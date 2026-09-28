@@ -1,0 +1,11 @@
+<resources>
+    <color name="primary">#0B57D0</color>
+    <color name="primary_container">#D3E3FD</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="surface">#F8F9FA</color>
+    <color name="on_surface">#1F1F1F</color>
+    <color name="status_green">#1E8E3E</color>
+    <color name="status_orange">#E37400</color>
+    <color name="status_red">#D93025</color>
+    <color name="ic_launcher_background">#FAF3E8</color>
+</resources>

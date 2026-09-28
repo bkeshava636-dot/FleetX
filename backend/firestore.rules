@@ -1,0 +1,124 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isUserActive() {
+      return isAuthenticated() && getUserData().active == true;
+    }
+    
+    function isAdmin() {
+      return isUserActive() && getUserData().role == 'ADMIN';
+    }
+    
+    function isDriver() {
+      return isUserActive() && (getUserData().role == 'DRIVER' || getUserData().role == 'ADMIN');
+    }
+
+    function getDriverAssignedBusId() {
+      return getUserData().assignedBusId;
+    }
+
+    // Users collection: users can read their own profile; admins can manage all;
+    // Public/student read is allowed strictly for active DRIVER profiles (for student dashboard driver info).
+    match /users/{userId} {
+      allow read: if (isAuthenticated() && (request.auth.uid == userId || isAdmin()))
+                  || (resource.data.role == 'DRIVER' && resource.data.active == true);
+      allow write: if isAdmin();
+    }
+
+    // Buses: Public read (Students have NO login); only Admins can create/edit/delete
+    match /buses/{busId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Routes & Stops: Public read (Students have NO login); only Admins can create/edit/delete
+    match /routes/{routeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Bus Swaps: Public read (Students see swap notices without login);
+    // Authenticated active drivers can ONLY report swaps for their assigned bus; admins manage all
+    match /bus_swaps/{swapId} {
+      allow read: if true;
+      allow create: if isAdmin() || (
+        isDriver() && 
+        request.resource.data.driverId == request.auth.uid &&
+        request.resource.data.originalBusId == getDriverAssignedBusId()
+      );
+      allow update, delete: if isAdmin() || (
+        isDriver() && 
+        resource.data.driverId == request.auth.uid &&
+        resource.data.originalBusId == getDriverAssignedBusId()
+      );
+    }
+
+    // Calendar Exceptions: Public read (Students and Drivers read without login/with auth);
+    // Only active Admins can create/edit/delete
+    match /calendar_exceptions/{dateStr} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Operating Schedule: Public read; only active Admins can create/edit/delete
+    match /operating_schedule/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Stop Requests: Drivers submit stops for their assigned bus, and read their own requests;
+    // Admins have full access to read, approve, reject, edit, or delete all requests.
+    match /stop_requests/{requestId} {
+      allow read: if isAdmin() || (isDriver() && resource.data.driverUid == request.auth.uid);
+      allow create: if isAdmin() || (
+        isDriver() && 
+        request.resource.data.driverUid == request.auth.uid &&
+        request.resource.data.busId == getDriverAssignedBusId()
+      );
+      allow update: if isAdmin() || (
+        isDriver() &&
+        resource.data.driverUid == request.auth.uid &&
+        resource.data.status == 'PENDING'
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Temporary Assignments: Public read so students see effective driver;
+    // Drivers can create/cancel/update only for their permanently assigned bus;
+    // Admins have full creation and management access.
+    match /temporary_assignments/{assignmentId} {
+      allow read: if true;
+      allow create: if isAdmin() || (
+        isDriver() &&
+        request.resource.data.busId == getDriverAssignedBusId() &&
+        request.resource.data.permanentDriverUid == request.auth.uid &&
+        request.resource.data.replacementDriverUid != request.auth.uid &&
+        request.resource.data.createdByUid == request.auth.uid &&
+        request.resource.data.createdByRole == 'DRIVER'
+      );
+      allow update: if isAdmin() || (
+        isDriver() &&
+        resource.data.permanentDriverUid == request.auth.uid &&
+        resource.data.busId == getDriverAssignedBusId() &&
+        (resource.data.status != 'CANCELLED' && resource.data.cancelledAt == null) &&
+        request.resource.data.status == 'CANCELLED' &&
+        request.resource.data.cancelledByUid == request.auth.uid &&
+        request.resource.data.cancelledByRole == 'DRIVER' &&
+        request.resource.data.busId == resource.data.busId &&
+        request.resource.data.permanentDriverUid == resource.data.permanentDriverUid &&
+        request.resource.data.replacementDriverUid == resource.data.replacementDriverUid
+      );
+      allow delete: if isAdmin();
+    }
+  }
+}

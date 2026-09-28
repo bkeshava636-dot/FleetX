@@ -1,0 +1,92 @@
+{
+  "buses": [
+    {
+      "busId": "BUS-12",
+      "busNumber": "12",
+      "registrationNumber": "KA-37-F-1234",
+      "routeId": "ROUTE-01",
+      "driverId": "driver_1",
+      "capacity": 50,
+      "isActive": true
+    },
+    {
+      "busId": "BUS-18",
+      "busNumber": "18",
+      "registrationNumber": "KA-37-F-5678",
+      "routeId": "ROUTE-01",
+      "driverId": "driver_2",
+      "capacity": 50,
+      "isActive": true
+    }
+  ],
+  "routes": [
+    {
+      "routeId": "ROUTE-01",
+      "name": "Koppal → College",
+      "busId": "BUS-12",
+      "stops": [
+        {
+          "stopId": "STOP-01",
+          "name": "Koppal Central Bus Stand",
+          "latitude": 15.3435,
+          "longitude": 76.1554,
+          "order": 1
+        },
+        {
+          "stopId": "STOP-02",
+          "name": "Gavi Math Circle",
+          "latitude": 15.3521,
+          "longitude": 76.1610,
+          "order": 2
+        },
+        {
+          "stopId": "STOP-03",
+          "name": "Hosalli Cross",
+          "latitude": 15.3610,
+          "longitude": 76.1725,
+          "order": 3
+        },
+        {
+          "stopId": "STOP-04",
+          "name": "Kinnnal Road Bypass",
+          "latitude": 15.3720,
+          "longitude": 76.1840,
+          "order": 4
+        },
+        {
+          "stopId": "STOP-05",
+          "name": "Engineering College Campus",
+          "latitude": 15.3850,
+          "longitude": 76.1980,
+          "order": 5
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "07:00",
+          "endTime": "09:00",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:00",
+          "endTime": "18:00",
+          "enabled": true
+        }
+      }
+    }
+  ],
+  "bus_swaps": [
+    {
+      "swapId": "SWAP-DEMO-01",
+      "originalBusId": "BUS-12",
+      "replacementBusId": "BUS-18",
+      "routeId": "ROUTE-01",
+      "driverId": "driver_1",
+      "affectedStopIds": ["STOP-01", "STOP-02"],
+      "message": "BUS 12 maintenance breakdown. Replacement BUS 18 will cover Koppal Bus Stand & Gavi Math Circle.",
+      "status": "ACTIVE",
+      "date": "2026-09-09",
+      "createdAt": 1788938400000
+    }
+  ]
+}
