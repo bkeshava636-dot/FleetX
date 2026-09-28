@@ -1,0 +1,120 @@
+{
+  "$comment": "PRODUCTION DATA TEMPLATE FOR COLLEGE BUS TRACKING SYSTEM. Do not load mock or test data into production. Populate with verified college transport data.",
+  "firestore": {
+    "users": [
+      {
+        "$comment": "Admin User Profile. Document ID must match the Firebase Authentication UID.",
+        "id": "FIREBASE_AUTH_UID_ADMIN",
+        "customId": "PROD_ADMIN_ID",
+        "email": "PROD_ADMIN_ID@collegebus.internal",
+        "name": "Official Admin Full Name",
+        "role": "ADMIN",
+        "assignedBusId": null,
+        "active": true,
+        "createdAt": 0
+      },
+      {
+        "$comment": "Driver User Profile. Document ID must match the Firebase Authentication UID.",
+        "id": "FIREBASE_AUTH_UID_DRIVER",
+        "customId": "PROD_DRIVER_ID",
+        "email": "PROD_DRIVER_ID@collegebus.internal",
+        "name": "Official Driver Full Name",
+        "role": "DRIVER",
+        "assignedBusId": "BUS_DOCUMENT_ID",
+        "active": true,
+        "createdAt": 0
+      }
+    ],
+    "buses": [
+      {
+        "$comment": "Bus Fleet Document. Document ID: {busId}",
+        "busId": "PROD_BUS_ID",
+        "busNumber": "COLLEGE_BUS_NUMBER",
+        "registrationNumber": "RTO_VEHICLE_REG_NUMBER",
+        "routeId": "PROD_ROUTE_ID",
+        "driverId": "FIREBASE_AUTH_UID_DRIVER",
+        "driverName": "Official Driver Full Name",
+        "capacity": 50,
+        "isActive": true
+      }
+    ],
+    "routes": [
+      {
+        "$comment": "Route Document with ordered stops and daily operating windows. Document ID: {routeId}",
+        "routeId": "PROD_ROUTE_ID",
+        "name": "Origin -> Destination Route Name",
+        "busId": "PROD_BUS_ID",
+        "stops": [
+          {
+            "stopId": "STOP_ID_1",
+            "name": "Official Stop Name",
+            "latitude": 0.0,
+            "longitude": 0.0,
+            "order": 1
+          }
+        ],
+        "schedules": {
+          "morning": {
+            "startTime": "07:00",
+            "endTime": "09:00",
+            "enabled": true
+          },
+          "evening": {
+            "startTime": "16:00",
+            "endTime": "18:00",
+            "enabled": true
+          }
+        }
+      }
+    ],
+    "bus_swaps": [
+      {
+        "$comment": "Temporary bus substitution record (created by Driver or Admin). Document ID: {swapId}",
+        "swapId": "SWAP_ID",
+        "originalBusId": "PROD_BUS_ID_ORIGINAL",
+        "replacementBusId": "PROD_BUS_ID_REPLACEMENT",
+        "routeId": "PROD_ROUTE_ID",
+        "driverId": "FIREBASE_AUTH_UID_DRIVER",
+        "driverName": "Official Driver Full Name",
+        "affectedStopIds": ["STOP_ID_1"],
+        "message": "Notice explaining temporary vehicle substitution.",
+        "status": "ACTIVE",
+        "date": "YYYY-MM-DD",
+        "createdAt": 0
+      }
+    ]
+  },
+  "realtime_database": {
+    "users": {
+      "$comment": "RTDB path: /users/{uid}. Required for RTDB security rules to authorize Driver tracking and Admin bypass.",
+      "FIREBASE_AUTH_UID_ADMIN": {
+        "role": "ADMIN",
+        "active": true,
+        "customId": "PROD_ADMIN_ID",
+        "name": "Official Admin Full Name"
+      },
+      "FIREBASE_AUTH_UID_DRIVER": {
+        "role": "DRIVER",
+        "assignedBusId": "PROD_BUS_ID",
+        "active": true,
+        "customId": "PROD_DRIVER_ID",
+        "name": "Official Driver Full Name"
+      }
+    },
+    "live_locations": {
+      "$comment": "RTDB path: /live_locations/{busId}. Holds only latest real-time GPS coordinate per bus.",
+      "PROD_BUS_ID": {
+        "busId": "PROD_BUS_ID",
+        "latitude": 0.0,
+        "longitude": 0.0,
+        "speed": 0.0,
+        "bearing": 0.0,
+        "trackingStatus": "INACTIVE",
+        "mode": "AUTO",
+        "routeId": "PROD_ROUTE_ID",
+        "driverId": "FIREBASE_AUTH_UID_DRIVER",
+        "lastUpdated": 0
+      }
+    }
+  }
+}

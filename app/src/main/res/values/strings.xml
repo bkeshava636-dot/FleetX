@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">FleetX</string>
+    <string name="channel_tracking_id">tracking_service_channel</string>
+    <string name="channel_tracking_name">FleetX Live Tracking</string>
+    <string name="channel_tracking_desc">Displays active GPS tracking status for the driver bus</string>
+    <string name="channel_alerts_id">bus_alerts_channel</string>
+    <string name="channel_alerts_name">FleetX Swap Alerts</string>
+    <string name="channel_alerts_desc">Notifies students about bus swaps and route updates</string>
+</resources>

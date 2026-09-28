@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Location Permissions -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- Foreground Service & Android 14+ Location Type -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!-- Network & Notifications -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Schedule Trigger & Boot Recovery -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <application
+        android:name=".CollegeBusApp"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.CollegeBusTracker">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.CollegeBusTracker">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Location Foreground Service (Handles live GPS during active tracking) -->
+        <service
+            android:name=".service.LocationTrackingService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
+
+        <service
+            android:name=".service.StudentContributorService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
+
+        <!-- Firebase Cloud Messaging for targeted swap alerts -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="bus_alerts_channel" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@android:drawable/ic_dialog_alert" />
+
+        <service
+            android:name=".service.PushNotificationService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Re-registers schedule triggers on device boot and app updates -->
+        <receiver
+            android:name=".service.AutoTrackingBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Alarm receiver for scheduled tracking windows (Driver) -->
+        <receiver
+            android:name=".service.DriverScheduleReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.college.bustracker.ACTION_DRIVER_SCHEDULE_CHECK" />
+                <action android:name="com.college.bustracker.ACTION_SCHEDULE_CHECK" />
+                <action android:name="com.college.bustracker.ACTION_CONFIGURE_SCHEDULE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Alarm receiver for scheduled tracking windows (Student Automatic Transit) -->
+        <receiver
+            android:name=".service.StudentScheduleReceiver"
+            android:exported="false" />
+
+    </application>
+
+</manifest>
