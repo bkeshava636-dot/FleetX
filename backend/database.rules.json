@@ -46,7 +46,7 @@
       "$busId": {
         "$sourceId": {
           ".read": "auth != null && (auth.uid == $sourceId || root.child('users').child(auth.uid).child('role').val() == 'ADMIN')",
-          ".write": "auth != null && auth.uid == $sourceId",
+          ".write": "auth != null && auth.uid == $sourceId && (newData.child('sourceType').val() != 'PRIMARY_DRIVER' || (root.child('users').child(auth.uid).child('active').val() == true && (root.child('users').child(auth.uid).child('role').val() == 'ADMIN' || (root.child('users').child(auth.uid).child('role').val() == 'DRIVER' && (root.child('users').child(auth.uid).child('assignedBusId').val() == $busId || root.child('bus_operators').child($busId).child('permanentDriverUid').val() == auth.uid || (root.child('bus_operators').child($busId).child('hasTemporary').val() == true && root.child('bus_operators').child($busId).child('temporaryDriverUid').val() == auth.uid))))))",
           ".validate": "newData.hasChildren(['busId', 'sourceId', 'sourceType', 'latitude', 'longitude', 'accuracy', 'timestamp', 'active']) && newData.child('busId').val() == $busId && newData.child('sourceId').val() == auth.uid",
           "sourceType": {
             ".validate": "newData.val() == 'PRIMARY_DRIVER' || newData.val() == 'SECONDARY_STUDENT'"
