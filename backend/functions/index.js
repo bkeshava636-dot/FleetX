@@ -454,9 +454,12 @@ exports.updateDriverEmail = functions.https.onCall(async (data, context) => {
  * Uses the client Web API Key without leaking credentials.
  */
 function sendPasswordResetEmailViaRest(email) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    const apiKey = process.env.WEB_API_KEY;
+    if (!apiKey) {
+      throw new Error("WEB_API_KEY is not configured");
+    }
     const https = require("https");
-    const apiKey = process.env.WEB_API_KEY || "AIzaSyDnJxIuGkIS1DGOIP1nl-dBYJ0O4PmbZEM";
     const postData = JSON.stringify({
       requestType: "PASSWORD_RESET",
       email: email
