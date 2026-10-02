@@ -98,7 +98,11 @@ class CollegeBusApp : Application() {
 
         // 5. Initialize Driver Location State Monitor for automatic GPS tracking recovery
         com.college.bustracker.util.DriverLocationStateMonitor.init(this)
-        com.college.bustracker.service.AutoTrackingScheduler.checkAndTriggerAutoTracking(this)
+        try {
+            com.college.bustracker.service.AutoTrackingScheduler.checkAndTriggerAutoTracking(this)
+        } catch (e: Exception) {
+            android.util.Log.w("CollegeBusApp", "Safe checkAndTriggerAutoTracking skipped on app create: ${e.message}")
+        }
     }
 
     private fun createNotificationChannels() {

@@ -43,6 +43,13 @@ class DriverScheduleReceiver : BroadcastReceiver() {
             ) == PackageManager.PERMISSION_GRANTED
         }
 
+        fun hasCoarseLocationPermission(context: Context): Boolean {
+            return ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+
         fun hasBackgroundLocationPermission(context: Context): Boolean {
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ContextCompat.checkSelfPermission(
@@ -52,6 +59,11 @@ class DriverScheduleReceiver : BroadcastReceiver() {
             } else {
                 true
             }
+        }
+
+        fun dismissBackgroundLocationPermissionMissingNotification(context: Context) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+            nm.cancel(NOTIFICATION_ID_PERMISSION_MISSING)
         }
 
         fun showLocationPermissionMissingNotification(context: Context) {
@@ -242,7 +254,7 @@ class DriverScheduleReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
         val pid = android.os.Process.myPid()
-        Log.i(TAG, "[AUTO-TRACK] $nowIso receiver process started: pid=$pid, action=${intent?.action}")
+        Log.i(TAG, "[AUTO-TRACE] Receiver entered: action=${intent?.action}, pid=$pid")
 
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
         val wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CollegeBus:DriverScheduleWakeLock")
@@ -251,6 +263,10 @@ class DriverScheduleReceiver : BroadcastReceiver() {
 
         try {
             if (intent?.action == "com.college.bustracker.ACTION_CONFIGURE_SCHEDULE") {
+                if (!com.college.bustracker.BuildConfig.DEBUG) {
+                    Log.w(TAG, "[AUTO-TRACK] ACTION_CONFIGURE_SCHEDULE ignored: prohibited in release builds")
+                    return
+                }
                 val morningStart = intent.getStringExtra("EXTRA_MORNING_START") ?: "07:00"
                 val morningEnd = intent.getStringExtra("EXTRA_MORNING_END") ?: "09:00"
                 val eveningStart = intent.getStringExtra("EXTRA_EVENING_START") ?: "16:00"
@@ -267,7 +283,7 @@ class DriverScheduleReceiver : BroadcastReceiver() {
 
             val prefs = context.getSharedPreferences(AutoTrackingScheduler.PREF_FILE, Context.MODE_PRIVATE)
             val isEnabled = prefs.getBoolean(AutoTrackingScheduler.KEY_AUTO_ENABLED, false)
-            Log.i(TAG, "[AUTO-TRACK] Automatic tracking preference = $isEnabled")
+            Log.i(TAG, "[AUTO-TRACE] Auto tracking preference=$isEnabled")
             if (!isEnabled) {
                 Log.d(TAG, "[AUTO-TRACK] Driver auto-tracking disabled in prefs; skipping trigger")
                 return
@@ -293,7 +309,8 @@ class DriverScheduleReceiver : BroadcastReceiver() {
             if (routeId.isBlank()) {
                 routeId = "ROUTE-01"
             }
-            Log.i(TAG, "[AUTO-TRACK] Resolved driver identity: bus=$busId, driver=$driverId, route=$routeId")
+            Log.i(TAG, "[AUTO-TRACE] Driver UID resolved: $driverId")
+            Log.i(TAG, "[AUTO-TRACE] Effective bus resolved: $busId")
 
             if (busId.isBlank()) {
                 Log.w(TAG, "[AUTO-TRACK] No assigned bus configured for driver; skipping trigger")
@@ -304,7 +321,8 @@ class DriverScheduleReceiver : BroadcastReceiver() {
             val isWorkingDay = CollegeCalendarService.isWorkingDay()
             val isHoliday = CollegeCalendarService.isHoliday()
             val holidayName = CollegeCalendarService.getHolidayName() ?: "None"
-            val forceWindow = intent?.getBooleanExtra("EXTRA_FORCE_WINDOW", false) == true
+            val forceWindow = com.college.bustracker.BuildConfig.DEBUG &&
+                (intent?.getBooleanExtra("EXTRA_FORCE_WINDOW", false) == true)
             val isOperatingNow = forceWindow || (ScheduleHelper.isWithinOperatingWindow(schedule) && isWorkingDay)
 
             Log.i(TAG, "[AUTO-TRACK] Holiday check = $isHoliday (holidayName=$holidayName)")
@@ -312,10 +330,14 @@ class DriverScheduleReceiver : BroadcastReceiver() {
             Log.i(TAG, "[AUTO-TRACK] Driver authorization = valid (driverId=$driverId, busId=$busId)")
 
             if (isOperatingNow) {
-                // Pre-flight 1: Fine Location Permission
+                // Pre-flight 1: Location Permissions
                 val hasFinePerm = hasLocationPermission(context)
+                val hasCoarsePerm = hasCoarseLocationPermission(context)
                 val hasBgPerm = hasBackgroundLocationPermission(context)
-                Log.i(TAG, "[AUTO-TRACK] Location permission check: fine=$hasFinePerm, background=$hasBgPerm")
+                Log.i(TAG, "[AUTO-TRACE] fineLocation=$hasFinePerm")
+                Log.i(TAG, "[AUTO-TRACE] coarseLocation=$hasCoarsePerm")
+                Log.i(TAG, "[AUTO-TRACE] backgroundLocation=$hasBgPerm")
+
                 if (!hasFinePerm) {
                     Log.w(TAG, "[AUTO-TRACK] Location permission not granted for driver automatic tracking; showing prompt")
                     showLocationPermissionMissingNotification(context)
@@ -324,9 +346,11 @@ class DriverScheduleReceiver : BroadcastReceiver() {
                 dismissLocationPermissionMissingNotification(context)
 
                 if (!hasBgPerm && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    Log.w(TAG, "[AUTO-TRACK] Background location ('Allow all the time') permission missing; showing prompt")
+                    Log.w(TAG, "[AUTO-TRACE] backgroundLocation=false (missing 'Allow all the time'); blocking service start and showing prompt")
                     showBackgroundLocationPermissionMissingNotification(context)
+                    return
                 }
+                dismissBackgroundLocationPermissionMissingNotification(context)
 
                 // Pre-flight 2: Device Location Services (GPS)
                 val locationOn = isLocationEnabled(context)
@@ -336,7 +360,7 @@ class DriverScheduleReceiver : BroadcastReceiver() {
                     showLocationDisabledNotification(context)
                 } else {
                     dismissLocationDisabledNotification(context)
-                    Log.i(TAG, "[AUTO-TRACK] Calling startForegroundService() for bus $busId (driver=$driverId)")
+                    Log.i(TAG, "[AUTO-TRACE] Starting foreground service for bus $busId")
                     try {
                         TrackingServiceHelper.startTracking(context, busId, routeId, driverId, "AUTO", forceWindow)
                     } catch (fse: Exception) {
@@ -353,18 +377,38 @@ class DriverScheduleReceiver : BroadcastReceiver() {
                 }
                 dismissLocationDisabledNotification(context)
                 dismissLocationPermissionMissingNotification(context)
+                dismissBackgroundLocationPermissionMissingNotification(context)
             }
 
-            // Always reschedule exact alarms for the next boundary
-            AutoTrackingScheduler.scheduleAlarms(context, schedule)
         } catch (e: Exception) {
             Log.e(TAG, "[AUTO-TRACK] Error handling driver schedule trigger: ${e.message}", e)
         } finally {
             try {
+                if (
+                    AutoTrackingScheduler.isAutoTrackingEnabled(context) &&
+                    intent?.action != "com.college.bustracker.ACTION_CONFIGURE_SCHEDULE"
+                ) {
+                    AutoTrackingScheduler.scheduleAlarms(
+                        context,
+                        AutoTrackingScheduler.getSavedSchedule(context)
+                    )
+
+                    Log.i(TAG, "[AUTO-TRACE] Next alarms re-armed")
+                }
+            } catch (e: Exception) {
+                Log.e(
+                    TAG,
+                    "[AUTO-TRACE] Failed to re-arm alarms: ${e.message}",
+                    e
+                )
+            }
+
+            try {
                 if (wakeLock?.isHeld == true) {
                     wakeLock.release()
                 }
-            } catch (ignored: Exception) {}
+            } catch (ignored: Exception) {
+            }
         }
     }
 }

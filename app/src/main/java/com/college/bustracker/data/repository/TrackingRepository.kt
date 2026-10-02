@@ -106,8 +106,10 @@ class TrackingRepository(
             // Flush any buffered coordinate first
             offlineBuffer.remove(busId)
             try {
+                Log.i("BusTrackerGPS", "[AUTO-TRACE] Firebase location write attempted: busId=$busId")
                 liveLocationsRef.child(busId).setValue(locationToUse) { error, _ ->
                     if (error != null) {
+                        Log.e("BusTrackerGPS", "[AUTO-TRACE] Firebase location write failed: code=${error.code}, msg=${error.message}")
                         val now = System.currentTimeMillis()
                         if (now - lastErrorLogTime > 10_000L) {
                             lastErrorLogTime = now
@@ -126,8 +128,7 @@ class TrackingRepository(
                             timestamp = locationToUse.lastUpdated
                         )
                     } else {
-                        val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-                        Log.i("BusTrackerGPS", "[AUTO_TRACK] $nowIso Firebase write successful: busId=$busId, lat=${locationToUse.latitude}, lng=${locationToUse.longitude}")
+                        Log.i("BusTrackerGPS", "[AUTO-TRACE] Firebase location write succeeded: busId=$busId, lat=${locationToUse.latitude}, lng=${locationToUse.longitude}")
                         if (_trackingError.value != null) {
                             _trackingError.value = null
                         }

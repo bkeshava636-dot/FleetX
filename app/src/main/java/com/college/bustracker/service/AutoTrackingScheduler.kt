@@ -143,6 +143,13 @@ class AutoTrackingScheduler {
                 }
                 DriverScheduleReceiver.dismissLocationPermissionMissingNotification(context)
 
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !DriverScheduleReceiver.hasBackgroundLocationPermission(context)) {
+                    Log.w(TAG, "[AUTO-TRACK] $nowIso Background location permission ('Allow all the time') missing for driver auto-tracking")
+                    DriverScheduleReceiver.showBackgroundLocationPermissionMissingNotification(context)
+                    return
+                }
+                DriverScheduleReceiver.dismissBackgroundLocationPermissionMissingNotification(context)
+
                 if (!DriverScheduleReceiver.isLocationEnabled(context)) {
                     Log.w(TAG, "[AUTO-TRACK] $nowIso Location Services disabled during operating window")
                     DriverScheduleReceiver.showLocationDisabledNotification(context)

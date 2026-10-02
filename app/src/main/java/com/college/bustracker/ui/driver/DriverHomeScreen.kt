@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -492,25 +493,75 @@ fun DriverHomeScreen(
                         )
                     }
 
+                    val hasBgLocPermission = remember(context) {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                            androidx.core.content.ContextCompat.checkSelfPermission(
+                                context,
+                                android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        } else true
+                    }
+
                     Switch(
                         checked = isAutoTracking,
                         onCheckedChange = { enable ->
-                            viewModel.toggleAutoTracking(enable)
                             if (enable && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                                val hasBgLoc = androidx.core.content.ContextCompat.checkSelfPermission(
+                                val hasBg = androidx.core.content.ContextCompat.checkSelfPermission(
                                     context,
                                     android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
                                 ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                                if (!hasBgLoc) {
+                                if (!hasBg) {
                                     showBackgroundLocationDialog = true
+                                    return@Switch
                                 }
                             }
+                            viewModel.toggleAutoTracking(enable)
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
                             checkedTrackColor = StatusActiveGreen
                         )
                     )
+                }
+
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    val hasBg = remember(context) {
+                        androidx.core.content.ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    }
+                    if (!hasBg) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFFFEF3C7), RoundedCornerShape(10.dp))
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFB45309),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Requires 'Allow all the time' location permission to track automatically when app is closed.",
+                                fontSize = 11.sp,
+                                color = Color(0xFF92400E),
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(
+                                onClick = { showBackgroundLocationDialog = true },
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text("Fix", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFB45309))
+                            }
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))

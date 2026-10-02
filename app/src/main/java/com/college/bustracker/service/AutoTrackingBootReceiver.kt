@@ -17,7 +17,6 @@ class AutoTrackingBootReceiver : BroadcastReceiver() {
         val action = intent?.action
         if (action == Intent.ACTION_BOOT_COMPLETED ||
             action == "android.intent.action.QUICKBOOT_POWERON" ||
-            action == "android.intent.action.LOCKED_BOOT_COMPLETED" ||
             action == Intent.ACTION_MY_PACKAGE_REPLACED
         ) {
             val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
