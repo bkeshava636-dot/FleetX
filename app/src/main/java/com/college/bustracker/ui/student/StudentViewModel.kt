@@ -143,10 +143,10 @@ class StudentViewModel : ViewModel() {
             }
         }
 
-        // Collect active fleet buses only
+        // Collect active fleet buses only (excluding non-student test buses)
         viewModelScope.launch {
             busRepo.getBusesFlow().collect { busList ->
-                val activeBuses = busList.filter { it.active }
+                val activeBuses = busList.filter { it.active && !it.busId.startsWith("TEST-", ignoreCase = true) }
                     .sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
                 _buses.value = activeBuses
                 _isLoadingBuses.value = false
