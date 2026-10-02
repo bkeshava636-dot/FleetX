@@ -1,0 +1,73 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'ADMIN')",
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'ADMIN' && root.child('users').child(auth.uid).child('active').val() == true",
+        ".validate": "newData.hasChildren(['role', 'active'])",
+        "role": {
+          ".validate": "newData.val() == 'ADMIN' || newData.val() == 'DRIVER'"
+        },
+        "active": {
+          ".validate": "newData.isBoolean()"
+        },
+        "assignedBusId": {
+          ".validate": "newData.val() == null || newData.isString()"
+        }
+      }
+    },
+    "bus_operators": {
+      ".read": true,
+      "$busId": {
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'ADMIN' || (root.child('users').child(auth.uid).child('role').val() == 'DRIVER' && (root.child('users').child(auth.uid).child('assignedBusId').val() == $busId || root.child('bus_operators').child($busId).child('permanentDriverUid').val() == auth.uid)))",
+        ".validate": "newData.hasChildren(['busId'])"
+      }
+    },
+    "live_locations": {
+      ".read": true,
+      "$busId": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('active').val() == true && (root.child('users').child(auth.uid).child('role').val() == 'ADMIN' || (root.child('users').child(auth.uid).child('role').val() == 'DRIVER' && (root.child('bus_operators').child($busId).child('hasTemporary').val() == true && now >= root.child('bus_operators').child($busId).child('startAt').val() && now < root.child('bus_operators').child($busId).child('endAt').val() ? auth.uid == root.child('bus_operators').child($busId).child('temporaryDriverUid').val() : (root.child('bus_operators').child($busId).child('permanentDriverUid').val() == auth.uid || (!root.child('bus_operators').child($busId).exists() && root.child('users').child(auth.uid).child('assignedBusId').val() == $busId)))))",
+        ".validate": "newData.hasChildren(['busId', 'latitude', 'longitude', 'trackingStatus', 'lastUpdated']) && newData.child('busId').val() == $busId && (!data.child('operatorEpoch').exists() || !newData.child('operatorEpoch').exists() || newData.child('operatorEpoch').val() >= data.child('operatorEpoch').val())",
+        "latitude": {
+          ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+        },
+        "longitude": {
+          ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+        },
+        "trackingStatus": {
+          ".validate": "newData.val() == 'ACTIVE' || newData.val() == 'INACTIVE' || newData.val() == 'WAITING_FOR_GPS'"
+        },
+        "lastUpdated": {
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+    "location_sources": {
+      "$busId": {
+        "$sourceId": {
+          ".read": "auth != null && (auth.uid == $sourceId || root.child('users').child(auth.uid).child('role').val() == 'ADMIN')",
+          ".write": "auth != null && auth.uid == $sourceId",
+          ".validate": "newData.hasChildren(['busId', 'sourceId', 'sourceType', 'latitude', 'longitude', 'accuracy', 'timestamp', 'active']) && newData.child('busId').val() == $busId && newData.child('sourceId').val() == auth.uid",
+          "sourceType": {
+            ".validate": "newData.val() == 'PRIMARY_DRIVER' || newData.val() == 'SECONDARY_STUDENT'"
+          },
+          "latitude": {
+            ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+          },
+          "longitude": {
+            ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+          },
+          "accuracy": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "timestamp": {
+            ".validate": "newData.isNumber()"
+          },
+          "active": {
+            ".validate": "newData.isBoolean()"
+          }
+        }
+      }
+    }
+  }
+}

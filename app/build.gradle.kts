@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.File
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -30,17 +33,32 @@ android {
 
     signingConfigs {
         create("release") {
-            // Configurable via gradle.properties or environment variables
-            // Do NOT hardcode passwords or keystore paths into source control
-            val keystorePath = project.findProperty("MYAPP_RELEASE_STORE_FILE") as String?
+            val keystorePropFile = rootProject.file("keystore.properties").takeIf { it.exists() }
+                ?: File(System.getProperty("user.home"), ".secrets/keystore.properties").takeIf { it.exists() }
+
+            val props = Properties()
+            if (keystorePropFile != null && keystorePropFile.exists()) {
+                keystorePropFile.inputStream().use { props.load(it) }
+            }
+
+            val keystorePath = props.getProperty("storeFile")
+                ?: props.getProperty("RELEASE_STORE_FILE")
+                ?: (project.findProperty("MYAPP_RELEASE_STORE_FILE") as String?)
                 ?: System.getenv("RELEASE_STORE_FILE")
+
             if (keystorePath != null && file(keystorePath).exists()) {
                 storeFile = file(keystorePath)
-                storePassword = (project.findProperty("MYAPP_RELEASE_STORE_PASSWORD") as String?)
+                storePassword = props.getProperty("storePassword")
+                    ?: props.getProperty("RELEASE_STORE_PASSWORD")
+                    ?: (project.findProperty("MYAPP_RELEASE_STORE_PASSWORD") as String?)
                     ?: System.getenv("RELEASE_STORE_PASSWORD")
-                keyAlias = (project.findProperty("MYAPP_RELEASE_KEY_ALIAS") as String?)
+                keyAlias = props.getProperty("keyAlias")
+                    ?: props.getProperty("RELEASE_KEY_ALIAS")
+                    ?: (project.findProperty("MYAPP_RELEASE_KEY_ALIAS") as String?)
                     ?: System.getenv("RELEASE_KEY_ALIAS")
-                keyPassword = (project.findProperty("MYAPP_RELEASE_KEY_PASSWORD") as String?)
+                keyPassword = props.getProperty("keyPassword")
+                    ?: props.getProperty("RELEASE_KEY_PASSWORD")
+                    ?: (project.findProperty("MYAPP_RELEASE_KEY_PASSWORD") as String?)
                     ?: System.getenv("RELEASE_KEY_PASSWORD")
             }
         }
