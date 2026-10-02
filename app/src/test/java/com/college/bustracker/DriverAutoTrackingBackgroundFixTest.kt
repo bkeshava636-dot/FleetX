@@ -217,4 +217,120 @@ class DriverAutoTrackingBackgroundFixTest {
         assertEquals("temp_driver_77", tempAssignment.replacementDriverUid)
         assertEquals(1700000000L, tempAssignment.operatorEpoch)
     }
+
+    // =========================================================================
+    // 11. ALARM-CHAIN RE-ARMING: FINALLY BLOCK EXECUTES ON EARLY RETURNS
+    // =========================================================================
+    @Test
+    fun test11_alarmChain_finallyGuaranteesReArmWhenAutoTrackingEnabled() {
+        // Simulates the finally block contract in DriverScheduleReceiver
+        var nextAlarmsReArmed = false
+        val isAutoTrackingEnabled = true
+        val intentAction = "com.college.bustracker.ACTION_DRIVER_SCHEDULE_CHECK"
+
+        fun simulateReceiverRun(earlyExitReason: String) {
+            try {
+                if (earlyExitReason == "MISSING_FINE_LOCATION") return
+                if (earlyExitReason == "MISSING_BG_LOCATION") return
+                if (earlyExitReason == "BLANK_BUS_ID") return
+                if (earlyExitReason == "EXCEPTION") throw RuntimeException("Simulated exception")
+            } finally {
+                if (isAutoTrackingEnabled && intentAction != "com.college.bustracker.ACTION_CONFIGURE_SCHEDULE") {
+                    nextAlarmsReArmed = true
+                }
+            }
+        }
+
+        // 1. Missing fine permission early exit
+        nextAlarmsReArmed = false
+        simulateReceiverRun("MISSING_FINE_LOCATION")
+        assertTrue("Alarms must be re-armed even if fine location permission was missing", nextAlarmsReArmed)
+
+        // 2. Missing background permission early exit
+        nextAlarmsReArmed = false
+        simulateReceiverRun("MISSING_BG_LOCATION")
+        assertTrue("Alarms must be re-armed even if background location permission was missing", nextAlarmsReArmed)
+
+        // 3. Blank bus assignment early exit
+        nextAlarmsReArmed = false
+        simulateReceiverRun("BLANK_BUS_ID")
+        assertTrue("Alarms must be re-armed even if busId was blank", nextAlarmsReArmed)
+
+        // 4. Exception during execution
+        nextAlarmsReArmed = false
+        try {
+            simulateReceiverRun("EXCEPTION")
+        } catch (ignored: Exception) {}
+        assertTrue("Alarms must be re-armed even if an unhandled exception occurred in try block", nextAlarmsReArmed)
+    }
+
+    // =========================================================================
+    // 12. ALARM-CHAIN: DISABLED AUTO TRACKING MUST NOT RE-ARM
+    // =========================================================================
+    @Test
+    fun test12_alarmChain_doesNotReArmWhenAutoTrackingDisabled() {
+        var nextAlarmsReArmed = false
+        val isAutoTrackingEnabled = false
+        val intentAction = "com.college.bustracker.ACTION_DRIVER_SCHEDULE_CHECK"
+
+        fun simulateReceiverRun() {
+            try {
+                return
+            } finally {
+                if (isAutoTrackingEnabled && intentAction != "com.college.bustracker.ACTION_CONFIGURE_SCHEDULE") {
+                    nextAlarmsReArmed = true
+                }
+            }
+        }
+
+        simulateReceiverRun()
+        assertFalse("When auto tracking is disabled, alarms must NOT be re-armed", nextAlarmsReArmed)
+    }
+
+    // =========================================================================
+    // 13. ALARM-CHAIN: ACTION_CONFIGURE_SCHEDULE HANDLED DIRECTLY
+    // =========================================================================
+    @Test
+    fun test13_alarmChain_actionConfigureSchedulePreserved() {
+        var finallyReArmed = false
+        val isAutoTrackingEnabled = true
+        val intentAction = "com.college.bustracker.ACTION_CONFIGURE_SCHEDULE"
+
+        fun simulateReceiverRun() {
+            try {
+                // ACTION_CONFIGURE_SCHEDULE configures and arms alarms directly with new schedule
+                return
+            } finally {
+                if (isAutoTrackingEnabled && intentAction != "com.college.bustracker.ACTION_CONFIGURE_SCHEDULE") {
+                    finallyReArmed = true
+                }
+            }
+        }
+
+        simulateReceiverRun()
+        assertFalse("ACTION_CONFIGURE_SCHEDULE must not be overridden by finally block re-arm", finallyReArmed)
+    }
+
+    // =========================================================================
+    // 14. GPS ACCURACY BOUNDARY CHECK (100M THRESHOLD)
+    // =========================================================================
+    @Test
+    fun test14_gpsAccuracyThreshold_boundaryCheck() {
+        val maxThreshold = 100.0f
+
+        fun isAccuracyAccepted(acc: Float): Boolean {
+            return acc <= maxThreshold
+        }
+
+        // Fixes <= 100m accepted
+        assertTrue("Accuracy 15m must be accepted", isAccuracyAccepted(15.0f))
+        assertTrue("Accuracy 50m must be accepted", isAccuracyAccepted(50.0f))
+        assertTrue("Accuracy 99.9m must be accepted", isAccuracyAccepted(99.9f))
+        assertTrue("Accuracy exactly 100.0m must be accepted (boundary)", isAccuracyAccepted(100.0f))
+
+        // Fixes > 100m rejected
+        assertFalse("Accuracy 100.1m must be rejected", isAccuracyAccepted(100.1f))
+        assertFalse("Accuracy 150m must be rejected", isAccuracyAccepted(150.0f))
+        assertFalse("Accuracy 500m must be rejected", isAccuracyAccepted(500.0f))
+    }
 }

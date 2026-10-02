@@ -28,6 +28,16 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         // Fine / Coarse location and notification permissions handled
+        try {
+            com.college.bustracker.service.AutoTrackingScheduler.checkAndTriggerAutoTracking(this)
+        } catch (ignored: Exception) {}
+    }
+
+    override fun onResume() {
+        super.onResume()
+        try {
+            com.college.bustracker.service.AutoTrackingScheduler.checkAndTriggerAutoTracking(this)
+        } catch (ignored: Exception) {}
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,6 +73,19 @@ class MainActivity : ComponentActivity() {
         if (!busId.isNullOrBlank()) {
             StudentPreferences.saveSelection(this, busId, stopId)
             studentViewModel.selectBusById(busId, stopId)
+        }
+        if (com.college.bustracker.BuildConfig.DEBUG && intent.hasExtra("EXTRA_MORNING_START")) {
+            val morningStart = intent.getStringExtra("EXTRA_MORNING_START") ?: "07:00"
+            val morningEnd = intent.getStringExtra("EXTRA_MORNING_END") ?: "09:00"
+            val eveningStart = intent.getStringExtra("EXTRA_EVENING_START") ?: "16:00"
+            val eveningEnd = intent.getStringExtra("EXTRA_EVENING_END") ?: "18:00"
+            val newSchedule = com.college.bustracker.data.model.RouteSchedule(
+                morning = com.college.bustracker.data.model.ScheduleWindow(morningStart, morningEnd, true),
+                evening = com.college.bustracker.data.model.ScheduleWindow(eveningStart, eveningEnd, true)
+            )
+            com.college.bustracker.service.AutoTrackingScheduler.saveSchedule(this, newSchedule)
+            com.college.bustracker.service.AutoTrackingScheduler.scheduleAlarms(this, newSchedule)
+            com.college.bustracker.service.AutoTrackingScheduler.checkAndTriggerAutoTracking(this)
         }
     }
 

@@ -62,6 +62,7 @@ class LocationTrackingService : Service() {
     private var forceWindow: Boolean = false
     private var hasLoggedFirstLocation: Boolean = false
     private var startupPollingJob: Job? = null
+    private var noFixWatchdogJob: Job? = null
 
     private var lastSentLat = 0.0
     private var lastSentLng = 0.0
@@ -110,7 +111,7 @@ class LocationTrackingService : Service() {
     override fun onCreate() {
         super.onCreate()
         val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-        Log.i(TAG, "[LOCATION-SERVICE] $nowIso onCreate")
+        Log.i(TAG, "[AUTO-TRACE] Service onCreate")
         
         locationHandlerThread = android.os.HandlerThread("CollegeBusGpsThread", android.os.Process.THREAD_PRIORITY_FOREGROUND).apply {
             start()
@@ -118,6 +119,7 @@ class LocationTrackingService : Service() {
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         locationManager = getSystemService(LOCATION_SERVICE) as? LocationManager
+        Log.i(TAG, "[AUTO-TRACE] Location client initialized")
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
@@ -176,7 +178,7 @@ class LocationTrackingService : Service() {
                 // Identity fallback recovery for background execution
                 resolveDriverIdentityFallbacks()
 
-                Log.i(TAG, "[LOCATION-SERVICE] $nowIso onStartCommand: action=ACTION_START_TRACKING, bus=$activeBusId, driver=$activeDriverId, mode=$activeMode")
+                Log.i(TAG, "[AUTO-TRACE] Service onStartCommand: action=${intent?.action}, bus=$activeBusId, driver=$activeDriverId, mode=$activeMode")
 
                 // Must promote to foreground first to satisfy Android startForegroundService contract
                 startForegroundTracking()
@@ -239,7 +241,12 @@ class LocationTrackingService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
-        Log.i(TAG, "[LOCATION-SERVICE] Foreground service started")
+        Log.i(TAG, "[AUTO-TRACE] startForeground succeeded")
+
+        val fbInit = try { com.google.firebase.FirebaseApp.getApps(this).isNotEmpty() } catch (e: Exception) { false }
+        val authUidAvailable = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != null
+        Log.i(TAG, "[AUTO-TRACE] Firebase initialized: $fbInit")
+        Log.i(TAG, "[AUTO-TRACE] FirebaseAuth UID available: $authUidAvailable")
 
         TrackingServiceHelper.updateServiceState(
             isTracking = true,
@@ -247,6 +254,33 @@ class LocationTrackingService : Service() {
             gps = "Starting GPS",
             timestamp = System.currentTimeMillis()
         )
+
+        // 30-second watchdog for initial GPS fix (Phase 10)
+        noFixWatchdogJob?.cancel()
+        noFixWatchdogJob = serviceScope.launch {
+            delay(30_000L)
+            if (!hasLoggedFirstLocation) {
+                val hasBg = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    androidx.core.content.ContextCompat.checkSelfPermission(
+                        this@LocationTrackingService,
+                        android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                } else true
+                Log.w(TAG, "[AUTO-TRACE] NO_FIX_30S mode=$activeMode, busId=$activeBusId, backgroundPermission=$hasBg")
+                val statusMsg = if (!hasBg) {
+                    "No GPS fix — check Location permission"
+                } else {
+                    "No GPS fix — searching for signal"
+                }
+                updateNotification(statusMsg)
+                TrackingServiceHelper.updateServiceState(
+                    isTracking = true,
+                    busId = activeBusId,
+                    gps = if (!hasBg) "Permission Missing" else "No GPS Fix",
+                    timestamp = System.currentTimeMillis()
+                )
+            }
+        }
 
         // Listen for student backup contributor fixes
         studentSourcesJob?.cancel()
@@ -320,6 +354,7 @@ class LocationTrackingService : Service() {
 
         // Dedicated initial location polling loop for fast startup in background
         startupPollingJob?.cancel()
+        Log.i(TAG, "[AUTO-TRACE] Startup location request")
         startupPollingJob = serviceScope.launch {
             var attempts = 0
             while (attempts < 10 && !hasLoggedFirstLocation) {
@@ -365,7 +400,7 @@ class LocationTrackingService : Service() {
                 locationCallback,
                 targetLooper
             )
-            Log.i(TAG, "[LOCATION-SERVICE] FusedLocationProviderClient updates registered successfully on dedicated looper")
+            Log.i(TAG, "[AUTO-TRACE] Location updates registered")
         } catch (e: SecurityException) {
             Log.e(TAG, "[LOCATION-SERVICE] Fused location permission denied: ${e.message}")
             TrackingServiceHelper.updateServiceState(
@@ -458,7 +493,8 @@ class LocationTrackingService : Service() {
 
         if (!hasLoggedFirstLocation) {
             hasLoggedFirstLocation = true
-            Log.i(TAG, "[LOCATION-SERVICE] $nowIso Location callback received: lat=${location.latitude}, lng=${location.longitude}, acc=${location.accuracy}m")
+            noFixWatchdogJob?.cancel()
+            Log.i(TAG, "[AUTO-TRACE] First GPS callback: lat=${location.latitude}, lng=${location.longitude}, acc=${location.accuracy}m")
         }
 
         Log.d(
@@ -543,6 +579,8 @@ class LocationTrackingService : Service() {
         hasLoggedFirstLocation = false
         startupPollingJob?.cancel()
         startupPollingJob = null
+        noFixWatchdogJob?.cancel()
+        noFixWatchdogJob = null
         studentSourcesJob?.cancel()
         studentSourcesJob = null
         fallbackWatchdogJob?.cancel()
