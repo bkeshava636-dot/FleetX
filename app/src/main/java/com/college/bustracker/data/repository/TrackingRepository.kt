@@ -217,8 +217,13 @@ class TrackingRepository(
             return
         }
         try {
-            locationSourcesRef.child(source.busId).child(source.sourceId).setValue(source)
-            Log.d("BusTrackerGPS", "STUDENT_GPS_CONTRIBUTED: bus=${source.busId}, source=${source.sourceId}, acc=${source.accuracy}m")
+            locationSourcesRef.child(source.busId).child(source.sourceId).setValue(source) { error, _ ->
+                if (error != null) {
+                    Log.e("BusTrackerGPS", "STUDENT_GPS_ERROR: Rejected with code ${error.code}: ${error.message}")
+                } else {
+                    Log.d("BusTrackerGPS", "STUDENT_GPS_CONTRIBUTED: bus=${source.busId}, source=${source.sourceId}, acc=${source.accuracy}m")
+                }
+            }
         } catch (e: Exception) {
             Log.w("BusTrackerGPS", "STUDENT_GPS_ERROR: Failed to contribute location: ${e.message}")
         }
