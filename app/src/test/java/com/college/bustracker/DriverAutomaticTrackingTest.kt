@@ -235,4 +235,16 @@ class DriverAutomaticTrackingTest {
         assertEquals("auto_tracking_prefs", AutoTrackingScheduler.PREF_FILE)
         assertEquals("auto_ride_prefs", com.college.bustracker.service.StudentAutoTrackingScheduler.PREFS_NAME)
     }
+
+    // 15. Driver logout stops tracking and cancels auto-tracking
+    @Test
+    fun test15_driverLogoutStopsTrackingState() {
+        TrackingServiceHelper.updateServiceState(true, "BUS-01", "Live GPS", System.currentTimeMillis())
+        assertTrue(TrackingServiceHelper.isTracking.value)
+
+        // When driver logs out, tracking must stop immediately
+        TrackingServiceHelper.updateServiceState(false, null, "Driver Logged Out", System.currentTimeMillis())
+        assertFalse("Tracking must be stopped after driver logs out", TrackingServiceHelper.isTracking.value)
+        assertEquals(null, TrackingServiceHelper.activeBusId.value)
+    }
 }

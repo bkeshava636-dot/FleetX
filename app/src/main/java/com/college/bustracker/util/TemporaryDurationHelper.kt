@@ -90,7 +90,7 @@ object TemporaryDurationHelper {
         schedule: RouteSchedule? = null,
         customEndDate: LocalDate? = null,
         customEndTime: LocalTime? = null,
-        zoneId: ZoneId = ZoneId.systemDefault()
+        zoneId: ZoneId = ScheduleHelper.KOLKATA_ZONE
     ): ReplacementTimeWindow {
         val operatingEndTime = resolveOperatingEndTime(schedule)
 

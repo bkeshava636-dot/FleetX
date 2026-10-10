@@ -185,6 +185,7 @@ fun AdminHeader(
     title: String = "Admin Dashboard",
     subtitle: String = "FleetX",
     todayEvaluation: DayEvaluation? = null,
+    onNavigateToDiagnostics: (() -> Unit)? = null,
     onLogout: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -255,6 +256,13 @@ fun AdminHeader(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false }
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("GPS Diagnostics", color = Color(0xFF0F172A), fontWeight = FontWeight.Medium) },
+                        onClick = {
+                            showMenu = false
+                            onNavigateToDiagnostics?.invoke()
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("Logout", color = StatusDangerRed, fontWeight = FontWeight.SemiBold) },
                         onClick = {

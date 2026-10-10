@@ -9,6 +9,7 @@ import com.college.bustracker.data.model.BusStop
 import com.college.bustracker.data.model.BusSwap
 import com.college.bustracker.data.model.LiveLocation
 import com.college.bustracker.data.model.Route
+import com.college.bustracker.data.model.RouteSchedule
 import com.college.bustracker.data.model.TrackingDisplayState
 import com.college.bustracker.data.model.UserProfile
 import com.college.bustracker.data.model.getDisplayState
@@ -44,6 +45,9 @@ class StudentViewModel : ViewModel() {
     private val swapRepo = app.busSwapRepository
     private val trackingRepo = app.trackingRepository
     private val tempAssignRepo = app.temporaryAssignmentRepository
+
+    private val allFleetBuses = MutableStateFlow<List<Bus>>(emptyList())
+    private var currentListeningBusId: String? = null
 
     private val _buses = MutableStateFlow<List<Bus>>(emptyList())
     val buses: StateFlow<List<Bus>> = _buses.asStateFlow()
@@ -121,6 +125,8 @@ class StudentViewModel : ViewModel() {
     )
     val todayHolidayName: StateFlow<String?> = _todayHolidayName.asStateFlow()
 
+    val operatingSchedule: StateFlow<RouteSchedule> = com.college.bustracker.util.OperatingScheduleService.operatingSchedule
+
     private var liveTrackingJob: Job? = null
 
     init {
@@ -134,6 +140,13 @@ class StudentViewModel : ViewModel() {
             }
         }
 
+        // Collect operating schedule to recalculate ETA/direction reactively
+        viewModelScope.launch {
+            operatingSchedule.collect {
+                updateEtaCalculation(_liveLocation.value, force = true)
+            }
+        }
+
         // Single shared cache of active fleet routes from Firestore
         viewModelScope.launch {
             routeRepo.getRoutesFlow().collect { routes ->
@@ -143,16 +156,20 @@ class StudentViewModel : ViewModel() {
             }
         }
 
-        // Collect active fleet buses only (excluding non-student test buses)
+        // Collect active fleet buses only (excluding non-student test buses unless selected)
         viewModelScope.launch {
             busRepo.getBusesFlow().collect { busList ->
-                val activeBuses = busList.filter { it.active && !it.busId.startsWith("TEST-", ignoreCase = true) }
-                    .sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
-                _buses.value = activeBuses
+                allFleetBuses.value = busList
+                val activeBuses = busList.filter { it.active }
+                val currentSelected = _selectedBus.value
+                val studentBuses = activeBuses.filter {
+                    !it.busId.startsWith("TEST-", ignoreCase = true) || it.busId.equals(currentSelected?.busId, ignoreCase = true)
+                }.sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
+
+                _buses.value = studentBuses
                 _isLoadingBuses.value = false
                 updateDriverDisplayInfo()
 
-                val currentSelected = _selectedBus.value
                 val savedBusId = StudentPreferences.getSavedBusId(app.applicationContext)
                 val savedStopId = StudentPreferences.getSavedStopId(app.applicationContext)
                 val matchedSavedBus = if (!savedBusId.isNullOrBlank()) {
@@ -163,11 +180,11 @@ class StudentViewModel : ViewModel() {
                     if (matchedSavedBus != null) {
                         selectBus(matchedSavedBus, preferredStopId = savedStopId)
                     } else {
-                        selectBus(activeBuses.first())
+                        selectBus(studentBuses.firstOrNull() ?: activeBuses.first())
                     }
-                } else if (currentSelected != null && activeBuses.none { it.busId == currentSelected.busId }) {
-                    if (activeBuses.isNotEmpty()) {
-                        selectBus(activeBuses.first())
+                } else if (currentSelected != null && !currentSelected.busId.startsWith("TEST-", ignoreCase = true) && activeBuses.none { it.busId.equals(currentSelected.busId, ignoreCase = true) }) {
+                    if (studentBuses.isNotEmpty()) {
+                        selectBus(studentBuses.first())
                     } else {
                         _selectedBus.value = null
                         _currentRoute.value = null
@@ -209,10 +226,13 @@ class StudentViewModel : ViewModel() {
                 _activeSwapForStudent.value = matchingSwap
                 updateDriverDisplayInfo()
                 val bus = _selectedBus.value
-                if (matchingSwap != null && matchingSwap.replacementBusId.isNotBlank()) {
-                    startListeningToLiveBus(matchingSwap.replacementBusId)
-                } else if (bus != null) {
-                    startListeningToLiveBus(bus.busId)
+                val targetBusId = if (matchingSwap != null && matchingSwap.replacementBusId.isNotBlank()) {
+                    matchingSwap.replacementBusId
+                } else {
+                    bus?.busId
+                }
+                if (!targetBusId.isNullOrBlank()) {
+                    startListeningToLiveBus(targetBusId)
                 }
             }
         }
@@ -263,6 +283,11 @@ class StudentViewModel : ViewModel() {
     }
 
     fun selectBus(bus: Bus, preferredStopId: String? = null) {
+        android.util.Log.i(
+            "BusTrackerGPS",
+            "STUDENT_SELECTED_BUS: busId=${bus.busId}, timestamp=${System.currentTimeMillis()}"
+        )
+
         // If auto sharing is enabled and selected bus changes, update assigned bus in AutomaticRideManager
         if (AutomaticRideManager.isAutoSharingEnabled.value && AutomaticRideManager.assignedBusId.value != bus.busId) {
             AutomaticRideManager.changeAssignedBus(app.applicationContext, bus.busId)
@@ -280,13 +305,21 @@ class StudentViewModel : ViewModel() {
         lastCalcTimeMs = 0L
 
         updateCurrentRouteForSelectedBus(preferredStopId)
+
+        val activeSwap = _activeSwapForStudent.value
+        val targetBusId = if (activeSwap != null && activeSwap.originalBusId == bus.busId && activeSwap.replacementBusId.isNotBlank()) {
+            activeSwap.replacementBusId
+        } else {
+            bus.busId
+        }
+        startListeningToLiveBus(targetBusId)
     }
 
     fun selectBusById(busId: String, preferredStopId: String? = null) {
         val bus = _buses.value.find { it.busId.equals(busId, ignoreCase = true) }
-        if (bus != null) {
-            selectBus(bus, preferredStopId)
-        }
+            ?: allFleetBuses.value.find { it.busId.equals(busId, ignoreCase = true) }
+            ?: Bus(busId = busId, busNumber = busId, active = true)
+        selectBus(bus, preferredStopId)
     }
 
     private fun updateCurrentRouteForSelectedBus(preferredStopId: String? = null) {
@@ -337,11 +370,29 @@ class StudentViewModel : ViewModel() {
     }
 
     fun startListeningToLiveBus(busId: String) {
+        if (busId.isBlank()) return
+        if (currentListeningBusId == busId && liveTrackingJob?.isActive == true) {
+            return
+        }
+        currentListeningBusId = busId
         liveTrackingJob?.cancel()
         liveTrackingJob = viewModelScope.launch {
             trackingRepo.getLiveLocationFlow(busId).collect { loc ->
-                _liveLocation.value = loc
-                updateEtaCalculation(loc, force = false)
+                val current = _liveLocation.value
+                if (current == null || current.busId != loc.busId || loc.lastUpdated >= current.lastUpdated || (loc.lastUpdated == 0L && current.lastUpdated == 0L)) {
+                    _liveLocation.value = loc
+                    _trackingState.value = loc.getDisplayState()
+                    _lastUpdateText.value = if (loc.lastUpdated > 0L) {
+                        ScheduleHelper.formatRelativeTime(loc.lastUpdated)
+                    } else {
+                        "Inactive"
+                    }
+                    updateEtaCalculation(loc, force = false)
+                    android.util.Log.i(
+                        "BusTrackerGPS",
+                        "LIVE_LOCATION_STATE_UPDATED: busId=${loc.busId}, lat=${loc.latitude}, lon=${loc.longitude}, lastUpdated=${loc.lastUpdated}"
+                    )
+                }
             }
         }
     }
@@ -349,6 +400,7 @@ class StudentViewModel : ViewModel() {
     fun stopListeningToLiveBus() {
         liveTrackingJob?.cancel()
         liveTrackingJob = null
+        currentListeningBusId = null
     }
 
     private var lastCalculatedDirection: com.college.bustracker.util.RouteDirection? = null
@@ -374,7 +426,7 @@ class StudentViewModel : ViewModel() {
             return
         }
 
-        val schedule = route?.schedules ?: com.college.bustracker.util.OperatingScheduleService.getSchedule()
+        val schedule = com.college.bustracker.util.OperatingScheduleService.getSchedule()
         val currentDirection = ScheduleHelper.determineRouteDirection(schedule)
         if (lastCalculatedDirection != currentDirection) {
             lastCalculatedDirection = currentDirection
@@ -445,7 +497,7 @@ class StudentViewModel : ViewModel() {
     }
 
     fun enableAutoSharing(busId: String) {
-        val schedule = _currentRoute.value?.schedules
+        val schedule = com.college.bustracker.util.OperatingScheduleService.getSchedule()
         AutomaticRideManager.enableAutoSharing(app.applicationContext, busId, schedule)
     }
 
@@ -454,7 +506,7 @@ class StudentViewModel : ViewModel() {
     }
 
     fun changeAutoSharingBus(busId: String) {
-        val schedule = _currentRoute.value?.schedules
+        val schedule = com.college.bustracker.util.OperatingScheduleService.getSchedule()
         AutomaticRideManager.changeAssignedBus(app.applicationContext, busId, schedule)
     }
 

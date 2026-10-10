@@ -99,6 +99,7 @@ import com.college.bustracker.ui.theme.StatusWarningOrange
 @Composable
 fun AdminDashboardScreen(
     viewModel: AdminViewModel,
+    onNavigateToDiagnostics: (() -> Unit)? = null,
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
@@ -204,6 +205,7 @@ fun AdminDashboardScreen(
                 },
                 subtitle = "FleetX",
                 todayEvaluation = todayEvaluation,
+                onNavigateToDiagnostics = onNavigateToDiagnostics,
                 onLogout = onLogout
             )
         },

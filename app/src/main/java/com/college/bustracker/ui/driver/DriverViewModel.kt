@@ -313,6 +313,12 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
         TrackingServiceHelper.stopTracking(getApplication())
     }
 
+    fun onLogout() {
+        _isAutoTrackingEnabled.value = false
+        AutoTrackingScheduler.onDriverLogout(getApplication())
+        TrackingServiceHelper.stopTracking(getApplication(), "DRIVER_LOGGED_OUT", "DriverViewModel.onLogout")
+    }
+
     fun reportBusSwap(
         replacementBusId: String,
         scopeType: String = BusSwap.SCOPE_ALL_STOPS,

@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -80,6 +81,7 @@ import com.college.bustracker.util.ScheduleHelper
 fun DriverHomeScreen(
     viewModel: DriverViewModel,
     onNavigateToSwap: () -> Unit,
+    onNavigateToDiagnostics: () -> Unit,
     onLogout: () -> Unit
 ) {
     val bus by viewModel.assignedBus.collectAsState()
@@ -732,7 +734,7 @@ fun DriverHomeScreen(
             operatingAsTempBus = operatingAsTempBus,
             assignedBus = bus,
             eligibleDrivers = eligibleDrivers,
-            schedule = route?.schedules,
+            schedule = operatingSchedule,
             isLoading = isReplacementLoading,
             onActivateReplacement = { repUid, startAt, endAt, cb ->
                 viewModel.activateTemporaryReplacement(repUid, startAt, endAt, cb)
@@ -801,6 +803,70 @@ fun DriverHomeScreen(
                             letterSpacing = 0.5.sp
                         )
                     }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // GPS DIAGNOSTICS Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(CollegePrimary.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = null,
+                                tint = CollegePrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "GPS Diagnostics",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = Color(0xFF0F172A)
+                            )
+                            Text(
+                                text = "Verify background tracking & view reports",
+                                fontSize = 12.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = onNavigateToDiagnostics,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.2.dp, CollegePrimary.copy(alpha = 0.5f))
+                ) {
+                    Text(
+                        text = "OPEN GPS DIAGNOSTICS",
+                        fontWeight = FontWeight.Bold,
+                        color = CollegePrimary,
+                        fontSize = 13.sp
+                    )
                 }
             }
         }

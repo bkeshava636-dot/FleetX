@@ -37,17 +37,71 @@ class AutoTrackingScheduler {
         const val ACTION_DRIVER_SCHEDULE_CHECK = "com.college.bustracker.ACTION_DRIVER_SCHEDULE_CHECK"
         const val ACTION_ALARM_CHECK = "com.college.bustracker.ACTION_SCHEDULE_CHECK" // Backward compatibility
 
-        private const val REQUEST_CODE_MORNING_START = 2001
-        private const val REQUEST_CODE_MORNING_END = 2002
-        private const val REQUEST_CODE_EVENING_START = 2003
-        private const val REQUEST_CODE_EVENING_END = 2004
+        const val REQUEST_CODE_MORNING_START = 2001
+        const val REQUEST_CODE_MORNING_END = 2002
+        const val REQUEST_CODE_EVENING_START = 2003
+        const val REQUEST_CODE_EVENING_END = 2004
+        const val REQUEST_CODE_MORNING_PRE_START = 2005
+        const val REQUEST_CODE_EVENING_PRE_START = 2006
+
+        fun calculatePreStartTime(startTimeStr: String, leadMinutes: Long = 2L): String {
+            return try {
+                val time = LocalTime.parse(startTimeStr, DateTimeFormatter.ofPattern("HH:mm"))
+                time.minusMinutes(leadMinutes).format(DateTimeFormatter.ofPattern("HH:mm"))
+            } catch (e: Exception) {
+                startTimeStr
+            }
+        }
+
+        fun isDriverLoggedIn(context: Context): Boolean {
+            val authUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            val staffPrefs = context.getSharedPreferences("staff_session_prefs", Context.MODE_PRIVATE)
+            val sessionUid = staffPrefs.getString("session_uid", null)
+            val sessionRole = staffPrefs.getString("session_role", null)
+
+            // If Firebase Auth is signed out AND staff_session_prefs is empty/null, driver is NOT logged in
+            if (authUser == null && sessionUid.isNullOrBlank()) {
+                return false
+            }
+            // If a session role is present, verify it's a driver (or admin)
+            if (!sessionRole.isNullOrBlank() && sessionRole != "DRIVER" && sessionRole != "ADMIN") {
+                return false
+            }
+            return true
+        }
+
+        fun onDriverLogout(context: Context) {
+            val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+            Log.i(TAG, "[AUTO_TRACK] $nowIso onDriverLogout: driver logged out. Disabling auto-tracking, cancelling alarms, and stopping tracking service.")
+
+            val prefs = context.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
+            prefs.edit()
+                .putBoolean(KEY_AUTO_ENABLED, false)
+                .remove(KEY_ASSIGNED_BUS)
+                .remove(KEY_ASSIGNED_ROUTE)
+                .remove(KEY_DRIVER_ID)
+                .apply()
+
+            cancelAlarms(context)
+            DriverScheduleReceiver.dismissLocationDisabledNotification(context)
+            DriverScheduleReceiver.dismissLocationPermissionMissingNotification(context)
+            DriverScheduleReceiver.dismissBackgroundLocationPermissionMissingNotification(context)
+
+            if (TrackingServiceHelper.isTracking.value) {
+                TrackingServiceHelper.stopTracking(context, "DRIVER_LOGGED_OUT", "AutoTrackingScheduler.onDriverLogout")
+            }
+
+            com.college.bustracker.diagnostics.GpsDiagnosticManager.onTrackingPreferenceChanged(context, false, "")
+            com.college.bustracker.diagnostics.GpsDiagnosticManager.stopWindowRecording(context, "Driver logged out")
+            com.college.bustracker.diagnostics.GpsDiagnosticManager.stopRecording(context)
+        }
 
         fun isAutoTrackingEnabled(context: Context): Boolean {
             val prefs = context.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
             return prefs.getBoolean(KEY_AUTO_ENABLED, false)
         }
 
-        fun getSavedSchedule(context: Context): RouteSchedule {
+        fun getSavedSchedule(context: Context? = null): RouteSchedule {
             return com.college.bustracker.util.OperatingScheduleService.getSchedule()
         }
 
@@ -82,6 +136,7 @@ class AutoTrackingScheduler {
                 .apply()
 
             saveSchedule(context, schedule)
+            com.college.bustracker.diagnostics.GpsDiagnosticManager.onTrackingPreferenceChanged(context, enabled, busId)
 
             if (enabled) {
                 Log.i(TAG, "[AUTO_TRACK] $nowIso schedule enabled: busId=$busId, routeId=$routeId, driverId=$driverId, morning=${schedule.morning.startTime}-${schedule.morning.endTime} (enabled=${schedule.morning.enabled}), evening=${schedule.evening.startTime}-${schedule.evening.endTime} (enabled=${schedule.evening.enabled})")
@@ -105,7 +160,15 @@ class AutoTrackingScheduler {
             val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
             val prefs = context.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
             val isEnabled = prefs.getBoolean(KEY_AUTO_ENABLED, false)
-            if (!isEnabled) return
+            val isDriverActive = isDriverLoggedIn(context)
+
+            if (!isEnabled || !isDriverActive) {
+                if (TrackingServiceHelper.isTracking.value) {
+                    Log.i(TAG, "[AUTO-TRACK] $nowIso Stopping driver tracking: auto-tracking disabled ($isEnabled) or driver logged out ($isDriverActive)")
+                    TrackingServiceHelper.stopTracking(context, "DRIVER_LOGGED_OUT", "AutoTrackingScheduler")
+                }
+                return
+            }
 
             var busId = prefs.getString(KEY_ASSIGNED_BUS, "") ?: ""
             var routeId = prefs.getString(KEY_ASSIGNED_ROUTE, "") ?: ""
@@ -136,6 +199,13 @@ class AutoTrackingScheduler {
             Log.i(TAG, "[AUTO-TRACK] $nowIso schedule start check: isOperatingNow=$isOperatingNow, isWorkingDay=$isWorkingDay, busId=$busId, driverId=$driverId")
 
             if (isOperatingNow) {
+                com.college.bustracker.diagnostics.GpsDiagnosticManager.startWindowRecording(
+                    context = context,
+                    reason = "Operating window active check",
+                    busId = busId,
+                    driverId = driverId
+                )
+
                 if (!DriverScheduleReceiver.hasLocationPermission(context)) {
                     Log.w(TAG, "[AUTO-TRACK] $nowIso Location permission missing for driver auto-tracking")
                     DriverScheduleReceiver.showLocationPermissionMissingNotification(context)
@@ -161,6 +231,10 @@ class AutoTrackingScheduler {
                     }
                 }
             } else {
+                com.college.bustracker.diagnostics.GpsDiagnosticManager.stopWindowRecording(
+                    context = context,
+                    reason = "Outside operating window"
+                )
                 if (TrackingServiceHelper.isTracking.value) {
                     Log.i(TAG, "[AUTO-TRACK] $nowIso Stopping driver tracking: outside operating window")
                     TrackingServiceHelper.stopTracking(context)
@@ -179,17 +253,21 @@ class AutoTrackingScheduler {
             saveSchedule(context, schedule)
             cancelAlarms(context)
 
-            val now = LocalDateTime.now()
+            val now = java.time.ZonedDateTime.now(com.college.bustracker.util.ScheduleHelper.KOLKATA_ZONE).toLocalDateTime()
 
             if (schedule.morning.enabled) {
+                val preMorningStart = calculatePreStartTime(schedule.morning.startTime, 2L)
+                scheduleSingleAlarm(context, alarmManager, preMorningStart, REQUEST_CODE_MORNING_PRE_START, now, isPreWindow = true)
                 scheduleSingleAlarm(context, alarmManager, schedule.morning.startTime, REQUEST_CODE_MORNING_START, now)
                 scheduleSingleAlarm(context, alarmManager, schedule.morning.endTime, REQUEST_CODE_MORNING_END, now)
             }
             if (schedule.evening.enabled) {
+                val preEveningStart = calculatePreStartTime(schedule.evening.startTime, 2L)
+                scheduleSingleAlarm(context, alarmManager, preEveningStart, REQUEST_CODE_EVENING_PRE_START, now, isPreWindow = true)
                 scheduleSingleAlarm(context, alarmManager, schedule.evening.startTime, REQUEST_CODE_EVENING_START, now)
                 scheduleSingleAlarm(context, alarmManager, schedule.evening.endTime, REQUEST_CODE_EVENING_END, now)
             }
-            Log.i(TAG, "Driver auto-tracking exact alarms scheduled for morning: ${schedule.morning.startTime}-${schedule.morning.endTime}, evening: ${schedule.evening.startTime}-${schedule.evening.endTime}")
+            Log.i(TAG, "Driver auto-tracking exact alarms scheduled with pre-window diagnostics (2 min lead)")
         }
 
         private fun scheduleSingleAlarm(
@@ -197,7 +275,8 @@ class AutoTrackingScheduler {
             alarmManager: AlarmManager,
             timeStr: String,
             requestCode: Int,
-            now: LocalDateTime = LocalDateTime.now()
+            now: LocalDateTime = java.time.ZonedDateTime.now(com.college.bustracker.util.ScheduleHelper.KOLKATA_ZONE).toLocalDateTime(),
+            isPreWindow: Boolean = false
         ) {
             try {
                 val time = LocalTime.parse(timeStr, DateTimeFormatter.ofPattern("HH:mm"))
@@ -206,10 +285,14 @@ class AutoTrackingScheduler {
                     targetDateTime = targetDateTime.plusDays(1)
                 }
 
-                val triggerMillis = targetDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                val triggerMillis = targetDateTime.atZone(com.college.bustracker.util.ScheduleHelper.KOLKATA_ZONE).toInstant().toEpochMilli()
 
                 val intent = Intent(context, DriverScheduleReceiver::class.java).apply {
                     action = ACTION_DRIVER_SCHEDULE_CHECK
+                    putExtra("EXTRA_EXPECTED_TRIGGER_MILLIS", triggerMillis)
+                    putExtra("EXTRA_REQUEST_CODE", requestCode)
+                    putExtra("EXTRA_TIME_STR", timeStr)
+                    putExtra("EXTRA_IS_PRE_WINDOW", isPreWindow)
                 }
                 val pendingIntent = PendingIntent.getBroadcast(
                     context,
@@ -217,9 +300,6 @@ class AutoTrackingScheduler {
                     intent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
-
-                val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-                Log.i(TAG, "[AUTO_TRACK] $nowIso alarm scheduled: target=$targetDateTime ($triggerMillis ms), requestCode=$requestCode, timeStr=$timeStr")
 
                 val showIntent = Intent(context, com.college.bustracker.ui.MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -231,18 +311,24 @@ class AutoTrackingScheduler {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
 
+                var alarmMethod = "setAlarmClock"
+                var isExact = true
                 try {
                     val clockInfo = AlarmManager.AlarmClockInfo(triggerMillis, showPendingIntent)
                     alarmManager.setAlarmClock(clockInfo, pendingIntent)
                 } catch (e: Exception) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         if (alarmManager.canScheduleExactAlarms()) {
+                            alarmMethod = "setExactAndAllowWhileIdle"
+                            isExact = true
                             alarmManager.setExactAndAllowWhileIdle(
                                 AlarmManager.RTC_WAKEUP,
                                 triggerMillis,
                                 pendingIntent
                             )
                         } else {
+                            alarmMethod = "setAndAllowWhileIdle"
+                            isExact = false
                             alarmManager.setAndAllowWhileIdle(
                                 AlarmManager.RTC_WAKEUP,
                                 triggerMillis,
@@ -250,6 +336,8 @@ class AutoTrackingScheduler {
                             )
                         }
                     } else {
+                        alarmMethod = "setExactAndAllowWhileIdle"
+                        isExact = true
                         alarmManager.setExactAndAllowWhileIdle(
                             AlarmManager.RTC_WAKEUP,
                             triggerMillis,
@@ -257,6 +345,17 @@ class AutoTrackingScheduler {
                         )
                     }
                 }
+
+                val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+                Log.i(TAG, "[AUTO_TRACK] $nowIso alarm scheduled: target=$targetDateTime ($triggerMillis ms), requestCode=$requestCode, timeStr=$timeStr, preWindow=$isPreWindow, method=$alarmMethod, exact=$isExact")
+                com.college.bustracker.diagnostics.GpsDiagnosticManager.onAlarmScheduled(
+                    context = context,
+                    timeStr = timeStr,
+                    triggerMillis = triggerMillis,
+                    requestCode = requestCode,
+                    isExact = isExact,
+                    alarmMethod = alarmMethod
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to schedule driver alarm for $timeStr: ${e.message}", e)
             }
@@ -268,7 +367,9 @@ class AutoTrackingScheduler {
                 REQUEST_CODE_MORNING_START,
                 REQUEST_CODE_MORNING_END,
                 REQUEST_CODE_EVENING_START,
-                REQUEST_CODE_EVENING_END
+                REQUEST_CODE_EVENING_END,
+                REQUEST_CODE_MORNING_PRE_START,
+                REQUEST_CODE_EVENING_PRE_START
             )
             for (code in requestCodes) {
                 val intent = Intent(context, DriverScheduleReceiver::class.java).apply {

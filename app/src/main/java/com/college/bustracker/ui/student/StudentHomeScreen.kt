@@ -98,7 +98,8 @@ import com.college.bustracker.util.StopEta
 fun StudentHomeScreen(
     viewModel: StudentViewModel,
     onNavigateToMap: () -> Unit,
-    onNavigateToStaffLogin: () -> Unit
+    onNavigateToStaffLogin: () -> Unit,
+    onNavigateToBusPass: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val buses by viewModel.buses.collectAsState()
@@ -117,6 +118,7 @@ fun StudentHomeScreen(
     val isHolidayToday by viewModel.isHolidayToday.collectAsState()
     val todayHolidayName by viewModel.todayHolidayName.collectAsState()
     val driverInfo by viewModel.driverDisplayInfo.collectAsState()
+    val operatingSchedule by viewModel.operatingSchedule.collectAsState()
 
     var busDropdownOpen by remember { mutableStateOf(false) }
     var stopDropdownOpen by remember { mutableStateOf(false) }
@@ -172,27 +174,55 @@ fun StudentHomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
-            OutlinedButton(
-                onClick = onNavigateToStaffLogin,
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF334155))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = null,
-                    modifier = Modifier.size(13.dp),
-                    tint = Color(0xFF475569)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Staff Login",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    softWrap = false
-                )
+                OutlinedButton(
+                    onClick = onNavigateToBusPass,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CollegePrimary),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Badge,
+                        contentDescription = null,
+                        modifier = Modifier.size(13.dp),
+                        tint = CollegePrimary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Pass",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = onNavigateToStaffLogin,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF334155)),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        modifier = Modifier.size(13.dp),
+                        tint = Color(0xFF475569)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Staff",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
             }
         }
 
@@ -886,10 +916,10 @@ fun StudentHomeScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    val sched = route?.schedules ?: com.college.bustracker.util.OperatingScheduleService.getSchedule()
+                    val sched = operatingSchedule
                     if (!sched.morning.enabled && !sched.evening.enabled) {
                         Text(
-                            text = "Operating schedule not configured for this route.",
+                            text = "Operating schedule is currently disabled.",
                             fontSize = 13.sp,
                             color = Color(0xFF94A3B8)
                         )
@@ -942,6 +972,67 @@ fun StudentHomeScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // My Bus Pass Quick Access Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                onClick = onNavigateToBusPass
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(CollegePrimary.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Badge,
+                                contentDescription = null,
+                                tint = CollegePrimary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text(
+                                text = "My Bus Pass",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Offline digital copy of your physical pass",
+                                fontSize = 12.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = onNavigateToBusPass,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("View / Scan", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

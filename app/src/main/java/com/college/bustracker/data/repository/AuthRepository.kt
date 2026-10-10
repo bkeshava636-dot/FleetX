@@ -464,7 +464,10 @@ class AuthRepository(
         val ctx = context ?: try { com.college.bustracker.CollegeBusApp.instance } catch (e: Exception) { null }
         if (ctx != null) {
             try {
-                com.college.bustracker.service.TrackingServiceHelper.stopTracking(ctx)
+                com.college.bustracker.service.AutoTrackingScheduler.onDriverLogout(ctx)
+            } catch (ignored: Exception) {}
+            try {
+                com.college.bustracker.service.TrackingServiceHelper.stopTracking(ctx, "DRIVER_LOGGED_OUT", "AuthRepository.logout")
             } catch (ignored: Exception) {}
         }
         clearSessionPrefs()

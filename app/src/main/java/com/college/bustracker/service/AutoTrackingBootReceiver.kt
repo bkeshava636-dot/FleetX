@@ -21,10 +21,11 @@ class AutoTrackingBootReceiver : BroadcastReceiver() {
         ) {
             val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
             Log.i(TAG, "[AUTO_TRACK] $nowIso Device boot/package update ($action); restoring driver and student auto-tracking triggers")
+            com.college.bustracker.diagnostics.GpsDiagnosticManager.onBootReceived(context, action ?: "UNKNOWN_BOOT_ACTION")
 
-            // 1. Restore Driver Auto-Tracking (if enabled)
+            // 1. Restore Driver Auto-Tracking (if enabled and driver is logged in)
             val isDriverAutoEnabled = AutoTrackingScheduler.isAutoTrackingEnabled(context)
-            if (isDriverAutoEnabled) {
+            if (isDriverAutoEnabled && AutoTrackingScheduler.isDriverLoggedIn(context)) {
                 val schedule = AutoTrackingScheduler.getSavedSchedule(context)
                 AutoTrackingScheduler.scheduleAlarms(context, schedule)
                 AutoTrackingScheduler.checkAndTriggerAutoTracking(context)

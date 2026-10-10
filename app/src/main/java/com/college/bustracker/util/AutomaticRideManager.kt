@@ -247,9 +247,8 @@ object AutomaticRideManager {
         consecutiveDivergenceCount = 0
         firstDivergenceTimestamp = 0L
 
-        if (schedule != null) {
-            StudentAutoTrackingScheduler.scheduleAlarms(ctx, schedule)
-        }
+        val sched = schedule ?: OperatingScheduleService.getSchedule()
+        StudentAutoTrackingScheduler.scheduleAlarms(ctx, sched)
 
         stopMonitoring()
         _isLocationServicesEnabled.value = isLocationEnabled(ctx)
@@ -327,7 +326,7 @@ object AutomaticRideManager {
             location = location,
             busLocation = busLoc,
             route = route,
-            schedule = route?.schedules
+            schedule = OperatingScheduleService.getSchedule()
         )
     }
 
@@ -649,7 +648,7 @@ object AutomaticRideManager {
 
         // 1. Schedule Window Check: Outside operating windows OR on a holiday -> 0% battery usage
         val isWorkingDay = CollegeCalendarService.isWorkingDay()
-        val effectiveSchedule = schedule ?: route?.schedules ?: OperatingScheduleService.getSchedule()
+        val effectiveSchedule = schedule ?: OperatingScheduleService.getSchedule()
         val isWithinWindow = isWorkingDay && ScheduleHelper.isWithinOperatingWindow(effectiveSchedule)
 
         // 2. Evaluate Ride Confidence

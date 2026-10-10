@@ -30,6 +30,8 @@ sealed class Screen(val route: String) {
     data object DriverHome : Screen("driver_home")
     data object DriverSwap : Screen("driver_swap")
     data object AdminDashboard : Screen("admin_dashboard")
+    data object BusPass : Screen("bus_pass")
+    data object GpsDiagnostics : Screen("gps_diagnostics")
 }
 
 @Composable
@@ -77,13 +79,38 @@ fun AppNavHost(
             StudentHomeScreen(
                 viewModel = studentViewModel,
                 onNavigateToMap = { navController.navigate(Screen.StudentMap.route) },
-                onNavigateToStaffLogin = { navController.navigate(Screen.StaffLogin.route) }
+                onNavigateToStaffLogin = { navController.navigate(Screen.StaffLogin.route) },
+                onNavigateToBusPass = { navController.navigate(Screen.BusPass.route) }
             )
         }
 
         composable(Screen.StudentMap.route) {
             StudentMapScreen(
                 viewModel = studentViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.BusPass.route) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val busPassViewModel: com.college.bustracker.pass.ui.BusPassViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        return com.college.bustracker.pass.ui.BusPassViewModel(
+                            com.college.bustracker.pass.storage.BusPassStorage(context.applicationContext)
+                        ) as T
+                    }
+                }
+            )
+            com.college.bustracker.pass.ui.BusPassScreen(
+                viewModel = busPassViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.GpsDiagnostics.route) {
+            com.college.bustracker.diagnostics.ui.GpsDiagnosticsScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -122,7 +149,9 @@ fun AppNavHost(
             DriverHomeScreen(
                 viewModel = driverViewModel,
                 onNavigateToSwap = { navController.navigate(Screen.DriverSwap.route) },
+                onNavigateToDiagnostics = { navController.navigate(Screen.GpsDiagnostics.route) },
                 onLogout = {
+                    driverViewModel.onLogout()
                     driverViewModel.stopTracking()
                     authViewModel.logout()
                     navController.navigate(Screen.StudentHome.route) {
@@ -143,6 +172,7 @@ fun AppNavHost(
         composable(Screen.AdminDashboard.route) {
             AdminDashboardScreen(
                 viewModel = adminViewModel,
+                onNavigateToDiagnostics = { navController.navigate(Screen.GpsDiagnostics.route) },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Screen.StudentHome.route) {
