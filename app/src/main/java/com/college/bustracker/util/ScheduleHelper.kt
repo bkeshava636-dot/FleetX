@@ -13,6 +13,10 @@ enum class RouteDirection {
 
 object ScheduleHelper {
 
+    val KOLKATA_ZONE: java.time.ZoneId = java.time.ZoneId.of("Asia/Kolkata")
+
+    fun nowKolkata(): LocalTime = LocalTime.now(KOLKATA_ZONE)
+
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault())
 
     /**
@@ -20,7 +24,7 @@ object ScheduleHelper {
      */
     fun determineRouteDirection(
         schedule: RouteSchedule = OperatingScheduleService.getSchedule(),
-        now: LocalTime = LocalTime.now()
+        now: LocalTime = nowKolkata()
     ): RouteDirection {
         return when {
             isTimeInWindow(now, schedule.morning) -> RouteDirection.STOPS_TO_COLLEGE
@@ -54,7 +58,7 @@ object ScheduleHelper {
      */
     fun isWithinOperatingWindow(
         schedule: RouteSchedule = OperatingScheduleService.getSchedule(),
-        now: LocalTime = LocalTime.now()
+        now: LocalTime = nowKolkata()
     ): Boolean {
         return isTimeInWindow(now, schedule.morning) || isTimeInWindow(now, schedule.evening)
     }
@@ -64,7 +68,7 @@ object ScheduleHelper {
      */
     fun getNextSessionDescription(
         schedule: RouteSchedule = OperatingScheduleService.getSchedule(),
-        now: LocalTime = LocalTime.now()
+        now: LocalTime = nowKolkata()
     ): String {
         return try {
             val morningStart = LocalTime.parse(schedule.morning.startTime, timeFormatter)

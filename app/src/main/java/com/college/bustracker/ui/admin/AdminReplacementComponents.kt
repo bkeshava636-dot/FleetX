@@ -75,6 +75,7 @@ import com.college.bustracker.ui.theme.StatusActiveGreen
 import com.college.bustracker.ui.theme.StatusDangerRed
 import com.college.bustracker.ui.theme.StatusWarningOrange
 import com.college.bustracker.util.DurationOption
+import com.college.bustracker.util.OperatingScheduleService
 import com.college.bustracker.util.ReplacementTimeWindow
 import com.college.bustracker.util.TemporaryDurationHelper
 import java.time.LocalDate
@@ -533,7 +534,7 @@ fun AdminCreateReplacementDialog(
             startDate = startDate,
             startTime = startTime,
             option = selectedDuration,
-            schedule = selectedRoute?.schedules,
+            schedule = OperatingScheduleService.getSchedule(),
             customEndDate = if (selectedDuration == DurationOption.CUSTOM) customEndDate else null,
             customEndTime = if (selectedDuration == DurationOption.CUSTOM) customEndTime else null
         )
@@ -809,7 +810,7 @@ fun AdminCreateReplacementDialog(
                             color = Color(0xFF334155),
                             fontWeight = FontWeight.Medium
                         )
-                        val endT = TemporaryDurationHelper.resolveOperatingEndTime(selectedRoute?.schedules)
+                        val endT = TemporaryDurationHelper.resolveOperatingEndTime(OperatingScheduleService.getSchedule())
                         Text(
                             text = "Route schedule operating day closing: ${TemporaryDurationHelper.formatTime(endT)}",
                             fontSize = 11.sp,

@@ -98,11 +98,44 @@ class CollegeBusApp : Application() {
 
         // 5. Initialize Driver Location State Monitor for automatic GPS tracking recovery
         com.college.bustracker.util.DriverLocationStateMonitor.init(this)
+
+        // 6. Initialize Background GPS Diagnostic System
+        com.college.bustracker.diagnostics.GpsDiagnosticManager.init(this)
+        com.college.bustracker.diagnostics.GpsDiagnosticManager.onProcessStarted(this)
+
+        // 7. Register Activity Lifecycle Tracker for diagnostics
+        registerDiagnosticActivityCallbacks()
+
         try {
             com.college.bustracker.service.AutoTrackingScheduler.checkAndTriggerAutoTracking(this)
         } catch (e: Exception) {
             android.util.Log.w("CollegeBusApp", "Safe checkAndTriggerAutoTracking skipped on app create: ${e.message}")
         }
+    }
+
+    private var activeActivityCount = 0
+
+    private fun registerDiagnosticActivityCallbacks() {
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) {}
+            override fun onActivityStarted(activity: android.app.Activity) {
+                activeActivityCount++
+            }
+            override fun onActivityResumed(activity: android.app.Activity) {
+                com.college.bustracker.diagnostics.GpsDiagnosticManager.onActivityResumed(this@CollegeBusApp, activity.javaClass.simpleName)
+            }
+            override fun onActivityPaused(activity: android.app.Activity) {
+                com.college.bustracker.diagnostics.GpsDiagnosticManager.onActivityPaused(this@CollegeBusApp, activity.javaClass.simpleName)
+            }
+            override fun onActivityStopped(activity: android.app.Activity) {
+                activeActivityCount = (activeActivityCount - 1).coerceAtLeast(0)
+                if (activeActivityCount == 0) {
+                    com.college.bustracker.diagnostics.GpsDiagnosticManager.onAppMovedToBackground(this@CollegeBusApp)
+                }
+            }
+            override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) {}
+            override fun onActivityDestroyed(activity: android.app.Activity) {}
+        })
     }
 
     private fun createNotificationChannels() {

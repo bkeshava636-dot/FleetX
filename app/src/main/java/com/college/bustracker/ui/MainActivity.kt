@@ -75,10 +75,11 @@ class MainActivity : ComponentActivity() {
             studentViewModel.selectBusById(busId, stopId)
         }
         if (com.college.bustracker.BuildConfig.DEBUG && intent.hasExtra("EXTRA_MORNING_START")) {
-            val morningStart = intent.getStringExtra("EXTRA_MORNING_START") ?: "07:00"
-            val morningEnd = intent.getStringExtra("EXTRA_MORNING_END") ?: "09:00"
-            val eveningStart = intent.getStringExtra("EXTRA_EVENING_START") ?: "16:00"
-            val eveningEnd = intent.getStringExtra("EXTRA_EVENING_END") ?: "18:00"
+            val current = com.college.bustracker.util.OperatingScheduleService.getSchedule()
+            val morningStart = intent.getStringExtra("EXTRA_MORNING_START") ?: current.morning.startTime
+            val morningEnd = intent.getStringExtra("EXTRA_MORNING_END") ?: current.morning.endTime
+            val eveningStart = intent.getStringExtra("EXTRA_EVENING_START") ?: current.evening.startTime
+            val eveningEnd = intent.getStringExtra("EXTRA_EVENING_END") ?: current.evening.endTime
             val newSchedule = com.college.bustracker.data.model.RouteSchedule(
                 morning = com.college.bustracker.data.model.ScheduleWindow(morningStart, morningEnd, true),
                 evening = com.college.bustracker.data.model.ScheduleWindow(eveningStart, eveningEnd, true)

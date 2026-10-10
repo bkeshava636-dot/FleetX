@@ -74,8 +74,15 @@ class LocationTrackingService : Service() {
     private var studentSourcesJob: Job? = null
     private var fallbackWatchdogJob: Job? = null
     private var operatorAuthorizationJob: Job? = null
-    private var currentOperatorEpoch: Long = 0L
+    private var currentOperatorEpoch: Long? = null
     private var currentTemporaryAssignmentId: String? = null
+    private var driverAuthStateListener: FirebaseAuth.AuthStateListener? = null
+
+    private var serviceStopReason: String = "SYSTEM_OR_EXTERNAL_TERMINATION"
+    private var serviceStopCaller: String = "ANDROID_FRAMEWORK"
+    private var serviceStartTimeMs: Long = 0L
+    private var totalCallbacksReceived: Int = 0
+    private var totalLocationsDispatched: Int = 0
 
     private var wakeLock: PowerManager.WakeLock? = null
 
@@ -162,12 +169,16 @@ class LocationTrackingService : Service() {
         val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
         when (intent?.action) {
             TrackingServiceHelper.ACTION_STOP_TRACKING -> {
-                Log.i(TAG, "[LOCATION-SERVICE] $nowIso onStartCommand: action=ACTION_STOP_TRACKING, bus=$activeBusId")
+                serviceStopReason = intent.getStringExtra(TrackingServiceHelper.EXTRA_STOP_REASON) ?: "ACTION_STOP_TRACKING_INTENT"
+                serviceStopCaller = intent.getStringExtra(TrackingServiceHelper.EXTRA_STOP_CALLER) ?: "ExternalIntent"
+                Log.i(TAG, "[LOCATION-SERVICE] $nowIso onStartCommand: action=ACTION_STOP_TRACKING, reason=$serviceStopReason, caller=$serviceStopCaller, bus=$activeBusId")
                 stopTrackingSession()
                 stopSelf()
                 return START_NOT_STICKY
             }
             TrackingServiceHelper.ACTION_START_TRACKING, null -> {
+                serviceStopReason = "SYSTEM_OR_EXTERNAL_TERMINATION"
+                serviceStopCaller = "ANDROID_FRAMEWORK"
                 activeBusId = intent?.getStringExtra(TrackingServiceHelper.EXTRA_BUS_ID) ?: ""
                 activeRouteId = intent?.getStringExtra(TrackingServiceHelper.EXTRA_ROUTE_ID) ?: ""
                 activeDriverId = intent?.getStringExtra(TrackingServiceHelper.EXTRA_DRIVER_ID) ?: ""
@@ -183,9 +194,26 @@ class LocationTrackingService : Service() {
                 // Must promote to foreground first to satisfy Android startForegroundService contract
                 startForegroundTracking()
 
+                if (!AutoTrackingScheduler.isDriverLoggedIn(this)) {
+                    Log.w(TAG, "[LOCATION-SERVICE] TRACKING_BLOCKED: Driver is logged out. Stopping tracking service immediately.")
+                    serviceStopReason = "DRIVER_LOGGED_OUT"
+                    serviceStopCaller = "AuthVerification"
+                    TrackingServiceHelper.updateServiceState(
+                        isTracking = false,
+                        busId = null,
+                        gps = "Driver Logged Out",
+                        timestamp = System.currentTimeMillis()
+                    )
+                    stopTrackingSession()
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+
                 if (!forceWindow && activeMode == "AUTO" && !com.college.bustracker.util.CollegeCalendarService.isWorkingDay()) {
                     val holidayName = com.college.bustracker.util.CollegeCalendarService.getHolidayName() ?: "College Holiday"
                     Log.w(TAG, "[LOCATION-SERVICE] TRACKING_BLOCKED: Today is a holiday ($holidayName). Tracking service will not continue.")
+                    serviceStopReason = "COLLEGE_HOLIDAY"
+                    serviceStopCaller = "CalendarCheck"
                     TrackingServiceHelper.updateServiceState(
                         isTracking = false,
                         busId = null,
@@ -229,6 +257,7 @@ class LocationTrackingService : Service() {
 
     private fun startForegroundTracking() {
         acquireWakeLock()
+        serviceStartTimeMs = System.currentTimeMillis()
         val notification = buildTrackingNotification("Starting GPS...")
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -242,11 +271,13 @@ class LocationTrackingService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
         Log.i(TAG, "[AUTO-TRACE] startForeground succeeded")
+        com.college.bustracker.diagnostics.GpsDiagnosticManager.onServiceStarted(this, activeBusId)
 
         val fbInit = try { com.google.firebase.FirebaseApp.getApps(this).isNotEmpty() } catch (e: Exception) { false }
         val authUidAvailable = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != null
         Log.i(TAG, "[AUTO-TRACE] Firebase initialized: $fbInit")
         Log.i(TAG, "[AUTO-TRACE] FirebaseAuth UID available: $authUidAvailable")
+        com.college.bustracker.diagnostics.GpsDiagnosticManager.onFirebaseState(this, fbInit, authUidAvailable)
 
         TrackingServiceHelper.updateServiceState(
             isTracking = true,
@@ -342,10 +373,13 @@ class LocationTrackingService : Service() {
                         // If active temporary driver is someone else, stop this driver's tracking session
                         if (activeDriverId.isNotBlank() && activeDriverId != activeTemp.replacementDriverUid) {
                             Log.w(TAG, "[LOCATION-SERVICE] OPERATOR_REPLACED: Driver $activeDriverId replaced by ${activeTemp.replacementDriverName} for bus $activeBusId. Stopping location writes.")
+                            serviceStopReason = "OPERATOR_REPLACED"
+                            serviceStopCaller = "OperatorAuthorizationJob"
                             stopTrackingSession()
                             stopSelf()
                         }
                     } else {
+                        currentOperatorEpoch = null
                         currentTemporaryAssignmentId = null
                     }
                 }
@@ -377,6 +411,28 @@ class LocationTrackingService : Service() {
             }
         }
 
+        // Real-time auth watcher: Stop tracking immediately if driver logs out
+        if (driverAuthStateListener == null) {
+            driverAuthStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+                if (firebaseAuth.currentUser == null && !AutoTrackingScheduler.isDriverLoggedIn(this@LocationTrackingService)) {
+                    Log.w(TAG, "[LOCATION-SERVICE] DRIVER_LOGGED_OUT: Driver signed out while service was running. Stopping tracking immediately.")
+                    serviceStopReason = "DRIVER_LOGGED_OUT"
+                    serviceStopCaller = "AuthStateListener"
+                    TrackingServiceHelper.updateServiceState(
+                        isTracking = false,
+                        busId = null,
+                        gps = "Driver Logged Out",
+                        timestamp = System.currentTimeMillis()
+                    )
+                    stopTrackingSession()
+                    stopSelf()
+                }
+            }
+            try {
+                FirebaseAuth.getInstance().addAuthStateListener(driverAuthStateListener!!)
+            } catch (ignored: Exception) {}
+        }
+
         requestLocationUpdates()
     }
 
@@ -401,8 +457,17 @@ class LocationTrackingService : Service() {
                 targetLooper
             )
             Log.i(TAG, "[AUTO-TRACE] Location updates registered")
+            com.college.bustracker.diagnostics.GpsDiagnosticManager.onLocationRequestRegistered(this, "FusedLocationProviderClient")
         } catch (e: SecurityException) {
             Log.e(TAG, "[LOCATION-SERVICE] Fused location permission denied: ${e.message}")
+            com.college.bustracker.diagnostics.GpsDiagnosticManager.logEvent(
+                context = this,
+                stage = com.college.bustracker.diagnostics.DiagnosticStage.LOCATION_REQUEST,
+                eventName = "FUSED_LOCATION_PERMISSION_DENIED",
+                details = mapOf("error" to (e.message ?: "SecurityException")),
+                isFailure = true,
+                failureType = com.college.bustracker.diagnostics.FailureType.PERMISSION_FAILURE
+            )
             TrackingServiceHelper.updateServiceState(
                 isTracking = false,
                 busId = null,
@@ -468,9 +533,26 @@ class LocationTrackingService : Service() {
     }
 
     private fun onNewLocation(location: Location) {
+        if (!AutoTrackingScheduler.isDriverLoggedIn(this)) {
+            Log.w(TAG, "[LOCATION-SERVICE] TRACKING_STOPPED: Driver is logged out during location callback. Stopping tracking.")
+            serviceStopReason = "DRIVER_LOGGED_OUT"
+            serviceStopCaller = "LocationCallback"
+            TrackingServiceHelper.updateServiceState(
+                isTracking = false,
+                busId = null,
+                gps = "Driver Logged Out",
+                timestamp = System.currentTimeMillis()
+            )
+            stopTrackingSession()
+            stopSelf()
+            return
+        }
+
         // 0. Calendar Holiday Check: Stop if date transitioned into a holiday
         if (!forceWindow && activeMode == "AUTO" && !com.college.bustracker.util.CollegeCalendarService.isWorkingDay()) {
             Log.w(TAG, "[LOCATION-SERVICE] TRACKING_STOPPED: Today is a college holiday. Stopping tracking.")
+            serviceStopReason = "COLLEGE_HOLIDAY"
+            serviceStopCaller = "CalendarCheck"
             stopTrackingSession()
             stopSelf()
             return
@@ -488,8 +570,17 @@ class LocationTrackingService : Service() {
             return
         }
 
+        totalCallbacksReceived++
         val now = System.currentTimeMillis()
         val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+
+        val locAge = if (location.time > 0) now - location.time else 0L
+        com.college.bustracker.diagnostics.GpsDiagnosticManager.onLocationCallbackReceived(
+            context = this,
+            accuracyMeters = if (location.hasAccuracy()) location.accuracy else 0f,
+            provider = location.provider ?: "unknown",
+            ageMs = locAge
+        )
 
         if (!hasLoggedFirstLocation) {
             hasLoggedFirstLocation = true
@@ -559,6 +650,7 @@ class LocationTrackingService : Service() {
             )
             lastFusedLocation = stamped
             Log.i(TAG, "[LOCATION-SERVICE] Writing location to Firebase: busId=$activeBusId, lat=${stamped.latitude}, lng=${stamped.longitude}, status=${stamped.trackingStatus}")
+            totalLocationsDispatched++
             CollegeBusApp.instance.trackingRepository.updateLiveLocation(stamped, hasInternet)
         }
 
@@ -587,6 +679,12 @@ class LocationTrackingService : Service() {
         fallbackWatchdogJob = null
         operatorAuthorizationJob?.cancel()
         operatorAuthorizationJob = null
+        driverAuthStateListener?.let {
+            try {
+                FirebaseAuth.getInstance().removeAuthStateListener(it)
+            } catch (ignored: Exception) {}
+            driverAuthStateListener = null
+        }
 
         try {
             fusedLocationClient.removeLocationUpdates(locationCallback)
@@ -600,6 +698,8 @@ class LocationTrackingService : Service() {
             CollegeBusApp.instance.trackingRepository.removeStudentLocation(activeBusId, activeDriverId)
             CollegeBusApp.instance.trackingRepository.stopTracking(activeBusId, activeDriverId)
         }
+
+        com.college.bustracker.diagnostics.GpsDiagnosticManager.onServiceStopped(this, "Tracking session stopped")
 
         TrackingServiceHelper.updateServiceState(
             isTracking = false,
@@ -624,6 +724,8 @@ class LocationTrackingService : Service() {
 
         val stopIntent = Intent(this, LocationTrackingService::class.java).apply {
             action = TrackingServiceHelper.ACTION_STOP_TRACKING
+            putExtra(TrackingServiceHelper.EXTRA_STOP_REASON, "NOTIFICATION_STOP_ACTION")
+            putExtra(TrackingServiceHelper.EXTRA_STOP_CALLER, "NotificationAction")
         }
         val stopPendingIntent = PendingIntent.getService(
             this,
@@ -650,7 +752,29 @@ class LocationTrackingService : Service() {
         notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.w(TAG, "[AUTO-TRACE] onTaskRemoved callback received. FleetX was swiped from Recent Apps. bus=$activeBusId")
+        com.college.bustracker.diagnostics.GpsDiagnosticManager.onTaskRemoved(
+            context = this,
+            busId = activeBusId,
+            isTracking = activeBusId.isNotBlank()
+        )
+    }
+
     override fun onDestroy() {
+        Log.w(TAG, "[AUTO-TRACE] LocationTrackingService onDestroy received. bus=$activeBusId, reason=$serviceStopReason, caller=$serviceStopCaller")
+        val activeSec = if (serviceStartTimeMs > 0) (System.currentTimeMillis() - serviceStartTimeMs) / 1000 else 0L
+        com.college.bustracker.diagnostics.GpsDiagnosticManager.onServiceDestroyed(
+            context = this,
+            busId = activeBusId,
+            wasTracking = activeBusId.isNotBlank(),
+            stopReason = serviceStopReason,
+            stopCaller = serviceStopCaller,
+            activeDurationSeconds = activeSec,
+            callbacksReceived = totalCallbacksReceived,
+            locationsDispatched = totalLocationsDispatched
+        )
         stopTrackingSession()
         try {
             locationHandlerThread?.quitSafely()

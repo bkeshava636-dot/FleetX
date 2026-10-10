@@ -37,35 +37,11 @@ object StudentAutoTrackingScheduler {
     private const val REQUEST_CODE_STUDENT_E_END = 3004
 
     fun saveSchedule(context: Context, schedule: RouteSchedule) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit()
-            .putBoolean(KEY_MORNING_ENABLED, schedule.morning.enabled)
-            .putString(KEY_MORNING_START, schedule.morning.startTime)
-            .putString(KEY_MORNING_END, schedule.morning.endTime)
-            .putBoolean(KEY_EVENING_ENABLED, schedule.evening.enabled)
-            .putString(KEY_EVENING_START, schedule.evening.startTime)
-            .putString(KEY_EVENING_END, schedule.evening.endTime)
-            .apply()
+        com.college.bustracker.util.OperatingScheduleService.updateCachedSchedule(schedule, context)
     }
 
-    fun getSavedSchedule(context: Context): RouteSchedule {
-        val globalSchedule = com.college.bustracker.util.OperatingScheduleService.getSchedule()
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (!prefs.contains(KEY_MORNING_START)) {
-            return globalSchedule
-        }
-        return RouteSchedule(
-            morning = ScheduleWindow(
-                startTime = prefs.getString(KEY_MORNING_START, globalSchedule.morning.startTime) ?: globalSchedule.morning.startTime,
-                endTime = prefs.getString(KEY_MORNING_END, globalSchedule.morning.endTime) ?: globalSchedule.morning.endTime,
-                enabled = prefs.getBoolean(KEY_MORNING_ENABLED, globalSchedule.morning.enabled)
-            ),
-            evening = ScheduleWindow(
-                startTime = prefs.getString(KEY_EVENING_START, globalSchedule.evening.startTime) ?: globalSchedule.evening.startTime,
-                endTime = prefs.getString(KEY_EVENING_END, globalSchedule.evening.endTime) ?: globalSchedule.evening.endTime,
-                enabled = prefs.getBoolean(KEY_EVENING_ENABLED, globalSchedule.evening.enabled)
-            )
-        )
+    fun getSavedSchedule(context: Context? = null): RouteSchedule {
+        return com.college.bustracker.util.OperatingScheduleService.getSchedule()
     }
 
     fun scheduleAlarms(context: Context, schedule: RouteSchedule) {
@@ -93,12 +69,13 @@ object StudentAutoTrackingScheduler {
     ) {
         try {
             val time = LocalTime.parse(timeStr, DateTimeFormatter.ofPattern("HH:mm"))
-            var targetDateTime = LocalDateTime.of(LocalDate.now(), time)
-            if (targetDateTime.isBefore(LocalDateTime.now())) {
+            val nowKolkata = java.time.ZonedDateTime.now(com.college.bustracker.util.ScheduleHelper.KOLKATA_ZONE)
+            var targetDateTime = LocalDateTime.of(nowKolkata.toLocalDate(), time)
+            if (!targetDateTime.isAfter(nowKolkata.toLocalDateTime())) {
                 targetDateTime = targetDateTime.plusDays(1)
             }
 
-            val triggerMillis = targetDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val triggerMillis = targetDateTime.atZone(com.college.bustracker.util.ScheduleHelper.KOLKATA_ZONE).toInstant().toEpochMilli()
 
             val intent = Intent(context, StudentScheduleReceiver::class.java).apply {
                 action = ACTION_STUDENT_SCHEDULE_CHECK

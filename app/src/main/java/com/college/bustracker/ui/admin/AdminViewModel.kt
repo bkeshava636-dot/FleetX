@@ -515,15 +515,16 @@ class AdminViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
+            val currentSched = com.college.bustracker.util.OperatingScheduleService.getSchedule()
             val sched = RouteSchedule(
                 morning = com.college.bustracker.data.model.ScheduleWindow(
-                    startTime = if (mStart.isNotBlank()) mStart else "07:00",
-                    endTime = if (mEnd.isNotBlank()) mEnd else "09:00",
+                    startTime = if (mStart.isNotBlank()) mStart else currentSched.morning.startTime,
+                    endTime = if (mEnd.isNotBlank()) mEnd else currentSched.morning.endTime,
                     enabled = morningEnabled
                 ),
                 evening = com.college.bustracker.data.model.ScheduleWindow(
-                    startTime = if (eStart.isNotBlank()) eStart else "16:00",
-                    endTime = if (eEnd.isNotBlank()) eEnd else "18:00",
+                    startTime = if (eStart.isNotBlank()) eStart else currentSched.evening.startTime,
+                    endTime = if (eEnd.isNotBlank()) eEnd else currentSched.evening.endTime,
                     enabled = eveningEnabled
                 )
             )

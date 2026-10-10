@@ -7,12 +7,18 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 
 class TrackingRepository(
     private val database: FirebaseDatabase = FirebaseDatabase.getInstance()
@@ -41,8 +47,17 @@ class TrackingRepository(
         val busRef = liveLocationsRef.child(busId)
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val loc = snapshot.getValue(LiveLocation::class.java)
+                val loc = try {
+                    snapshot.getValue(LiveLocation::class.java)
+                } catch (e: Exception) {
+                    Log.w("BusTrackerGPS", "LIVE_LOCATION_MAPPING_WARNING: Reflection deserialization failed for bus $busId, fallback to manual parse: ${e.message}")
+                    null
+                } ?: parseLiveLocationSnapshot(snapshot, busId)
+
                 if (loc != null) {
+                    Log.i("BusTrackerGPS", "LIVE_LOCATION_CALLBACK: busId=$busId, lat=${loc.latitude}, lon=${loc.longitude}, lastUpdated=${loc.lastUpdated}")
+                    Log.i("BusTrackerGPS", "STUDENT_LIVE_LOCATION_RECEIVED: busId=${loc.busId}, latitude=${loc.latitude}, longitude=${loc.longitude}, lastUpdated=${loc.lastUpdated}")
+
                     if (loc.isStale()) {
                         Log.w("BusTrackerGPS", "GPS_STALE: location for bus ${loc.busId} exceeds 90s stale threshold")
                     }
@@ -54,6 +69,7 @@ class TrackingRepository(
             }
 
             override fun onCancelled(error: DatabaseError) {
+                Log.e("BusTrackerGPS", "STUDENT_LOCATION_LISTENER_ERROR: code=${error.code}, message=${error.message}, details=${error.details}")
                 // Fall back to memory state
                 _localLocations.value[busId]?.let { trySend(it) }
             }
@@ -61,6 +77,94 @@ class TrackingRepository(
 
         busRef.addValueEventListener(listener)
         awaitClose { busRef.removeEventListener(listener) }
+    }
+
+    private val repositoryScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.Job())
+    private val pendingRetries = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Job>()
+
+    private fun isTransientError(code: Int): Boolean {
+        return code == DatabaseError.NETWORK_ERROR ||
+               code == DatabaseError.DISCONNECTED ||
+               code == DatabaseError.OPERATION_FAILED ||
+               code == DatabaseError.UNAVAILABLE ||
+               code == DatabaseError.WRITE_CANCELED ||
+               code == DatabaseError.EXPIRED_TOKEN
+    }
+
+    private fun scheduleWriteRetry(
+        locationToUse: LiveLocation,
+        attempt: Int,
+        lastErrorCode: Int,
+        lastErrorMessage: String
+    ) {
+        val busId = locationToUse.busId
+        if (attempt > 3) {
+            offlineBuffer[busId] = locationToUse
+            com.college.bustracker.diagnostics.GpsDiagnosticManager.onRtdbRetryExhausted(
+                context = com.college.bustracker.CollegeBusApp.instance,
+                busId = busId,
+                totalAttempts = 3,
+                lastErrorCode = lastErrorCode,
+                lastErrorMessage = lastErrorMessage
+            )
+            return
+        }
+
+        val backoffDelayMs = 1000L * (1L shl (attempt - 1)) // 1000ms, 2000ms, 4000ms
+        com.college.bustracker.diagnostics.GpsDiagnosticManager.onRtdbRetryScheduled(
+            context = com.college.bustracker.CollegeBusApp.instance,
+            busId = busId,
+            attempt = attempt,
+            delayMs = backoffDelayMs,
+            reason = "Transient RTDB write error ($lastErrorCode)"
+        )
+
+        pendingRetries[busId]?.cancel()
+        val job = repositoryScope.launch {
+            kotlinx.coroutines.delay(backoffDelayMs)
+            val currentCached = _localLocations.value[busId]
+            // Monotonicity check: abort retry if cache already has a newer fix
+            if (currentCached != null && currentCached.lastUpdated > locationToUse.lastUpdated) {
+                Log.d("BusTrackerGPS", "GPS_RETRY_SKIPPED: newer fix already available for $busId")
+                return@launch
+            }
+
+            val retryStart = System.currentTimeMillis()
+            try {
+                liveLocationsRef.child(busId).setValue(locationToUse) { error, _ ->
+                    val retryLatency = System.currentTimeMillis() - retryStart
+                    if (error != null) {
+                        val isTransient = isTransientError(error.code)
+                        if (isTransient) {
+                            scheduleWriteRetry(locationToUse, attempt + 1, error.code, error.message)
+                        } else {
+                            offlineBuffer[busId] = locationToUse
+                            com.college.bustracker.diagnostics.GpsDiagnosticManager.onRtdbWriteFailed(
+                                context = com.college.bustracker.CollegeBusApp.instance,
+                                busId = busId,
+                                errorCode = error.code,
+                                errorMessage = error.message,
+                                latencyMs = retryLatency,
+                                isRetryable = false,
+                                attempt = attempt
+                            )
+                        }
+                    } else {
+                        pendingRetries.remove(busId)
+                        com.college.bustracker.diagnostics.GpsDiagnosticManager.onRtdbRetrySuccess(
+                            context = com.college.bustracker.CollegeBusApp.instance,
+                            busId = busId,
+                            attempt = attempt,
+                            latencyMs = retryLatency
+                        )
+                        _trackingError.value = null
+                    }
+                }
+            } catch (e: Exception) {
+                scheduleWriteRetry(locationToUse, attempt + 1, -1, e.message ?: "Exception in retry")
+            }
+        }
+        pendingRetries[busId] = job
     }
 
     fun updateLiveLocation(location: LiveLocation, hasInternet: Boolean = true) {
@@ -107,15 +211,39 @@ class TrackingRepository(
             offlineBuffer.remove(busId)
             try {
                 Log.i("BusTrackerGPS", "[AUTO-TRACE] Firebase location write attempted: busId=$busId")
+                val writeStart = System.currentTimeMillis()
+                com.college.bustracker.diagnostics.GpsDiagnosticManager.onRtdbWriteAttempted(com.college.bustracker.CollegeBusApp.instance, busId)
+
                 liveLocationsRef.child(busId).setValue(locationToUse) { error, _ ->
+                    val writeLatency = System.currentTimeMillis() - writeStart
+                    val auth = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                    val hasAuth = auth != null
                     if (error != null) {
                         Log.e("BusTrackerGPS", "[AUTO-TRACE] Firebase location write failed: code=${error.code}, msg=${error.message}")
+                        val isTransient = isTransientError(error.code)
+                        val isPermanent = (error.code == DatabaseError.PERMISSION_DENIED)
+                        if (error.code == DatabaseError.EXPIRED_TOKEN) {
+                            try { auth?.getIdToken(true) } catch (ignored: Exception) {}
+                        }
+                        com.college.bustracker.diagnostics.GpsDiagnosticManager.onRtdbWriteFailed(
+                            context = com.college.bustracker.CollegeBusApp.instance,
+                            busId = busId,
+                            errorCode = error.code,
+                            errorMessage = error.message,
+                            latencyMs = writeLatency,
+                            exceptionClass = "DatabaseError",
+                            hasAuthUser = hasAuth,
+                            isNetworkConnected = hasInternet,
+                            isRetryable = isTransient,
+                            attempt = 1,
+                            hasOperatorEpoch = (locationToUse.operatorEpoch != null)
+                        )
                         val now = System.currentTimeMillis()
                         if (now - lastErrorLogTime > 10_000L) {
                             lastErrorLogTime = now
                             Log.e("BusTrackerGPS", "RTDB_WRITE_REJECTED: busId=$busId write failed with code ${error.code}: ${error.message}")
                         }
-                        val userMsg = if (error.code == DatabaseError.PERMISSION_DENIED) {
+                        val userMsg = if (isPermanent) {
                             "Tracking permission denied for $busId. Check driver bus assignment."
                         } else {
                             "Live tracking error: ${error.message}"
@@ -124,11 +252,20 @@ class TrackingRepository(
                         com.college.bustracker.service.TrackingServiceHelper.updateServiceState(
                             isTracking = true,
                             busId = busId,
-                            gps = if (error.code == DatabaseError.PERMISSION_DENIED) "Permission Denied" else "Sync Error",
+                            gps = if (isPermanent) "Permission Denied" else "Sync Error",
                             timestamp = locationToUse.lastUpdated
                         )
+                        if (isTransient) {
+                            scheduleWriteRetry(locationToUse, 1, error.code, error.message)
+                        }
                     } else {
                         Log.i("BusTrackerGPS", "[AUTO-TRACE] Firebase location write succeeded: busId=$busId, lat=${locationToUse.latitude}, lng=${locationToUse.longitude}")
+                        pendingRetries.remove(busId)?.cancel()
+                        com.college.bustracker.diagnostics.GpsDiagnosticManager.onRtdbWriteSuccess(
+                            context = com.college.bustracker.CollegeBusApp.instance,
+                            busId = busId,
+                            latencyMs = writeLatency
+                        )
                         if (_trackingError.value != null) {
                             _trackingError.value = null
                         }
@@ -139,6 +276,14 @@ class TrackingRepository(
                     "GPS_UPLOADED: busId=$busId, lat=${locationToUse.latitude}, lng=${locationToUse.longitude}, t=${locationToUse.lastUpdated}"
                 )
             } catch (e: Exception) {
+                com.college.bustracker.diagnostics.GpsDiagnosticManager.onRtdbWriteFailed(
+                    context = com.college.bustracker.CollegeBusApp.instance,
+                    busId = busId,
+                    errorCode = -1,
+                    errorMessage = e.message ?: "Exception in setValue",
+                    exceptionClass = e.javaClass.simpleName,
+                    isRetryable = false
+                )
                 offlineBuffer[busId] = locationToUse
                 Log.w("BusTrackerGPS", "GPS_BUFFERED: write failed, buffered busId=$busId")
             }
@@ -272,5 +417,45 @@ class TrackingRepository(
 
         busSourcesRef.addValueEventListener(listener)
         awaitClose { busSourcesRef.removeEventListener(listener) }
+    }
+
+    companion object {
+        fun parseLiveLocationSnapshot(snapshot: DataSnapshot, fallbackBusId: String): LiveLocation? {
+            if (!snapshot.exists()) return null
+            return try {
+                val busId = snapshot.child("busId").getValue(String::class.java) ?: fallbackBusId
+                val lat = (snapshot.child("latitude").value as? Number)?.toDouble() ?: 0.0
+                val lon = (snapshot.child("longitude").value as? Number)?.toDouble() ?: 0.0
+                val speed = (snapshot.child("speed").value as? Number)?.toFloat() ?: 0.0f
+                val bearing = (snapshot.child("bearing").value as? Number)?.toFloat() ?: 0.0f
+                val status = snapshot.child("trackingStatus").getValue(String::class.java) ?: "INACTIVE"
+                val mode = snapshot.child("mode").getValue(String::class.java) ?: "MANUAL"
+                val routeId = snapshot.child("routeId").getValue(String::class.java) ?: ""
+                val driverId = snapshot.child("driverId").getValue(String::class.java) ?: ""
+                val sourceType = snapshot.child("sourceType").getValue(String::class.java) ?: "PRIMARY_DRIVER"
+                val epoch = (snapshot.child("operatorEpoch").value as? Number)?.toLong()
+                val tempId = snapshot.child("temporaryAssignmentId").getValue(String::class.java)
+                val lastUpdated = (snapshot.child("lastUpdated").value as? Number)?.toLong() ?: 0L
+
+                LiveLocation(
+                    busId = busId,
+                    latitude = lat,
+                    longitude = lon,
+                    speed = speed,
+                    bearing = bearing,
+                    trackingStatus = status,
+                    mode = mode,
+                    routeId = routeId,
+                    driverId = driverId,
+                    sourceType = sourceType,
+                    operatorEpoch = epoch,
+                    temporaryAssignmentId = tempId,
+                    lastUpdated = lastUpdated
+                )
+            } catch (e: Exception) {
+                Log.e("BusTrackerGPS", "STUDENT_LOCATION_PARSE_ERROR: busId=$fallbackBusId, err=${e.message}")
+                null
+            }
+        }
     }
 }

@@ -16,6 +16,8 @@ object TrackingServiceHelper {
     const val EXTRA_ROUTE_ID = "EXTRA_ROUTE_ID"
     const val EXTRA_DRIVER_ID = "EXTRA_DRIVER_ID"
     const val EXTRA_TRACKING_MODE = "EXTRA_TRACKING_MODE" // "AUTO" or "MANUAL"
+    const val EXTRA_STOP_REASON = "EXTRA_STOP_REASON"
+    const val EXTRA_STOP_CALLER = "EXTRA_STOP_CALLER"
 
     private val _isTracking = MutableStateFlow(false)
     val isTracking: StateFlow<Boolean> = _isTracking.asStateFlow()
@@ -57,9 +59,15 @@ object TrackingServiceHelper {
         ContextCompat.startForegroundService(context, intent)
     }
 
-    fun stopTracking(context: Context) {
+    fun stopTracking(
+        context: Context,
+        reason: String = "USER_MANUAL_STOP",
+        caller: String = "TrackingServiceHelper"
+    ) {
         val intent = Intent(context, LocationTrackingService::class.java).apply {
             action = ACTION_STOP_TRACKING
+            putExtra(EXTRA_STOP_REASON, reason)
+            putExtra(EXTRA_STOP_CALLER, caller)
         }
         context.startService(intent)
     }

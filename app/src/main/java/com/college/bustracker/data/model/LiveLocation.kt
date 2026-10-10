@@ -15,7 +15,7 @@ data class LiveLocation(
     val routeId: String = "",
     val driverId: String = "",
     val sourceType: String = "PRIMARY_DRIVER", // PRIMARY_DRIVER, SECONDARY_STUDENT_FALLBACK
-    val operatorEpoch: Long = 0L,
+    val operatorEpoch: Long? = null,
     val temporaryAssignmentId: String? = null,
     val lastUpdated: Long = 0L
 ) {

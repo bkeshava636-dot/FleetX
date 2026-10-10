@@ -81,11 +81,13 @@ object CollegeCalendarService {
         }
     }
 
+    fun nowLocalDate(): LocalDate = LocalDate.now(ScheduleHelper.KOLKATA_ZONE)
+
     /**
      * Pure evaluator for any date against given or cached exceptions.
      */
     fun evaluateDay(
-        date: LocalDate = LocalDate.now(),
+        date: LocalDate = nowLocalDate(),
         exceptions: Map<String, CalendarException> = _cachedExceptions.value
     ): DayEvaluation {
         var currentExceptions = exceptions
@@ -170,21 +172,21 @@ object CollegeCalendarService {
     }
 
     fun isWorkingDay(
-        date: LocalDate = LocalDate.now(),
+        date: LocalDate = nowLocalDate(),
         exceptions: Map<String, CalendarException> = _cachedExceptions.value
     ): Boolean {
         return evaluateDay(date, exceptions).isWorkingDay
     }
 
     fun isHoliday(
-        date: LocalDate = LocalDate.now(),
+        date: LocalDate = nowLocalDate(),
         exceptions: Map<String, CalendarException> = _cachedExceptions.value
     ): Boolean {
         return evaluateDay(date, exceptions).isHoliday
     }
 
     fun getHolidayName(
-        date: LocalDate = LocalDate.now(),
+        date: LocalDate = nowLocalDate(),
         exceptions: Map<String, CalendarException> = _cachedExceptions.value
     ): String? {
         return evaluateDay(date, exceptions).holidayName
