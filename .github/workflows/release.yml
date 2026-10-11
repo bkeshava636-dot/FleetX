@@ -1,0 +1,131 @@
+name: FleetX Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name (e.g. v1.0.1)'
+        required: true
+        default: 'v1.0.1'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Make Gradlew Executable
+        run: chmod +x gradlew
+
+      - name: Setup google-services.json
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+            echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > app/google-services.json
+          fi
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Locate APK and Compute Checksum
+        id: apk_info
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "main" ]; then
+            TAG_NAME="${{ github.event.inputs.tag_name }}"
+          fi
+          
+          # Find generated APK
+          APK_PATH=$(find app/build/outputs/apk/ -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "Error: No APK found after build."
+            exit 1
+          fi
+          
+          RELEASE_APK="FleetX-${TAG_NAME}.apk"
+          cp "$APK_PATH" "$RELEASE_APK"
+          
+          SHA256=$(sha256sum "$RELEASE_APK" | awk '{print $1}')
+          FILE_SIZE=$(stat -c%s "$RELEASE_APK")
+          
+          # Extract versionCode and versionName from build.gradle.kts or tag
+          VERSION_NAME=$(echo "$TAG_NAME" | sed 's/^v//')
+          
+          # Compute semver integer code e.g. 1.0.1 -> 10001
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NAME"
+          MAJOR=${MAJOR:-1}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
+          VERSION_CODE=$(( MAJOR * 10000 + MINOR * 100 + PATCH ))
+          
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "apk_path=$RELEASE_APK" >> $GITHUB_OUTPUT
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "file_size=$FILE_SIZE" >> $GITHUB_OUTPUT
+          
+          # Create companion update manifest
+          cat <<EOF > update-manifest.json
+          {
+            "versionName": "$VERSION_NAME",
+            "versionCode": $VERSION_CODE,
+            "sha256": "$SHA256",
+            "sizeBytes": $FILE_SIZE,
+            "apkFileName": "$RELEASE_APK",
+            "publishedAt": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          }
+          EOF
+          
+          # Create checksums.txt
+          echo "$SHA256  $RELEASE_APK" > checksums.txt
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.apk_info.outputs.tag_name }}
+          name: FleetX ${{ steps.apk_info.outputs.tag_name }}
+          draft: false
+          prerelease: false
+          body: |
+            ## FleetX Campus Transit Portal - Release ${{ steps.apk_info.outputs.tag_name }}
+            
+            ### Release Information
+            - **Version Name:** `${{ steps.apk_info.outputs.version_name }}`
+            - **Version Code:** `${{ steps.apk_info.outputs.version_code }}`
+            - **Release Date:** $(date -u +'%Y-%m-%d %H:%M UTC')
+            - **APK Asset:** `${{ steps.apk_info.outputs.apk_path }}`
+            - **SHA-256 Checksum:**
+            ```
+            ${{ steps.apk_info.outputs.sha256 }}
+            ```
+            
+            versionCode: ${{ steps.apk_info.outputs.version_code }}
+            SHA-256: ${{ steps.apk_info.outputs.sha256 }}
+            
+            ### What's New
+            - In-app automatic update delivery via GitHub Releases
+            - Cryptographic SHA-256 and signing certificate verification
+            - Fleet tracking and campus transit performance enhancements
+          files: |
+            ${{ steps.apk_info.outputs.apk_path }}
+            update-manifest.json
+            checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

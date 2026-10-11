@@ -178,5 +178,10 @@ fun AdminOverviewScreen(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // FleetX Updates & About Section
+        com.college.bustracker.update.ui.UpdateCard()
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }

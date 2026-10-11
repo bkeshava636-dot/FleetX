@@ -870,6 +870,11 @@ fun DriverHomeScreen(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // FleetX Updates & About Section
+        com.college.bustracker.update.ui.UpdateCard()
     }
 
     // Stop Confirmation Dialog

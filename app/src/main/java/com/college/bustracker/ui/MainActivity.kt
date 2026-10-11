@@ -17,6 +17,10 @@ import com.college.bustracker.data.repository.StudentPreferences
 import com.college.bustracker.service.PushNotificationService
 import com.college.bustracker.ui.navigation.AppNavHost
 import com.college.bustracker.ui.student.StudentViewModel
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.college.bustracker.ui.theme.CollegeBusTrackerTheme
 import com.college.bustracker.ui.theme.CollegeSurface
 
@@ -40,6 +44,8 @@ class MainActivity : ComponentActivity() {
         } catch (ignored: Exception) {}
     }
 
+    private var startupUpdateInfo by androidx.compose.runtime.mutableStateOf<com.college.bustracker.update.model.AppReleaseInfo?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -48,6 +54,25 @@ class MainActivity : ComponentActivity() {
         // Request runtime permissions for location and notifications
         requestRequiredPermissions()
 
+        // Non-blocking update check on application start
+        lifecycleScope.launch {
+            try {
+                val result = com.college.bustracker.update.AppUpdateManager.instance.checkForUpdates(
+                    this@MainActivity,
+                    isManual = false
+                )
+                if (result is com.college.bustracker.update.model.UpdateCheckResult.UpdateAvailable) {
+                    if (!com.college.bustracker.update.AppUpdateManager.instance.isVersionDismissed(
+                            this@MainActivity,
+                            result.releaseInfo.versionCode
+                        )
+                    ) {
+                        startupUpdateInfo = result.releaseInfo
+                    }
+                }
+            } catch (ignored: Exception) {}
+        }
+
         setContent {
             CollegeBusTrackerTheme {
                 Surface(
@@ -55,6 +80,16 @@ class MainActivity : ComponentActivity() {
                     color = CollegeSurface
                 ) {
                     AppNavHost(studentViewModel = studentViewModel)
+
+                    startupUpdateInfo?.let { release ->
+                        val updateManager = com.college.bustracker.update.AppUpdateManager.instance
+                        com.college.bustracker.update.ui.UpdateDialog(
+                            releaseInfo = release,
+                            installedVersionName = updateManager.getInstalledVersionName(this@MainActivity),
+                            installedVersionCode = updateManager.getInstalledVersionCode(this@MainActivity),
+                            onDismiss = { startupUpdateInfo = null }
+                        )
+                    }
                 }
             }
         }
