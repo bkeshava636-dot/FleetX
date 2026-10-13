@@ -23,6 +23,7 @@ class CollegeBusApp : Application() {
     companion object {
         const val TRACKING_CHANNEL_ID = "tracking_service_channel"
         const val ALERTS_CHANNEL_ID = "bus_alerts_channel"
+        const val ANNOUNCEMENTS_CHANNEL_ID = "announcements_channel"
 
         lateinit var instance: CollegeBusApp
             private set
@@ -41,6 +42,7 @@ class CollegeBusApp : Application() {
     lateinit var operatingScheduleRepository: com.college.bustracker.data.repository.OperatingScheduleRepository
     lateinit var stopRequestRepository: com.college.bustracker.data.repository.StopRequestRepository
     lateinit var temporaryAssignmentRepository: com.college.bustracker.data.repository.TemporaryAssignmentRepository
+    lateinit var announcementRepository: com.college.bustracker.data.repository.AnnouncementRepository
     lateinit var networkMonitor: NetworkMonitor
 
     override fun onCreate() {
@@ -49,6 +51,9 @@ class CollegeBusApp : Application() {
 
         // 1. Initialize OpenStreetMap Tile Configuration (User-Agent, offline caching)
         OsmConfigHelper.initialize(this)
+
+        // Initialize Locale preference
+        com.college.bustracker.util.LocaleHelper.init(this)
 
         // 2. Setup Notification Channels
         createNotificationChannels()
@@ -63,6 +68,7 @@ class CollegeBusApp : Application() {
         operatingScheduleRepository = com.college.bustracker.data.repository.OperatingScheduleRepository()
         stopRequestRepository = com.college.bustracker.data.repository.StopRequestRepository()
         temporaryAssignmentRepository = com.college.bustracker.data.repository.TemporaryAssignmentRepository()
+        announcementRepository = com.college.bustracker.data.repository.AnnouncementRepository()
         networkMonitor = NetworkMonitor(this)
 
         // 4. Initialize Calendar & Operating Schedule Services and keep caches reactive
@@ -163,8 +169,19 @@ class CollegeBusApp : Application() {
                 enableVibration(true)
             }
 
+            // High-priority channel for campus announcements & timing changes
+            val announcementsChannel = NotificationChannel(
+                ANNOUNCEMENTS_CHANNEL_ID,
+                getString(R.string.channel_announcements_name),
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = getString(R.string.channel_announcements_desc)
+                enableVibration(true)
+            }
+
             notificationManager.createNotificationChannel(trackingChannel)
             notificationManager.createNotificationChannel(alertsChannel)
+            notificationManager.createNotificationChannel(announcementsChannel)
         }
     }
 }

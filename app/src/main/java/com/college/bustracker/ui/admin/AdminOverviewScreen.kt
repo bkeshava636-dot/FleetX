@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cached
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.DirectionsBus
@@ -54,7 +55,8 @@ fun AdminOverviewScreen(
     pendingStopRequests: List<StopRequest>,
     onNavigateToOperations: (subTab: String) -> Unit,
     onNavigateToRoutes: (subTab: String) -> Unit,
-    onNavigateToCalendar: () -> Unit
+    onNavigateToCalendar: () -> Unit,
+    onNavigateToAnnouncements: () -> Unit = {}
 ) {
     val now = System.currentTimeMillis()
     val activeReplacements = temporaryAssignments.filter { it.isActive(now) }
@@ -175,6 +177,13 @@ fun AdminOverviewScreen(
             title = "Calendar",
             subtitle = "Working days, holidays, and schedule overrides",
             onClick = onNavigateToCalendar
+        )
+
+        AdminMenuRow(
+            icon = Icons.Default.Campaign,
+            title = "Announcements",
+            subtitle = "Campus transit alerts, bus timing updates, and notices",
+            onClick = onNavigateToAnnouncements
         )
 
         Spacer(modifier = Modifier.height(16.dp))

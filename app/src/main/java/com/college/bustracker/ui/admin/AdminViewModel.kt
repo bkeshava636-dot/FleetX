@@ -37,6 +37,58 @@ class AdminViewModel : ViewModel() {
     val temporaryAssignments: StateFlow<List<com.college.bustracker.data.model.TemporaryAssignment>> = tempAssignRepo.getAllAssignmentsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val announcementRepo = app.announcementRepository
+
+    val announcements: StateFlow<List<com.college.bustracker.data.model.Announcement>> = announcementRepo.getAnnouncementsFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val publishedAnnouncements: StateFlow<List<com.college.bustracker.data.model.Announcement>> = announcements.map { list ->
+        list.filter { it.status == com.college.bustracker.data.model.Announcement.STATUS_PUBLISHED }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val draftAnnouncements: StateFlow<List<com.college.bustracker.data.model.Announcement>> = announcements.map { list ->
+        list.filter { it.status == com.college.bustracker.data.model.Announcement.STATUS_DRAFT }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val archivedAnnouncements: StateFlow<List<com.college.bustracker.data.model.Announcement>> = announcements.map { list ->
+        list.filter { it.status == com.college.bustracker.data.model.Announcement.STATUS_ARCHIVED }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun createAnnouncement(announcement: com.college.bustracker.data.model.Announcement, onResult: (Result<String>) -> Unit) {
+        viewModelScope.launch {
+            val res = announcementRepo.createAnnouncement(announcement)
+            onResult(res)
+        }
+    }
+
+    fun updateAnnouncement(announcement: com.college.bustracker.data.model.Announcement, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            val res = announcementRepo.updateAnnouncement(announcement)
+            onResult(res)
+        }
+    }
+
+    fun publishAnnouncement(id: String, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            val res = announcementRepo.publishAnnouncement(id)
+            onResult(res)
+        }
+    }
+
+    fun archiveAnnouncement(id: String, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            val res = announcementRepo.archiveAnnouncement(id)
+            onResult(res)
+        }
+    }
+
+    fun deleteAnnouncement(id: String, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            val res = announcementRepo.deleteAnnouncement(id)
+            onResult(res)
+        }
+    }
+
     val activeReplacementsCount: StateFlow<Int> = temporaryAssignments.map { list ->
         val now = tempAssignRepo.getEstimatedServerTime()
         list.count { it.isActive(now) }

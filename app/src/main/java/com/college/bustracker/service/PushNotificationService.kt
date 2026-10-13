@@ -9,7 +9,9 @@ import androidx.core.app.NotificationCompat
 import com.college.bustracker.CollegeBusApp
 import com.college.bustracker.data.repository.StudentPreferences
 import com.college.bustracker.ui.MainActivity
+import com.college.bustracker.util.AnnouncementTopicManager
 import com.college.bustracker.util.BusTopicManager
+import com.college.bustracker.util.LocaleHelper
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
@@ -22,6 +24,7 @@ class PushNotificationService : FirebaseMessagingService() {
         const val EXTRA_BUS_ID = "EXTRA_BUS_ID"
         const val EXTRA_REPLACEMENT_BUS_ID = "EXTRA_REPLACEMENT_BUS_ID"
         const val EXTRA_STOP_ID = "EXTRA_STOP_ID"
+        const val EXTRA_ANNOUNCEMENT_ID = "EXTRA_ANNOUNCEMENT_ID"
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
@@ -29,6 +32,74 @@ class PushNotificationService : FirebaseMessagingService() {
 
         val data = remoteMessage.data
         val notificationType = data["notificationType"] ?: "BUS_SWAP"
+
+        if (notificationType.equals("ANNOUNCEMENT", ignoreCase = true)) {
+            handleAnnouncementMessage(remoteMessage, data)
+        } else {
+            handleBusSwapMessage(remoteMessage, data)
+        }
+    }
+
+    private fun handleAnnouncementMessage(remoteMessage: RemoteMessage, data: Map<String, String>) {
+        val announcementId = data["announcementId"] ?: data["id"] ?: ""
+        val isKn = LocaleHelper.isKannada(applicationContext)
+
+        val titleEn = data["titleEn"] ?: ""
+        val titleKn = data["titleKn"] ?: ""
+        val messageEn = data["messageEn"] ?: ""
+        val messageKn = data["messageKn"] ?: ""
+
+        val rawTitle = if (isKn) {
+            titleKn.ifBlank { titleEn }
+        } else {
+            titleEn.ifBlank { titleKn }
+        }
+
+        val rawMessage = if (isKn) {
+            messageKn.ifBlank { messageEn }
+        } else {
+            messageEn.ifBlank { messageKn }
+        }
+
+        val title = remoteMessage.notification?.title ?: data["title"] ?: rawTitle.ifBlank {
+            if (isKn) "📢 ಕಾಲೇಜು ಪ್ರಕಟಣೆ" else "📢 Campus Announcement"
+        }
+        val message = remoteMessage.notification?.body ?: data["body"] ?: rawMessage.ifBlank {
+            if (isKn) "ಹೊಸ ಪ್ರಕಟಣೆ ಲಭ್ಯವಿದೆ" else "A new announcement has been published."
+        }
+
+        Log.i(TAG, "Announcement FCM received: id=$announcementId, title=$title")
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_ROUTE, "announcements")
+            putExtra(EXTRA_ANNOUNCEMENT_ID, announcementId)
+        }
+
+        val requestCode = if (announcementId.isNotBlank()) announcementId.hashCode() else 301
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CollegeBusApp.ANNOUNCEMENTS_CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationId = if (announcementId.isNotBlank()) announcementId.hashCode() else System.currentTimeMillis().toInt()
+        manager.notify(notificationId, notification)
+    }
+
+    private fun handleBusSwapMessage(remoteMessage: RemoteMessage, data: Map<String, String>) {
         val swapId = data["swapId"] ?: ""
         val originalBusId = data["originalBusId"] ?: ""
         val replacementBusId = data["replacementBusId"] ?: ""
@@ -36,7 +107,14 @@ class PushNotificationService : FirebaseMessagingService() {
         val stopName = data["stopName"] ?: ""
         val status = (data["status"] ?: "ACTIVE").uppercase()
 
-        val defaultTitle = if (status == "CANCELLED") "🚌 Bus Change Cancelled" else "🚌 Bus Change Alert"
+        val isKn = LocaleHelper.isKannada(applicationContext)
+
+        val defaultTitle = if (status == "CANCELLED") {
+            if (isKn) "🚌 ಬಸ್ ಬದಲಾವಣೆ ರದ್ದುಗೊಂಡಿದೆ" else "🚌 Bus Change Cancelled"
+        } else {
+            if (isKn) "🚌 ಬಸ್ ಬದಲಾವಣೆ ಸೂಚನೆ" else "🚌 Bus Change Alert"
+        }
+
         val defaultBody = when {
             status == "CANCELLED" -> {
                 val target = if (stopName.isNotBlank()) " for $stopName" else ""
@@ -52,7 +130,7 @@ class PushNotificationService : FirebaseMessagingService() {
         val title = remoteMessage.notification?.title ?: data["title"] ?: defaultTitle
         val body = remoteMessage.notification?.body ?: data["body"] ?: defaultBody
 
-        Log.i(TAG, "FCM message received: swapId=$swapId, type=$notificationType, originalBusId=$originalBusId, stopId=$stopId, status=$status")
+        Log.i(TAG, "FCM message received: swapId=$swapId, originalBusId=$originalBusId, stopId=$stopId, status=$status")
 
         showNotification(
             title = title,
@@ -73,6 +151,7 @@ class PushNotificationService : FirebaseMessagingService() {
         if (!savedBus.isNullOrBlank() && !savedStop.isNullOrBlank()) {
             BusTopicManager.updateSubscription(applicationContext, savedBus, savedStop)
         }
+        AnnouncementTopicManager.subscribeToGeneralTopics()
     }
 
     private fun showNotification(
@@ -111,7 +190,6 @@ class PushNotificationService : FirebaseMessagingService() {
             .build()
 
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        // Deduplicate notifications per swap ID to prevent duplicate notification cards
         val notificationId = if (swapId.isNotBlank()) swapId.hashCode() else System.currentTimeMillis().toInt()
         manager.notify(notificationId, notification)
         Log.i(TAG, "Notification displayed in system tray: id=$notificationId, title=$title, stopId=$stopId")

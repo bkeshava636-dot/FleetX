@@ -17,6 +17,7 @@ import com.college.bustracker.data.repository.StudentPreferences
 import com.college.bustracker.service.PushNotificationService
 import com.college.bustracker.ui.navigation.AppNavHost
 import com.college.bustracker.ui.student.StudentViewModel
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
@@ -73,22 +74,41 @@ class MainActivity : ComponentActivity() {
             } catch (ignored: Exception) {}
         }
 
-        setContent {
-            CollegeBusTrackerTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = CollegeSurface
-                ) {
-                    AppNavHost(studentViewModel = studentViewModel)
+        com.college.bustracker.util.LocaleHelper.init(this)
 
-                    startupUpdateInfo?.let { release ->
-                        val updateManager = com.college.bustracker.update.AppUpdateManager.instance
-                        com.college.bustracker.update.ui.UpdateDialog(
-                            releaseInfo = release,
-                            installedVersionName = updateManager.getInstalledVersionName(this@MainActivity),
-                            installedVersionCode = updateManager.getInstalledVersionCode(this@MainActivity),
-                            onDismiss = { startupUpdateInfo = null }
-                        )
+        setContent {
+            val currentLang by com.college.bustracker.util.LocaleHelper.currentLanguage.collectAsState()
+            val localizedContext = androidx.compose.runtime.remember(currentLang) {
+                com.college.bustracker.util.LocaleHelper.getLocalizedContext(this@MainActivity, currentLang)
+            }
+            val localizedConfiguration = androidx.compose.runtime.remember(currentLang) {
+                android.content.res.Configuration(resources.configuration).apply {
+                    val locale = java.util.Locale(currentLang)
+                    setLocale(locale)
+                    setLayoutDirection(locale)
+                }
+            }
+
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalContext provides localizedContext,
+                androidx.compose.ui.platform.LocalConfiguration provides localizedConfiguration
+            ) {
+                CollegeBusTrackerTheme {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = CollegeSurface
+                    ) {
+                        AppNavHost(studentViewModel = studentViewModel)
+
+                        startupUpdateInfo?.let { release ->
+                            val updateManager = com.college.bustracker.update.AppUpdateManager.instance
+                            com.college.bustracker.update.ui.UpdateDialog(
+                                releaseInfo = release,
+                                installedVersionName = updateManager.getInstalledVersionName(this@MainActivity),
+                                installedVersionCode = updateManager.getInstalledVersionCode(this@MainActivity),
+                                onDismiss = { startupUpdateInfo = null }
+                            )
+                        }
                     }
                 }
             }

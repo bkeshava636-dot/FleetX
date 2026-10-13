@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
@@ -94,6 +95,7 @@ fun StaffLoginScreen(
     var userIdInput by remember { mutableStateOf("") }
     var passwordInput by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
 
     // Admin Password Recovery State
     var showForgotPasswordDialog by remember { mutableStateOf(false) }
@@ -110,30 +112,53 @@ fun StaffLoginScreen(
             .background(CollegeSurface)
             .statusBarsPadding()
     ) {
-        // Pinned Header: Back arrow & Title perfectly vertically aligned
+        // Pinned Header: Back arrow, Title, and Language Selector
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            IconButton(
-                onClick = onNavigateBack,
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back to Student View",
-                    tint = Color(0xFF1E293B)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = onNavigateBack,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back to Student View",
+                        tint = Color(0xFF1E293B)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Staff Authentication",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0F172A)
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Staff Authentication",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF0F172A)
-            )
+
+            androidx.compose.material3.OutlinedButton(
+                onClick = { showLanguageDialog = true },
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0F766E)),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Language,
+                    contentDescription = "Language",
+                    modifier = Modifier.size(13.dp),
+                    tint = Color(0xFF0F766E)
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = if (com.college.bustracker.util.LocaleHelper.isKannada()) "ಕನ್ನಡ" else "EN",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         // Scrollable content area with imePadding for soft keyboard support
@@ -543,6 +568,12 @@ fun StaffLoginScreen(
                 },
                 shape = RoundedCornerShape(16.dp),
                 containerColor = Color.White
+            )
+        }
+
+        if (showLanguageDialog) {
+            com.college.bustracker.ui.common.LanguageSelectionDialog(
+                onDismiss = { showLanguageDialog = false }
             )
         }
     }

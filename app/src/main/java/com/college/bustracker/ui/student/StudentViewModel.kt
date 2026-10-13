@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class StudentViewModel : ViewModel() {
@@ -45,6 +46,7 @@ class StudentViewModel : ViewModel() {
     private val swapRepo = app.busSwapRepository
     private val trackingRepo = app.trackingRepository
     private val tempAssignRepo = app.temporaryAssignmentRepository
+    private val announcementRepo = app.announcementRepository
 
     private val allFleetBuses = MutableStateFlow<List<Bus>>(emptyList())
     private var currentListeningBusId: String? = null
@@ -63,6 +65,16 @@ class StudentViewModel : ViewModel() {
 
     private val _selectedStop = MutableStateFlow<BusStop?>(null)
     val selectedStop: StateFlow<BusStop?> = _selectedStop.asStateFlow()
+
+    val announcements: StateFlow<List<com.college.bustracker.data.model.Announcement>> = combine(
+        announcementRepo.getAnnouncementsFlow(),
+        _selectedBus,
+        _currentRoute,
+        _selectedStop
+    ) { list, bus, route, stop ->
+        val now = System.currentTimeMillis()
+        list.filter { it.isRelevantToStudent(bus?.busId, route?.routeId, stop?.stopId, now) }
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _liveLocation = MutableStateFlow<LiveLocation?>(null)
     val liveLocation: StateFlow<LiveLocation?> = _liveLocation.asStateFlow()
