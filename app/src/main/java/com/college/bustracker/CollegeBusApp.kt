@@ -49,6 +49,17 @@ class CollegeBusApp : Application() {
         super.onCreate()
         instance = this
 
+        // Install persistent fatal crash logger
+        val defaultUncaught = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                android.util.Log.e("FATAL_CRASH", "Uncaught exception on thread ${thread.name}: ${throwable.message}", throwable)
+                val crashFile = java.io.File(filesDir, "last_crash.txt")
+                crashFile.writeText(android.util.Log.getStackTraceString(throwable))
+            } catch (ignored: Exception) {}
+            defaultUncaught?.uncaughtException(thread, throwable)
+        }
+
         // 1. Initialize OpenStreetMap Tile Configuration (User-Agent, offline caching)
         OsmConfigHelper.initialize(this)
 
