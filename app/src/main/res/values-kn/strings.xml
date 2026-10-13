@@ -166,7 +166,7 @@
     <string name="target_item">ಆಯ್ದ ಗುರಿ</string>
     <string name="published_tab">ಪ್ರಕಟಿತ</string>
     <string name="drafts_tab">ಕರಡುಗಳು</string>
-    <string name="archived_tab">ಆರ್ಕೈವ್ ಮಾಡಲಾದವು</string>
+    <string name="archived_tab">ಆರ್ಕೈವ್</string>
     <string name="save_as_draft">ಕರಡಾಗಿ ಉಳಿಸಿ</string>
     <string name="publish_now">ಈಗಲೇ ಪ್ರಕಟಿಸಿ</string>
     <string name="expiry_date">ಮುಕ್ತಾಯ ದಿನಾಂಕ ಮತ್ತು ಸಮಯ</string>
@@ -207,6 +207,8 @@
     <string name="bus_timing_alert_workflow">ಬಸ್ ಸಮಯ ಬದಲಾವಣೆ ಎಚ್ಚರಿಕೆ</string>
     <string name="timing_alert_explanation">ಈ ಎಚ್ಚರಿಕೆಯನ್ನು ಪ್ರಕಟಿಸುವುದರಿಂದ ವಿದ್ಯಾರ್ಥಿ ಮತ್ತು ಚಾಲಕರಿಗೆ ತಕ್ಷಣ ಮಾಹಿತಿ ತಲುಪುತ್ತದೆ. ಇದು ನೈಜ ಚಾಲನಾ ವೇಳಾಪಟ್ಟಿಯನ್ನು ಬದಲಿಸುವುದಿಲ್ಲ.</string>
     <string name="select_bus_for_timing">ಬಾಧಿತ ಬಸ್ ಆಯ್ಕೆಮಾಡಿ</string>
+    <string name="all_buses_option">ಎಲ್ಲಾ ಬಸ್‌ಗಳು (ಸಂಪೂರ್ಣ ಫ್ಲೀಟ್)</string>
+    <string name="all_buses_label">ಎಲ್ಲಾ ಬಸ್‌ಗಳು</string>
     <string name="timing_change_type">ಸೇವಾ ಸಮಯ</string>
     <string name="morning_departure">ಬೆಳಗಿನ ಹೊರಡುವಿಕೆ</string>
     <string name="evening_departure">ಸಂಜೆಯ ಹೊರಡುವಿಕೆ</string>

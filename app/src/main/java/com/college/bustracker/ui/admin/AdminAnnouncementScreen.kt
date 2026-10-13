@@ -1,7 +1,10 @@
 package com.college.bustracker.ui.admin
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -100,74 +103,81 @@ fun AdminAnnouncementScreen(
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary),
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(stringResource(R.string.create_announcement), fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(15.dp))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = stringResource(R.string.create_announcement),
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
             OutlinedButton(
                 onClick = onTimingChangeClick,
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD97706)),
+                border = BorderStroke(1.dp, Color(0xFFD97706)),
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp)
             ) {
-                Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFFD97706))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(stringResource(R.string.bus_timing_change), fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color(0xFFD97706))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = stringResource(R.string.bus_timing_change),
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Subtabs
-        TabRow(
-            selectedTabIndex = selectedTab,
-            containerColor = Color.White,
-            contentColor = CollegePrimary,
-            indicator = { tabPositions ->
-                TabRowDefaults.SecondaryIndicator(
-                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = CollegePrimary,
-                    height = 3.dp
-                )
-            }
+        // Subtabs (Modern segmented control)
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = Color(0xFFF1F5F9),
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                text = {
-                    Text(
-                        text = "${stringResource(R.string.published_tab)} (${published.size})",
-                        fontSize = 12.sp,
-                        fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
-                    )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val tabs = listOf(
+                    Triple(0, stringResource(R.string.published_tab), published.size),
+                    Triple(1, stringResource(R.string.drafts_tab), drafts.size),
+                    Triple(2, stringResource(R.string.archived_tab), archived.size)
+                )
+                tabs.forEach { (tabIdx, label, count) ->
+                    val isSelected = selectedTab == tabIdx
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) Color.White else Color.Transparent)
+                            .clickable { selectedTab = tabIdx }
+                            .padding(vertical = 9.dp, horizontal = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "$label ($count)",
+                            fontSize = 11.5.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) CollegePrimary else Color(0xFF64748B),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
-            )
-            Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
-                text = {
-                    Text(
-                        text = "${stringResource(R.string.drafts_tab)} (${drafts.size})",
-                        fontSize = 12.sp,
-                        fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
-                    )
-                }
-            )
-            Tab(
-                selected = selectedTab == 2,
-                onClick = { selectedTab = 2 },
-                text = {
-                    Text(
-                        text = "${stringResource(R.string.archived_tab)} (${archived.size})",
-                        fontSize = 12.sp,
-                        fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal
-                    )
-                }
-            )
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
