@@ -34,7 +34,7 @@ class AppUpdateManager private constructor() {
         private const val PREFS_NAME = "fleetx_update_prefs"
         private const val KEY_LAST_CHECK_MS = "key_last_check_ms"
         private const val KEY_DISMISSED_VERSION_CODE = "key_dismissed_version_code"
-        private const val MIN_CHECK_INTERVAL_MS = 2 * 60 * 60 * 1000L // 2 hours
+        private const val MIN_CHECK_INTERVAL_MS = 60 * 1000L // 1 minute
     }
 
     private val _updateCheckResult = MutableStateFlow<UpdateCheckResult?>(null)

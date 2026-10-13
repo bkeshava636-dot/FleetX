@@ -10,6 +10,18 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
@@ -105,6 +117,68 @@ class MainActivity : ComponentActivity() {
                         color = CollegeSurface
                     ) {
                         AppNavHost(studentViewModel = studentViewModel)
+
+                        var previousCrashLog by androidx.compose.runtime.remember {
+                            val crashFile = java.io.File(filesDir, "last_crash.txt")
+                            val text = if (crashFile.exists()) {
+                                val content = crashFile.readText()
+                                crashFile.delete()
+                                content
+                            } else null
+                            androidx.compose.runtime.mutableStateOf(text)
+                        }
+
+                        previousCrashLog?.let { crashText ->
+                            androidx.compose.material3.AlertDialog(
+                                onDismissRequest = { previousCrashLog = null },
+                                icon = {
+                                    androidx.compose.material3.Icon(
+                                        androidx.compose.material.icons.Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = com.college.bustracker.ui.theme.StatusDangerRed
+                                    )
+                                },
+                                title = { androidx.compose.material3.Text("Diagnostic Crash Report") },
+                                text = {
+                                    androidx.compose.foundation.layout.Column {
+                                        androidx.compose.material3.Text("FleetX recovered from an unexpected error:", fontSize = 13.sp)
+                                        androidx.compose.foundation.layout.Spacer(Modifier.height(8.dp))
+                                        androidx.compose.foundation.layout.Box(
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .height(180.dp)
+                                                .background(androidx.compose.ui.graphics.Color(0xFF1E293B), androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                                                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                                                .padding(8.dp)
+                                        ) {
+                                            androidx.compose.material3.Text(
+                                                crashText,
+                                                color = androidx.compose.ui.graphics.Color.White,
+                                                fontSize = 10.sp,
+                                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                            )
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    androidx.compose.material3.Button(
+                                        onClick = {
+                                            val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Crash Log", crashText))
+                                            android.widget.Toast.makeText(this@MainActivity, "Crash details copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                                            previousCrashLog = null
+                                        }
+                                    ) {
+                                        androidx.compose.material3.Text("Copy Error & Close")
+                                    }
+                                },
+                                dismissButton = {
+                                    androidx.compose.material3.TextButton(onClick = { previousCrashLog = null }) {
+                                        androidx.compose.material3.Text("Dismiss")
+                                    }
+                                }
+                            )
+                        }
 
                         startupUpdateInfo?.let { release ->
                             val updateManager = com.college.bustracker.update.AppUpdateManager.instance
