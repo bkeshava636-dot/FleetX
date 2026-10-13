@@ -2,6 +2,7 @@ package com.college.bustracker.data.repository
 
 import android.util.Log
 import com.college.bustracker.data.model.Announcement
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
@@ -37,10 +38,10 @@ class AnnouncementRepository(
                 if (snapshot != null) {
                     val list = snapshot.documents.mapNotNull { doc ->
                         try {
-                            doc.toObject(Announcement::class.java)?.copy(id = doc.id)
+                            doc.toObject(Announcement::class.java)?.copy(id = doc.id) ?: fromDocMap(doc)
                         } catch (e: Exception) {
-                            Log.e(TAG, "Error parsing announcement doc ${doc.id}", e)
-                            null
+                            Log.w(TAG, "Fallback parsing announcement doc ${doc.id}: ${e.message}")
+                            fromDocMap(doc)
                         }
                     }
                     trySend(list)
@@ -50,6 +51,36 @@ class AnnouncementRepository(
         awaitClose {
             listener.remove()
         }
+    }
+
+    private fun fromDocMap(doc: DocumentSnapshot): Announcement {
+        val data = doc.data ?: return Announcement(id = doc.id)
+        return Announcement(
+            id = doc.id,
+            titleEn = data["titleEn"] as? String ?: "",
+            messageEn = data["messageEn"] as? String ?: "",
+            titleKn = data["titleKn"] as? String ?: "",
+            messageKn = data["messageKn"] as? String ?: "",
+            category = data["category"] as? String ?: Announcement.CATEGORY_GENERAL,
+            priority = data["priority"] as? String ?: Announcement.PRIORITY_NORMAL,
+            targetAudience = data["targetAudience"] as? String ?: Announcement.AUDIENCE_ALL,
+            targetId = data["targetId"] as? String ?: "",
+            targetName = data["targetName"] as? String ?: "",
+            status = data["status"] as? String ?: Announcement.STATUS_PUBLISHED,
+            createdBy = data["createdBy"] as? String ?: "",
+            createdByName = data["createdByName"] as? String ?: "",
+            createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,
+            scheduledAt = (data["scheduledAt"] as? Number)?.toLong(),
+            expiresAt = (data["expiresAt"] as? Number)?.toLong(),
+            updatedAt = (data["updatedAt"] as? Number)?.toLong() ?: 0L,
+            timingBusId = data["timingBusId"] as? String,
+            timingChangeType = data["timingChangeType"] as? String,
+            previousTime = data["previousTime"] as? String,
+            newTime = data["newTime"] as? String,
+            effectiveDate = data["effectiveDate"] as? String,
+            endDate = data["endDate"] as? String,
+            changeReason = data["changeReason"] as? String
+        )
     }
 
     /**

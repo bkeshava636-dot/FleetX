@@ -71,7 +71,7 @@ fun BusTimingChangeDialog(
 ) {
     val isKn = LocaleHelper.isKannada()
 
-    var selectedBus by remember { mutableStateOf(buses.firstOrNull()) }
+    var selectedBus by remember { mutableStateOf<Bus?>(null) }
     var busDropdownOpen by remember { mutableStateOf(false) }
 
     var timingType by remember { mutableStateOf("Morning departure time") }
@@ -91,7 +91,11 @@ fun BusTimingChangeDialog(
     var priority by remember { mutableStateOf(Announcement.PRIORITY_IMPORTANT) }
     var errorText by remember { mutableStateOf<String?>(null) }
 
-    val targetBusId = selectedBus?.busId ?: "BUS"
+    val isAllBuses = selectedBus == null
+    val targetBusId = if (isAllBuses) "ALL" else (selectedBus?.busId ?: "BUS")
+    val busLabelEn = if (isAllBuses) "All Buses" else "Bus $targetBusId"
+    val busLabelKn = if (isAllBuses) "ಎಲ್ಲಾ ಬಸ್‌ಗಳ" else "ಬಸ್ $targetBusId"
+
     val timingTypeKn = if (timingType.contains("Morning", ignoreCase = true)) "ಬೆಳಗಿನ ಹೊರಡುವಿಕೆ" else "ಸಂಜೆಯ ಹೊರಡುವಿಕೆ"
     val reasonKn = when (reason) {
         "College examination schedule" -> "ಕಾಲೇಜು ಪರೀಕ್ಷಾ ವೇಳಾಪಟ್ಟಿ"
@@ -101,11 +105,11 @@ fun BusTimingChangeDialog(
         else -> reason
     }
 
-    val generatedTitleEn = "Bus $targetBusId Timing Alert: $timingType"
-    val generatedMessageEn = "Effective $effectiveDate, the $timingType for Bus $targetBusId has changed from $previousTime to $newTime.${if (endDate.isNotBlank()) " Temporary until $endDate." else ""} Reason: $reason."
+    val generatedTitleEn = if (isAllBuses) "All Buses Timing Alert: $timingType" else "Bus $targetBusId Timing Alert: $timingType"
+    val generatedMessageEn = "Effective $effectiveDate, the $timingType for $busLabelEn has changed from $previousTime to $newTime.${if (endDate.isNotBlank()) " Temporary until $endDate." else ""} Reason: $reason."
 
-    val generatedTitleKn = "ಬಸ್ $targetBusId ಸಮಯ ಬದಲಾವಣೆ: $timingTypeKn"
-    val generatedMessageKn = "$effectiveDate ರಿಂದ ಜಾರಿಗೆ ಬರುವಂತೆ, ಬಸ್ $targetBusId $timingTypeKn ಸಮಯವನ್ನು $previousTime ರಿಂದ $newTime ಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ.${if (endDate.isNotBlank()) " ಇದು $endDate ವರೆಗೆ ತಾತ್ಕಾಲಿಕವಾಗಿರುತ್ತದೆ." else ""} ಕಾರಣ: $reasonKn."
+    val generatedTitleKn = if (isAllBuses) "ಎಲ್ಲಾ ಬಸ್‌ಗಳ ಸಮಯ ಬದಲಾವಣೆ: $timingTypeKn" else "ಬಸ್ $targetBusId ಸಮಯ ಬದಲಾವಣೆ: $timingTypeKn"
+    val generatedMessageKn = "$effectiveDate ರಿಂದ ಜಾರಿಗೆ ಬರುವಂತೆ, $busLabelKn $timingTypeKn ಸಮಯವನ್ನು $previousTime ರಿಂದ $newTime ಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ.${if (endDate.isNotBlank()) " ಇದು $endDate ವರೆಗೆ ತಾತ್ಕಾಲಿಕವಾಗಿರುತ್ತದೆ." else ""} ಕಾರಣ: $reasonKn."
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -177,7 +181,11 @@ fun BusTimingChangeDialog(
                     onExpandedChange = { busDropdownOpen = !busDropdownOpen }
                 ) {
                     OutlinedTextField(
-                        value = selectedBus?.let { "${it.busNumber} (${it.busId})" } ?: "Select Bus",
+                        value = if (selectedBus == null) {
+                            stringResource(R.string.all_buses_option)
+                        } else {
+                            "${selectedBus!!.busNumber} (${selectedBus!!.busId})"
+                        },
                         onValueChange = {},
                         readOnly = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = busDropdownOpen) },
@@ -189,6 +197,19 @@ fun BusTimingChangeDialog(
                         expanded = busDropdownOpen,
                         onDismissRequest = { busDropdownOpen = false }
                     ) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = stringResource(R.string.all_buses_option),
+                                    fontWeight = FontWeight.Bold,
+                                    color = CollegePrimary
+                                )
+                            },
+                            onClick = {
+                                selectedBus = null
+                                busDropdownOpen = false
+                            }
+                        )
                         buses.forEach { bus ->
                             DropdownMenuItem(
                                 text = { Text("${bus.busNumber} (${bus.busId})") },
@@ -339,17 +360,13 @@ fun BusTimingChangeDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val bus = selectedBus
-                    if (bus == null) {
-                        errorText = "Please select a bus"
-                        return@Button
-                    }
                     if (previousTime.isBlank() || newTime.isBlank()) {
-                        errorText = "Please enter previous and new times"
+                        errorText = if (isKn) "ದಯವಿಟ್ಟು ಹಿಂದಿನ ಮತ್ತು ಹೊಸ ಸಮಯವನ್ನು ನಮೂದಿಸಿ" else "Please enter previous and new times"
                         return@Button
                     }
 
                     val now = System.currentTimeMillis()
+                    val isAll = selectedBus == null
                     val announcement = Announcement(
                         titleEn = generatedTitleEn,
                         messageEn = generatedMessageEn,
@@ -357,11 +374,11 @@ fun BusTimingChangeDialog(
                         messageKn = generatedMessageKn,
                         category = Announcement.CATEGORY_TIMING_CHANGE,
                         priority = priority,
-                        targetAudience = Announcement.AUDIENCE_SELECTED_BUS,
-                        targetId = bus.busId,
-                        targetName = bus.busNumber,
+                        targetAudience = if (isAll) Announcement.AUDIENCE_ALL else Announcement.AUDIENCE_SELECTED_BUS,
+                        targetId = if (isAll) "" else (selectedBus?.busId ?: ""),
+                        targetName = if (isAll) (if (isKn) "ಎಲ್ಲಾ ಬಸ್‌ಗಳು" else "All Buses") else (selectedBus?.busNumber ?: ""),
                         status = Announcement.STATUS_PUBLISHED,
-                        timingBusId = bus.busId,
+                        timingBusId = if (isAll) "ALL" else selectedBus?.busId,
                         timingChangeType = timingType,
                         previousTime = previousTime.trim(),
                         newTime = newTime.trim(),

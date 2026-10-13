@@ -207,6 +207,8 @@
     <string name="bus_timing_alert_workflow">Bus Timing Change Alert</string>
     <string name="timing_alert_explanation">Publishing this timing alert informs students and drivers immediately. It communicates information without automatically modifying operating schedules.</string>
     <string name="select_bus_for_timing">Select Affected Bus</string>
+    <string name="all_buses_option">All Buses (Entire Fleet)</string>
+    <string name="all_buses_label">All Buses</string>
     <string name="timing_change_type">Service Window</string>
     <string name="morning_departure">Morning Departure</string>
     <string name="evening_departure">Evening Departure</string>

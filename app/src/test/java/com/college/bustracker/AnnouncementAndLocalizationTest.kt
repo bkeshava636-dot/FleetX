@@ -309,6 +309,40 @@ class AnnouncementAndLocalizationTest {
         assertEquals(Announcement.PRIORITY_IMPORTANT, map["priority"])
     }
 
+    @Test
+    fun testBusTimingAnnouncement_allBusesFleetWide() {
+        val allBusesAnnouncement = Announcement(
+            id = "timing-all",
+            titleEn = "All Buses Timing Alert: Morning departure time",
+            messageEn = "Effective 14 October 2026, the Morning departure time for All Buses has changed from 07:00 to 07:30. Reason: College examination schedule.",
+            titleKn = "ಎಲ್ಲಾ ಬಸ್‌ಗಳ ಸಮಯ ಬದಲಾವಣೆ: ಬೆಳಗಿನ ಹೊರಡುವಿಕೆ",
+            messageKn = "14 October 2026 ರಿಂದ ಜಾರಿಗೆ ಬರುವಂತೆ, ಎಲ್ಲಾ ಬಸ್‌ಗಳ ಬೆಳಗಿನ ಹೊರಡುವಿಕೆ ಸಮಯವನ್ನು 07:00 ರಿಂದ 07:30 ಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ. ಕಾರಣ: ಕಾಲೇಜು ಪರೀಕ್ಷಾ ವೇಳಾಪಟ್ಟಿ.",
+            category = Announcement.CATEGORY_TIMING_CHANGE,
+            priority = Announcement.PRIORITY_IMPORTANT,
+            targetAudience = Announcement.AUDIENCE_ALL,
+            targetId = "",
+            targetName = "All Buses",
+            timingBusId = "ALL",
+            timingChangeType = "Morning departure time",
+            previousTime = "07:00",
+            newTime = "07:30",
+            effectiveDate = "14 October 2026",
+            changeReason = "College examination schedule"
+        )
+
+        // Verifies target audience is ALL so all students and drivers receive it
+        assertTrue(allBusesAnnouncement.isRelevantToStudent("BUS-01", "ROUTE-01", "STOP-01"))
+        assertTrue(allBusesAnnouncement.isRelevantToStudent("BUS-09", "ROUTE-02", "STOP-05"))
+        assertTrue(allBusesAnnouncement.isRelevantToDriver("BUS-01", "ROUTE-01"))
+        assertTrue(allBusesAnnouncement.isRelevantToDriver("BUS-09", "ROUTE-02"))
+
+        val map = allBusesAnnouncement.toMap()
+        assertEquals("ALL", map["timingBusId"])
+        assertEquals(Announcement.AUDIENCE_ALL, map["targetAudience"])
+        assertEquals("All Buses", map["targetName"])
+        assertEquals("Morning departure time", map["timingChangeType"])
+    }
+
     // =========================================================================
     // 7. ANNOUNCEMENT TOPIC MANAGER SUBSCRIPTIONS
     // =========================================================================
