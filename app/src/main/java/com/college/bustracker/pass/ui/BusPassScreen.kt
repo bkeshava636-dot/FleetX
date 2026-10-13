@@ -74,10 +74,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.college.bustracker.R
 import com.college.bustracker.pass.model.BusPass
 import com.college.bustracker.pass.storage.BusPassStorage
 import com.college.bustracker.ui.theme.CollegePrimary
@@ -204,10 +206,10 @@ fun BusPassScreen(
         AlertDialog(
             onDismissRequest = { showReplaceConfirmDialog = false },
             icon = { Icon(Icons.Default.Refresh, contentDescription = null, tint = CollegePrimary) },
-            title = { Text("Replace Bus Pass?", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.replace_bus_pass_title), fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "You will scan both sides of your new pass. Your current digital pass will remain safe and active until you finish and confirm the new scan.",
+                    stringResource(R.string.replace_bus_pass_desc),
                     fontSize = 14.sp
                 )
             },
@@ -219,12 +221,12 @@ fun BusPassScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
                 ) {
-                    Text("Continue to Scan")
+                    Text(stringResource(R.string.continue_to_scan))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showReplaceConfirmDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -235,10 +237,10 @@ fun BusPassScreen(
         AlertDialog(
             onDismissRequest = { showDeleteConfirmDialog = false },
             icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = StatusDangerRed) },
-            title = { Text("Delete Bus Pass?", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.delete_bus_pass_title), fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "Are you sure you want to remove your digital bus pass from this device? You can re-scan your physical college bus pass at any time.",
+                    stringResource(R.string.delete_bus_pass_desc),
                     fontSize = 14.sp
                 )
             },
@@ -250,12 +252,12 @@ fun BusPassScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed)
                 ) {
-                    Text("Delete Permanently")
+                    Text(stringResource(R.string.delete_permanently))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirmDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -297,10 +299,10 @@ private fun BusPassIdleContent(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Bus Pass", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
+                title = { Text(stringResource(R.string.my_bus_pass), fontWeight = FontWeight.Bold, fontSize = 20.sp) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -333,11 +335,11 @@ private fun BusPassIdleContent(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Info, contentDescription = null, tint = CollegePrimary)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Unfinished Scan Detected", fontWeight = FontWeight.Bold, color = CollegePrimary)
+                            Text(stringResource(R.string.unfinished_scan_detected), fontWeight = FontWeight.Bold, color = CollegePrimary)
                         }
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            "You previously scanned the front side of your bus pass. Would you like to continue and scan the back side?",
+                            stringResource(R.string.unfinished_scan_desc),
                             fontSize = 13.sp,
                             color = Color(0xFF334155)
                         )
@@ -347,14 +349,14 @@ private fun BusPassIdleContent(
                             horizontalArrangement = Arrangement.End
                         ) {
                             TextButton(onClick = onDiscardDraft) {
-                                Text("Discard Draft", color = Color(0xFF64748B))
+                                Text(stringResource(R.string.discard_draft), color = Color(0xFF64748B))
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(
                                 onClick = onResumeDraft,
                                 colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
                             ) {
-                                Text("Continue")
+                                Text(stringResource(R.string.continue_action))
                             }
                         }
                     }
@@ -406,7 +408,7 @@ private fun BusPassIdleContent(
                                 modifier = Modifier.clickable { selectedSideTab = 0 }
                             ) {
                                 Text(
-                                    text = "Front Side",
+                                    text = stringResource(R.string.pass_front_side),
                                     color = if (selectedSideTab == 0) Color.White else Color(0xFF475569),
                                     fontWeight = if (selectedSideTab == 0) FontWeight.Bold else FontWeight.Medium,
                                     fontSize = 13.sp,
@@ -419,7 +421,7 @@ private fun BusPassIdleContent(
                                 modifier = Modifier.clickable { selectedSideTab = 1 }
                             ) {
                                 Text(
-                                    text = "Back Side",
+                                    text = stringResource(R.string.pass_back_side),
                                     color = if (selectedSideTab == 1) Color.White else Color(0xFF475569),
                                     fontWeight = if (selectedSideTab == 1) FontWeight.Bold else FontWeight.Medium,
                                     fontSize = 13.sp,
@@ -433,7 +435,7 @@ private fun BusPassIdleContent(
                                     modifier = Modifier.clickable { selectedSideTab = 2 }
                                 ) {
                                     Text(
-                                        text = "Fee Receipt",
+                                        text = stringResource(R.string.pass_fee_receipt),
                                         color = if (selectedSideTab == 2) Color.White else Color(0xFF475569),
                                         fontWeight = if (selectedSideTab == 2) FontWeight.Bold else FontWeight.Medium,
                                         fontSize = 13.sp,
@@ -453,7 +455,7 @@ private fun BusPassIdleContent(
                     ) {
                         Icon(
                             imageVector = Icons.Default.FlipCameraAndroid,
-                            contentDescription = "Flip Card",
+                            contentDescription = stringResource(R.string.pass_flip_card),
                             tint = Color(0xFF1E293B),
                             modifier = Modifier.size(20.dp)
                         )
@@ -480,9 +482,9 @@ private fun BusPassIdleContent(
                             Image(
                                 bitmap = currentBmp.asImageBitmap(),
                                 contentDescription = when (selectedSideTab) {
-                                    0 -> "Front pass"
-                                    1 -> "Back pass"
-                                    else -> "Fee Receipt"
+                                    0 -> stringResource(R.string.front_pass)
+                                    1 -> stringResource(R.string.back_pass)
+                                    else -> stringResource(R.string.pass_fee_receipt)
                                 },
                                 contentScale = ContentScale.Fit,
                                 modifier = Modifier
@@ -511,7 +513,7 @@ private fun BusPassIdleContent(
                                     )
                                     Spacer(modifier = Modifier.width(5.dp))
                                     Text(
-                                        "Tap to Zoom",
+                                        stringResource(R.string.pass_tap_to_zoom),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = Color.White
@@ -519,7 +521,7 @@ private fun BusPassIdleContent(
                                 }
                             }
                         } else {
-                            Text("Image unavailable", color = Color(0xFF94A3B8))
+                            Text(stringResource(R.string.image_unavailable), color = Color(0xFF94A3B8))
                         }
                     }
                 }
@@ -565,13 +567,13 @@ private fun BusPassIdleContent(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = "Fee Receipt Attached",
+                                        text = stringResource(R.string.fee_receipt_attached),
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 14.sp,
                                         color = Color(0xFF0F172A)
                                     )
                                     Text(
-                                        text = "Tap to view in viewer above",
+                                        text = stringResource(R.string.fee_receipt_subtext),
                                         fontSize = 12.sp,
                                         color = Color(0xFF64748B)
                                     )
@@ -585,7 +587,7 @@ private fun BusPassIdleContent(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Refresh,
-                                        contentDescription = "Replace Receipt",
+                                        contentDescription = stringResource(R.string.replace_receipt),
                                         tint = CollegePrimary,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -596,7 +598,7 @@ private fun BusPassIdleContent(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
-                                        contentDescription = "Delete Receipt",
+                                        contentDescription = stringResource(R.string.delete_receipt),
                                         tint = StatusDangerRed,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -623,7 +625,7 @@ private fun BusPassIdleContent(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            "+ Attach Bus Fee Receipt (Optional)",
+                            stringResource(R.string.attach_fee_receipt),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = CollegePrimary
@@ -648,7 +650,7 @@ private fun BusPassIdleContent(
                     ) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(17.dp), tint = CollegePrimary)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Re-scan Pass", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = CollegePrimary)
+                        Text(stringResource(R.string.rescan_pass), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = CollegePrimary)
                     }
 
                     OutlinedButton(
@@ -662,7 +664,7 @@ private fun BusPassIdleContent(
                     ) {
                         Icon(imageVector = Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(17.dp), tint = StatusDangerRed)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Delete Pass", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = StatusDangerRed)
+                        Text(stringResource(R.string.delete_pass), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = StatusDangerRed)
                     }
                 }
 
@@ -671,9 +673,9 @@ private fun BusPassIdleContent(
                     AlertDialog(
                         onDismissRequest = { showDeleteReceiptDialog = false },
                         icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = StatusDangerRed) },
-                        title = { Text("Remove Fee Receipt?", fontWeight = FontWeight.Bold) },
+                        title = { Text(stringResource(R.string.remove_fee_receipt_title), fontWeight = FontWeight.Bold) },
                         text = {
-                            Text("Are you sure you want to remove the fee receipt photo? Your scanned bus pass will remain saved.", fontSize = 14.sp)
+                            Text(stringResource(R.string.remove_fee_receipt_desc), fontSize = 14.sp)
                         },
                         confirmButton = {
                             Button(
@@ -683,12 +685,12 @@ private fun BusPassIdleContent(
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed)
                             ) {
-                                Text("Remove")
+                                Text(stringResource(R.string.remove_action))
                             }
                         },
                         dismissButton = {
                             TextButton(onClick = { showDeleteReceiptDialog = false }) {
-                                Text("Cancel")
+                                Text(stringResource(R.string.cancel))
                             }
                         }
                     )
@@ -716,7 +718,7 @@ private fun BusPassIdleContent(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Text(
-                    text = "Add Your College Bus Pass",
+                    text = stringResource(R.string.add_pass_title),
                     fontSize = 21.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0F172A)
@@ -725,7 +727,7 @@ private fun BusPassIdleContent(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Scan both sides of your official college pass to show the driver whenever boarding without carrying physical cards.",
+                    text = stringResource(R.string.add_pass_desc),
                     fontSize = 14.sp,
                     color = Color(0xFF64748B),
                     textAlign = TextAlign.Center,
@@ -746,7 +748,7 @@ private fun BusPassIdleContent(
                 ) {
                     Icon(imageVector = Icons.Default.AddAPhoto, contentDescription = null, tint = Color.White)
                     Spacer(modifier = Modifier.width(10.dp))
-                    Text("Scan Bus Pass Now", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(stringResource(R.string.scan_pass_now), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }
@@ -756,7 +758,7 @@ private fun BusPassIdleContent(
     inspectBitmap?.let { bmp ->
         InspectZoomDialog(
             bitmap = bmp,
-            title = if (selectedSideTab == 0) "Front Pass" else "Back Pass",
+            title = if (selectedSideTab == 0) stringResource(R.string.front_pass) else stringResource(R.string.back_pass),
             onDismiss = { inspectBitmap = null }
         )
     }
@@ -801,7 +803,7 @@ private fun FrontScanConfirmedPrompt(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Front Side Captured!",
+                text = stringResource(R.string.front_side_captured),
                 color = Color.White,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
@@ -810,7 +812,7 @@ private fun FrontScanConfirmedPrompt(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Now flip your physical bus pass over to scan the back side.",
+                text = stringResource(R.string.flip_pass_to_scan_back),
                 color = Color(0xFF94A3B8),
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center
@@ -834,7 +836,7 @@ private fun FrontScanConfirmedPrompt(
                     ) {
                         Image(
                             bitmap = frontBitmap.asImageBitmap(),
-                            contentDescription = "Front side preview",
+                            contentDescription = stringResource(R.string.front_pass),
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .fillMaxSize()
@@ -864,7 +866,7 @@ private fun FrontScanConfirmedPrompt(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "Adjust Crop / Corners",
+                    stringResource(R.string.adjust_crop_corners),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF38BDF8)
@@ -883,7 +885,7 @@ private fun FrontScanConfirmedPrompt(
             ) {
                 Icon(imageVector = Icons.Default.FlipCameraAndroid, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Use This Photo & Scan Back", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.use_photo_and_scan_back), fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -895,10 +897,10 @@ private fun FrontScanConfirmedPrompt(
                 TextButton(onClick = onRetakeFront) {
                     Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Retake Front", color = Color(0xFF94A3B8))
+                    Text(stringResource(R.string.retake_front), color = Color(0xFF94A3B8))
                 }
                 TextButton(onClick = onCancel) {
-                    Text("Cancel", color = Color(0xFFEF4444))
+                    Text(stringResource(R.string.cancel), color = Color(0xFFEF4444))
                 }
             }
         }

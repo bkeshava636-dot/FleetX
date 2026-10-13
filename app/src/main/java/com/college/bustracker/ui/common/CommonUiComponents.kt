@@ -34,11 +34,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.college.bustracker.R
 import com.college.bustracker.data.model.TrackingDisplayState
 import com.college.bustracker.ui.theme.CollegePrimary
 import com.college.bustracker.ui.theme.StatusActiveGreen
@@ -62,25 +64,25 @@ fun StatusBadge(
             StatusGreenContainer,
             StatusActiveGreen,
             Icons.Default.CheckCircle,
-            "Live Now"
+            stringResource(R.string.status_live_now)
         )
         TrackingDisplayState.WAITING_FOR_GPS -> Quad(
             StatusWarningContainer,
             StatusWarningOrange,
             Icons.Default.GpsFixed,
-            "Waiting for GPS…"
+            stringResource(R.string.status_waiting_for_gps)
         )
         TrackingDisplayState.STALE -> Quad(
             Color(0xFFFFEDD5),
             Color(0xFFC2410C),
             Icons.Default.History,
-            "Location may be outdated"
+            stringResource(R.string.status_location_outdated)
         )
         TrackingDisplayState.INACTIVE -> Quad(
             Color(0xFFF1F5F9),
             StatusNeutralGray,
             Icons.Default.DirectionsBus,
-            "Not Tracking Currently"
+            stringResource(R.string.status_not_tracking)
         )
     }
 
@@ -123,7 +125,7 @@ fun NetworkBadge(
     val bgColor = if (isOnline) StatusGreenContainer else Color(0xFFFEE2E2)
     val textColor = if (isOnline) StatusActiveGreen else StatusDangerRed
     val icon = if (isOnline) Icons.Default.Wifi else Icons.Default.WifiOff
-    val text = if (isOnline) "Online" else "Offline (Buffered)"
+    val text = if (isOnline) stringResource(R.string.network_online) else stringResource(R.string.network_offline)
 
     Row(
         modifier = modifier

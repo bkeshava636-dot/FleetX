@@ -56,12 +56,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.college.bustracker.R
 import com.college.bustracker.ui.theme.CollegePrimary
 import com.college.bustracker.ui.theme.StatusWarningOrange
 
@@ -109,13 +111,13 @@ fun BusPassReviewScreen(
                 IconButton(onClick = onCancel, enabled = !isSaving) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Cancel",
+                        contentDescription = stringResource(R.string.cancel),
                         tint = Color.White
                     )
                 }
 
                 Text(
-                    text = "Review Bus Pass",
+                    text = stringResource(R.string.review_bus_pass),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -128,7 +130,7 @@ fun BusPassReviewScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.FlipCameraAndroid,
-                        contentDescription = "Flip preview side",
+                        contentDescription = stringResource(R.string.pass_flip_card),
                         tint = Color.White
                     )
                 }
@@ -150,7 +152,7 @@ fun BusPassReviewScreen(
                     onClick = { selectedSideTab = 0 },
                     text = {
                         Text(
-                            text = "Front Side",
+                            text = stringResource(R.string.pass_front_side),
                             fontWeight = if (selectedSideTab == 0) FontWeight.Bold else FontWeight.Normal,
                             color = if (selectedSideTab == 0) CollegePrimary else Color(0xFF94A3B8)
                         )
@@ -161,7 +163,7 @@ fun BusPassReviewScreen(
                     onClick = { selectedSideTab = 1 },
                     text = {
                         Text(
-                            text = "Back Side",
+                            text = stringResource(R.string.pass_back_side),
                             fontWeight = if (selectedSideTab == 1) FontWeight.Bold else FontWeight.Normal,
                             color = if (selectedSideTab == 1) CollegePrimary else Color(0xFF94A3B8)
                         )
@@ -190,7 +192,7 @@ fun BusPassReviewScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Warning: Front and Back scans look identical. Did you scan the same side twice?",
+                            text = stringResource(R.string.duplicate_scan_warning),
                             color = Color(0xFFFFD166),
                             fontSize = 12.sp,
                             lineHeight = 16.sp
@@ -213,7 +215,7 @@ fun BusPassReviewScreen(
                 if (currentBitmap != null) {
                     Image(
                         bitmap = currentBitmap.asImageBitmap(),
-                        contentDescription = if (selectedSideTab == 0) "Front pass" else "Back pass",
+                        contentDescription = if (selectedSideTab == 0) stringResource(R.string.front_pass) else stringResource(R.string.back_pass),
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxSize()
@@ -242,7 +244,7 @@ fun BusPassReviewScreen(
                             tint = Color(0xFF38BDF8)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Adjust Crop", fontSize = 12.sp, color = Color(0xFF38BDF8))
+                        Text(stringResource(R.string.adjust_crop), fontSize = 12.sp, color = Color(0xFF38BDF8))
                     }
 
                     // Zoom / Inspect button overlay
@@ -264,11 +266,11 @@ fun BusPassReviewScreen(
                             tint = Color.White
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Inspect & Zoom", fontSize = 12.sp)
+                        Text(stringResource(R.string.inspect_and_zoom), fontSize = 12.sp)
                     }
                 } else {
                     Text(
-                        text = "Image not loaded",
+                        text = stringResource(R.string.image_unavailable),
                         color = Color(0xFF64748B),
                         fontSize = 14.sp
                     )
@@ -295,7 +297,7 @@ fun BusPassReviewScreen(
                     ) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Retake Front", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.retake_front), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
 
                     OutlinedButton(
@@ -307,7 +309,7 @@ fun BusPassReviewScreen(
                     ) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Retake Back", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.retake_back), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
 
@@ -333,11 +335,11 @@ fun BusPassReviewScreen(
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(10.dp))
-                        Text("Saving to Device…", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(stringResource(R.string.saving_to_device), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     } else {
                         Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Save Bus Pass", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(stringResource(R.string.save_bus_pass), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
@@ -348,7 +350,7 @@ fun BusPassReviewScreen(
     if (isInspectZoomOpen && currentBitmap != null) {
         InspectZoomDialog(
             bitmap = currentBitmap,
-            title = if (selectedSideTab == 0) "Inspect Front" else "Inspect Back",
+            title = if (selectedSideTab == 0) stringResource(R.string.inspect_front) else stringResource(R.string.inspect_back),
             onDismiss = { isInspectZoomOpen = false }
         )
     }
@@ -357,10 +359,10 @@ fun BusPassReviewScreen(
     if (showDuplicateOverrideDialog) {
         AlertDialog(
             onDismissRequest = { showDuplicateOverrideDialog = false },
-            title = { Text("Save Matching Sides?", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.save_matching_sides_title), fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "The front and back scans look identical or very similar. Are you sure you scanned both different sides of your physical bus pass?",
+                    stringResource(R.string.save_matching_sides_desc),
                     fontSize = 14.sp
                 )
             },
@@ -372,12 +374,12 @@ fun BusPassReviewScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
                 ) {
-                    Text("Yes, Save Both")
+                    Text(stringResource(R.string.yes_save_both))
                 }
             },
             dismissButton = {
                 OutlinedButton(onClick = { showDuplicateOverrideDialog = false }) {
-                    Text("Check Again")
+                    Text(stringResource(R.string.check_again))
                 }
             }
         )

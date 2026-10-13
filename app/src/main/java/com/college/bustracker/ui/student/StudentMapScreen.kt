@@ -57,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -237,17 +238,17 @@ fun StudentMapScreen(
                 if (canShowMarker) {
                     val busPoint = GeoPoint(lat, lng)
                     val statusText = when (trackingState) {
-                        TrackingDisplayState.ACTIVE -> "Tracking Live"
-                        TrackingDisplayState.WAITING_FOR_GPS -> "Awaiting GPS Signal"
-                        TrackingDisplayState.STALE -> "GPS Signal Stale"
-                        TrackingDisplayState.INACTIVE -> "Bus Inactive"
+                        TrackingDisplayState.ACTIVE -> context.getString(R.string.tracking_live)
+                        TrackingDisplayState.WAITING_FOR_GPS -> context.getString(R.string.awaiting_gps_signal)
+                        TrackingDisplayState.STALE -> context.getString(R.string.gps_signal_stale)
+                        TrackingDisplayState.INACTIVE -> context.getString(R.string.bus_inactive)
                     }
                     val busLabel = bus?.busNumber ?: "BUS-25"
                     busMarker.position = busPoint
                     busMarker.title = "$busLabel • $statusText"
                     busMarker.snippet = if (trackingState == TrackingDisplayState.ACTIVE) {
                         val speedKmH = (speedMps * 3.6).toInt()
-                        "Speed: $speedKmH km/h • $lastUpdateText"
+                        context.getString(R.string.speed_format, speedKmH, lastUpdateText)
                     } else {
                         lastUpdateText
                     }
@@ -298,7 +299,7 @@ fun StudentMapScreen(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = stringResource(R.string.back),
                         tint = Color(0xFF1E293B)
                     )
                 }
@@ -328,7 +329,7 @@ fun StudentMapScreen(
                         }
                     }
                     Text(
-                        text = route?.name ?: "No route selected",
+                        text = route?.name ?: stringResource(R.string.no_route_selected),
                         fontSize = 11.sp,
                         color = Color(0xFF64748B),
                         maxLines = 1,
@@ -372,7 +373,7 @@ fun StudentMapScreen(
                     contentColor = Color.White,
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Icon(Icons.Default.MyLocation, contentDescription = "Center Bus Location", modifier = Modifier.size(22.dp))
+                    Icon(Icons.Default.MyLocation, contentDescription = stringResource(R.string.map_center_bus), modifier = Modifier.size(22.dp))
                 }
             }
 
@@ -409,13 +410,13 @@ fun StudentMapScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "No bus service today",
+                                text = stringResource(R.string.no_bus_service_today),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF1E3A8A)
                             )
                             Text(
-                                text = "Holiday — ${todayHolidayName ?: "College Holiday"}",
+                                text = stringResource(R.string.holiday_prefix, todayHolidayName ?: stringResource(R.string.college_holiday)),
                                 fontSize = 12.sp,
                                 color = Color(0xFF2563EB)
                             )
@@ -458,7 +459,7 @@ fun StudentMapScreen(
                         Spacer(modifier = Modifier.width(10.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
-                            val stopTitle = nextStopEta?.stop?.name ?: (route?.stops?.firstOrNull()?.name ?: "No Route")
+                            val stopTitle = nextStopEta?.stop?.name ?: (route?.stops?.firstOrNull()?.name ?: stringResource(R.string.no_route))
                             Text(
                                 text = stopTitle,
                                 fontSize = 14.sp,
@@ -470,12 +471,12 @@ fun StudentMapScreen(
                             val detailSubtext = when (trackingState) {
                                 TrackingDisplayState.ACTIVE -> {
                                     val dist = nextStopEta?.distanceFormatted ?: ""
-                                    val speed = if (speedKmH > 2) "$speedKmH km/h" else "At Stop"
+                                    val speed = if (speedKmH > 2) "$speedKmH km/h" else stringResource(R.string.speed_at_stop)
                                     if (dist.isNotBlank()) "$dist away • $speed" else speed
                                 }
-                                TrackingDisplayState.WAITING_FOR_GPS -> "Connecting • GPS pending"
-                                TrackingDisplayState.STALE -> "Signal outdated ($lastUpdateText)"
-                                TrackingDisplayState.INACTIVE -> "Bus not in service"
+                                TrackingDisplayState.WAITING_FOR_GPS -> stringResource(R.string.connecting_gps_pending)
+                                TrackingDisplayState.STALE -> stringResource(R.string.signal_outdated, lastUpdateText)
+                                TrackingDisplayState.INACTIVE -> stringResource(R.string.bus_not_in_service)
                             }
                             Text(
                                 text = detailSubtext,
@@ -504,9 +505,9 @@ fun StudentMapScreen(
                         } else {
                             Text(
                                 text = when (trackingState) {
-                                    TrackingDisplayState.WAITING_FOR_GPS -> "Pending"
-                                    TrackingDisplayState.STALE -> "Stale"
-                                    else -> "Off-duty"
+                                    TrackingDisplayState.WAITING_FOR_GPS -> stringResource(R.string.status_pending)
+                                    TrackingDisplayState.STALE -> stringResource(R.string.status_stale)
+                                    else -> stringResource(R.string.status_off_duty)
                                 },
                                 fontSize = 11.sp,
                                 color = Color(0xFF94A3B8),
@@ -533,7 +534,7 @@ fun StudentMapScreen(
                         // Route Stops List
                         if (upcomingStops.isNotEmpty()) {
                             Text(
-                                text = "Route Stops & ETAs",
+                                text = stringResource(R.string.route_stops_and_etas),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = CollegePrimary,
@@ -575,7 +576,7 @@ fun StudentMapScreen(
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = if (trackingState == TrackingDisplayState.ACTIVE) stopEta.etaFormatted else if (stopEta.isPassed) "Passed" else "—",
+                                            text = if (trackingState == TrackingDisplayState.ACTIVE) stopEta.etaFormatted else if (stopEta.isPassed) stringResource(R.string.stop_passed) else "—",
                                             fontSize = 11.sp,
                                             fontWeight = if (stopEta.isNext) FontWeight.Bold else FontWeight.Medium,
                                             color = if (stopEta.isNext) Color(0xFF15803D) else if (stopEta.isPassed) Color(0xFF94A3B8) else Color(0xFF64748B),
@@ -600,14 +601,14 @@ fun StudentMapScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 val headerText = when {
-                                    isSharing -> "🔴 Backup GPS Active"
-                                    isAutoEnabled -> "🟢 Auto-Backup On"
-                                    else -> "Student Transit Backup"
+                                    isSharing -> stringResource(R.string.backup_gps_active)
+                                    isAutoEnabled -> stringResource(R.string.auto_backup_on)
+                                    else -> stringResource(R.string.student_transit_backup)
                                 }
                                 val subText = when {
-                                    isSharing -> "Assisting live map with secondary GPS"
-                                    isAutoEnabled -> "Contributes automatically when riding"
-                                    else -> "Share location when on this bus"
+                                    isSharing -> stringResource(R.string.assisting_live_map)
+                                    isAutoEnabled -> stringResource(R.string.contributes_automatically)
+                                    else -> stringResource(R.string.share_location_when_on_bus)
                                 }
                                 Text(
                                     text = headerText,
@@ -629,7 +630,7 @@ fun StudentMapScreen(
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                                 ) {
-                                    Text("Stop", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                    Text(stringResource(R.string.stop_sharing_btn), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                                 }
                             } else {
                                 OutlinedButton(
@@ -644,7 +645,7 @@ fun StudentMapScreen(
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                                 ) {
-                                    Text("Auto-Share", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(stringResource(R.string.auto_share_btn), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }

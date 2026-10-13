@@ -67,6 +67,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import com.college.bustracker.R
 import com.college.bustracker.data.model.UserProfile
 import com.college.bustracker.data.model.UserRole
 import com.college.bustracker.ui.theme.CollegePrimary
@@ -127,13 +129,13 @@ fun StaffLoginScreen(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back to Student View",
+                        contentDescription = stringResource(R.string.return_to_student_portal),
                         tint = Color(0xFF1E293B)
                     )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Staff Authentication",
+                    text = stringResource(R.string.staff_auth_title),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0F172A)
@@ -193,7 +195,7 @@ fun StaffLoginScreen(
 
             // Console Title (Centered)
             Text(
-                text = if (selectedTabIndex == 0) "Driver Access Console" else "Transit Administrator",
+                text = if (selectedTabIndex == 0) stringResource(R.string.driver_access_console) else stringResource(R.string.transit_administrator),
                 fontSize = 21.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color(0xFF0F172A),
@@ -205,9 +207,9 @@ fun StaffLoginScreen(
             // Console Subtitle (Centered)
             Text(
                 text = if (selectedTabIndex == 0)
-                    "Sign in with your assigned staff ID to begin route tracking"
+                    stringResource(R.string.driver_login_desc)
                 else
-                    "Sign in with administrator credentials to manage transit fleet",
+                    stringResource(R.string.admin_login_desc),
                 fontSize = 13.sp,
                 color = Color(0xFF64748B),
                 textAlign = TextAlign.Center,
@@ -252,7 +254,7 @@ fun StaffLoginScreen(
                             },
                             text = {
                                 Text(
-                                    text = "Bus Driver",
+                                    text = stringResource(R.string.role_bus_driver),
                                     fontSize = 14.sp,
                                     fontWeight = if (selectedTabIndex == 0) FontWeight.Bold else FontWeight.Medium,
                                     color = if (selectedTabIndex == 0) CollegePrimary else Color(0xFF64748B),
@@ -268,7 +270,7 @@ fun StaffLoginScreen(
                             },
                             text = {
                                 Text(
-                                    text = "Administrator",
+                                    text = stringResource(R.string.role_administrator),
                                     fontSize = 14.sp,
                                     fontWeight = if (selectedTabIndex == 1) FontWeight.Bold else FontWeight.Medium,
                                     color = if (selectedTabIndex == 1) CollegePrimary else Color(0xFF64748B),
@@ -301,7 +303,7 @@ fun StaffLoginScreen(
 
                     // ID Field
                     Text(
-                        text = if (selectedTabIndex == 0) "Driver Staff ID" else "Administrator ID",
+                        text = if (selectedTabIndex == 0) stringResource(R.string.driver_staff_id) else stringResource(R.string.admin_id),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF475569),
@@ -317,7 +319,7 @@ fun StaffLoginScreen(
                         },
                         placeholder = {
                             Text(
-                                if (selectedTabIndex == 0) "Enter driver ID" else "Enter admin username",
+                                if (selectedTabIndex == 0) stringResource(R.string.enter_driver_id) else stringResource(R.string.enter_admin_username),
                                 color = Color(0xFF94A3B8),
                                 fontSize = 14.sp
                             )
@@ -342,7 +344,7 @@ fun StaffLoginScreen(
 
                     // Password Field
                     Text(
-                        text = "Password",
+                        text = stringResource(R.string.password_label),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF475569),
@@ -357,7 +359,7 @@ fun StaffLoginScreen(
                             authViewModel.clearError()
                         },
                         placeholder = {
-                            Text("Enter password", color = Color(0xFF94A3B8), fontSize = 14.sp)
+                            Text(stringResource(R.string.enter_password), color = Color(0xFF94A3B8), fontSize = 14.sp)
                         },
                         leadingIcon = {
                             Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFF94A3B8))
@@ -407,7 +409,7 @@ fun StaffLoginScreen(
                                 }
                             ) {
                                 Text(
-                                    text = "Forgot Password?",
+                                    text = stringResource(R.string.forgot_password_q),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = CollegePrimary
@@ -442,7 +444,7 @@ fun StaffLoginScreen(
                             )
                         } else {
                             Text(
-                                text = if (selectedTabIndex == 0) "SIGN IN AS DRIVER" else "SIGN IN AS ADMINISTRATOR",
+                                text = if (selectedTabIndex == 0) stringResource(R.string.sign_in_as_driver) else stringResource(R.string.sign_in_as_admin),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.5.sp,
@@ -461,7 +463,7 @@ fun StaffLoginScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Return to Public Student Portal",
+                    text = stringResource(R.string.return_to_student_portal),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color(0xFF475569),
@@ -483,7 +485,7 @@ fun StaffLoginScreen(
                 },
                 title = {
                     Text(
-                        text = "Reset Administrator Password",
+                        text = stringResource(R.string.reset_admin_password),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF0F172A)
@@ -492,7 +494,7 @@ fun StaffLoginScreen(
                 text = {
                     Column {
                         Text(
-                            text = "Enter your Administrator ID or registered email address. We will send a secure password reset link to your registered email.",
+                            text = stringResource(R.string.reset_admin_password_desc),
                             fontSize = 13.sp,
                             color = Color(0xFF475569),
                             lineHeight = 18.sp
@@ -505,9 +507,13 @@ fun StaffLoginScreen(
                                 resetFeedbackMessage = null
                             },
                             placeholder = {
-                                Text("Enter your Admin ID", fontSize = 13.sp, color = Color(0xFF94A3B8))
+                                // Enter your Admin ID
+                                Text(stringResource(R.string.enter_admin_id_placeholder), fontSize = 13.sp, color = Color(0xFF94A3B8))
                             },
-                            label = { Text("Enter Admin ID", fontSize = 12.sp) },
+                            label = {
+                                // Enter Admin ID
+                                Text(stringResource(R.string.enter_admin_id_label), fontSize = 12.sp)
+                            },
                             singleLine = true,
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -551,7 +557,7 @@ fun StaffLoginScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text("Send Reset Link", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.send_reset_link), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 },
@@ -563,7 +569,7 @@ fun StaffLoginScreen(
                         },
                         enabled = !isResetLoading
                     ) {
-                        Text("Close", fontSize = 13.sp, color = Color(0xFF64748B))
+                        Text(stringResource(R.string.close), fontSize = 13.sp, color = Color(0xFF64748B))
                     }
                 },
                 shape = RoundedCornerShape(16.dp),

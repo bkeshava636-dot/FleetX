@@ -84,6 +84,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -91,6 +92,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.college.bustracker.R
 import com.college.bustracker.pass.engine.CardDetector
 import com.college.bustracker.pass.engine.QualityChecker
 import com.college.bustracker.pass.model.CardQuad
@@ -308,13 +310,13 @@ fun BusPassScannerScreen(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = stringResource(R.string.back),
                         tint = Color.White
                     )
                 }
 
                 Text(
-                    text = if (isFrontSide) "Scan FRONT of Bus Pass" else "Scan BACK of Bus Pass",
+                    text = if (isFrontSide) stringResource(R.string.scan_front_pass) else stringResource(R.string.scan_back_pass),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -413,7 +415,7 @@ fun BusPassScannerScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.PhotoLibrary,
-                            contentDescription = "Choose from Gallery",
+                            contentDescription = stringResource(R.string.choose_from_gallery),
                             tint = Color.White,
                             modifier = Modifier.size(26.dp)
                         )

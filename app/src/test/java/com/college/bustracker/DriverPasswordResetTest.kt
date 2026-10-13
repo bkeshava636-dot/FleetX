@@ -560,7 +560,8 @@ class DriverPasswordResetTest {
     // =========================================================================
     @Test
     fun test26_forgotPasswordUiContainsNoRealAdminIdExamples() {
-        val loginFile = File("C:/Users/bhrao/college_bus_tracker/app/src/main/java/com/college/bustracker/ui/auth/LoginScreen.kt")
+        val loginFile = File("app/src/main/java/com/college/bustracker/ui/auth/LoginScreen.kt").takeIf { it.exists() }
+            ?: File("C:/Users/bhrao/college_bus_tracker/app/src/main/java/com/college/bustracker/ui/auth/LoginScreen.kt")
         assertTrue("LoginScreen.kt must exist", loginFile.exists())
         val content = loginFile.readText()
 
