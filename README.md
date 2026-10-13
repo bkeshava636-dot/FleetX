@@ -1,13 +1,13 @@
 # FleetX — Real-Time College Bus Tracking & Fleet Management
 
-[![Download Latest APK](https://img.shields.io/badge/Download_FleetX_APK-v1.0.1_Latest-22c55e?style=for-the-badge&logo=android&logoColor=white)](https://github.com/bkeshava636-dot/FleetX/releases/latest)
+[![Download Latest APK](https://img.shields.io/badge/Download_FleetX_APK-v1.0.2_Latest-22c55e?style=for-the-badge&logo=android&logoColor=white)](https://github.com/bkeshava636-dot/FleetX/releases/latest)
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.20-purple.svg?style=flat&logo=kotlin)](https://kotlinlang.org)
 [![Android](https://img.shields.io/badge/Android-API%2026%2B-green.svg?style=flat&logo=android)](https://developer.android.com)
 [![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-blue.svg?style=flat&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
 [![Firebase](https://img.shields.io/badge/Backend-Firebase-orange.svg?style=flat&logo=firebase)](https://firebase.google.com)
 [![OpenStreetMap](https://img.shields.io/badge/Maps-OpenStreetMap%20%2F%20OsmDroid-brightgreen.svg?style=flat&logo=openstreetmap)](https://github.com/osmdroid/osmdroid)
-[![Release](https://img.shields.io/badge/Release-v1.0.1-brightgreen.svg)](https://github.com/bkeshava636-dot/FleetX/releases/latest)
+[![Release](https://img.shields.io/badge/Release-v1.0.2-brightgreen.svg)](https://github.com/bkeshava636-dot/FleetX/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **FleetX** is a modern, battery-efficient, and enterprise-grade college bus tracking and fleet management ecosystem built natively for Android. Designed specifically for higher education transit networks, FleetX connects students, drivers, and campus transportation administrators through real-time telemetry, automated schedule synchronization, digital bus pass scanning with on-device computer vision, and continuous background GPS diagnostics.

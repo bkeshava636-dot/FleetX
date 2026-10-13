@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag name (e.g. v1.0.1)'
         required: true
-        default: 'v1.0.1'
+        default: 'v1.0.2'
 
 permissions:
   contents: write
@@ -120,9 +120,11 @@ jobs:
             SHA-256: ${{ steps.apk_info.outputs.sha256 }}
             
             ### What's New
-            - In-app automatic update delivery via GitHub Releases
-            - Cryptographic SHA-256 and signing certificate verification
-            - Fleet tracking and campus transit performance enhancements
+            - **Kannada & English Language Support**: Complete bilingual translation across all Student, Driver, and Admin screens with instant in-app language switching.
+            - **Admin Announcements & Bus Timing Alerts**: Create, schedule, and broadcast targeted notices (All, Students, Drivers, Bus, Route, Stop) with dual-language previews.
+            - **Bus Timing Change Workflow**: Dedicated administrative workflow to announce schedule changes without disrupting operational tracking alarms.
+            - In-app automatic update delivery via GitHub Releases with cryptographic SHA-256 verification.
+            - Fleet tracking, digital bus pass scanner, and campus transit stability improvements.
           files: |
             ${{ steps.apk_info.outputs.apk_path }}
             update-manifest.json
