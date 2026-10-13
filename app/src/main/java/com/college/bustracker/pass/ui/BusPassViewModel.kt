@@ -1,10 +1,12 @@
 package com.college.bustracker.pass.ui
 
+import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.college.bustracker.pass.engine.CardDetector
@@ -61,8 +63,20 @@ data class BusPassUiState(
 )
 
 class BusPassViewModel(
-    private val storage: BusPassStorage = BusPassStorage(com.college.bustracker.CollegeBusApp.instance)
-) : ViewModel() {
+    application: Application
+) : AndroidViewModel(application) {
+
+    private var storage: BusPassStorage = BusPassStorage(application)
+
+    constructor() : this(com.college.bustracker.CollegeBusApp.instance)
+
+    constructor(application: Application, customStorage: BusPassStorage) : this(application) {
+        this.storage = customStorage
+    }
+
+    constructor(customStorage: BusPassStorage) : this(com.college.bustracker.CollegeBusApp.instance) {
+        this.storage = customStorage
+    }
 
     private val _uiState = MutableStateFlow(BusPassUiState())
     val uiState: StateFlow<BusPassUiState> = _uiState.asStateFlow()
