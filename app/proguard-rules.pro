@@ -9,8 +9,11 @@
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
 
-# Keep data models
+# Keep data models and pass models
 -keep class com.college.bustracker.data.model.** { *; }
+-keep class com.college.bustracker.pass.** { *; }
+-keep class androidx.camera.** { *; }
+-dontwarn androidx.camera.**
 
 # Strip debug and verbose logs in release builds
 -assumenosideeffects class android.util.Log {

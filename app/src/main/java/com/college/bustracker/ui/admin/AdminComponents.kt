@@ -69,6 +69,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.college.bustracker.R
 import com.college.bustracker.ui.theme.CollegePrimary
 import com.college.bustracker.ui.theme.CollegeSurface
 import com.college.bustracker.ui.theme.StatusActiveGreen
@@ -105,7 +107,7 @@ fun AdminBottomNavigation(
                     Icon(Icons.Default.Dashboard, contentDescription = "Overview")
                 }
             },
-            label = { Text("Overview", fontSize = 11.sp, fontWeight = if (selectedSection == 0) FontWeight.Bold else FontWeight.Normal) },
+            label = { Text(stringResource(R.string.overview), fontSize = 11.sp, fontWeight = if (selectedSection == 0) FontWeight.Bold else FontWeight.Normal) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = CollegePrimary,
                 selectedTextColor = CollegePrimary,
@@ -128,7 +130,7 @@ fun AdminBottomNavigation(
                     Icon(Icons.Default.DirectionsBus, contentDescription = "Operations")
                 }
             },
-            label = { Text("Operations", fontSize = 11.sp, fontWeight = if (selectedSection == 1) FontWeight.Bold else FontWeight.Normal) },
+            label = { Text(stringResource(R.string.operations), fontSize = 11.sp, fontWeight = if (selectedSection == 1) FontWeight.Bold else FontWeight.Normal) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = CollegePrimary,
                 selectedTextColor = CollegePrimary,
@@ -151,7 +153,7 @@ fun AdminBottomNavigation(
                     Icon(Icons.Default.Route, contentDescription = "Routes")
                 }
             },
-            label = { Text("Routes", fontSize = 11.sp, fontWeight = if (selectedSection == 2) FontWeight.Bold else FontWeight.Normal) },
+            label = { Text(stringResource(R.string.routes), fontSize = 11.sp, fontWeight = if (selectedSection == 2) FontWeight.Bold else FontWeight.Normal) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = CollegePrimary,
                 selectedTextColor = CollegePrimary,
@@ -166,7 +168,7 @@ fun AdminBottomNavigation(
             selected = selectedSection == 3,
             onClick = { onSectionSelected(3) },
             icon = { Icon(Icons.Default.DateRange, contentDescription = "Calendar") },
-            label = { Text("Calendar", fontSize = 11.sp, fontWeight = if (selectedSection == 3) FontWeight.Bold else FontWeight.Normal) },
+            label = { Text(stringResource(R.string.calendar), fontSize = 11.sp, fontWeight = if (selectedSection == 3) FontWeight.Bold else FontWeight.Normal) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = CollegePrimary,
                 selectedTextColor = CollegePrimary,
@@ -181,7 +183,7 @@ fun AdminBottomNavigation(
             selected = selectedSection == 4,
             onClick = { onSectionSelected(4) },
             icon = { Icon(Icons.Default.Campaign, contentDescription = "Announcements") },
-            label = { Text("Notices", fontSize = 11.sp, fontWeight = if (selectedSection == 4) FontWeight.Bold else FontWeight.Normal) },
+            label = { Text(stringResource(R.string.notices), fontSize = 11.sp, fontWeight = if (selectedSection == 4) FontWeight.Bold else FontWeight.Normal) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = CollegePrimary,
                 selectedTextColor = CollegePrimary,

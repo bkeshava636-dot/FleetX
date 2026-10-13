@@ -61,7 +61,7 @@ data class BusPassUiState(
 )
 
 class BusPassViewModel(
-    private val storage: BusPassStorage
+    private val storage: BusPassStorage = BusPassStorage(com.college.bustracker.CollegeBusApp.instance)
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BusPassUiState())

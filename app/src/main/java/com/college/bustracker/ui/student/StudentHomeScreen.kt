@@ -172,7 +172,7 @@ fun StudentHomeScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "Campus Transit Portal",
+                        text = stringResource(R.string.app_tagline),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF64748B),
@@ -211,28 +211,6 @@ fun StudentHomeScreen(
                 }
 
                 OutlinedButton(
-                    onClick = onNavigateToBusPass,
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CollegePrimary),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Badge,
-                        contentDescription = null,
-                        modifier = Modifier.size(13.dp),
-                        tint = CollegePrimary
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = stringResource(R.string.bus_pass),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
-
-                OutlinedButton(
                     onClick = onNavigateToStaffLogin,
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF334155)),
@@ -259,11 +237,11 @@ fun StudentHomeScreen(
         Spacer(modifier = Modifier.height(18.dp))
 
         if (isLoadingBuses) {
-            LoadingCard(message = "Loading campus fleet routes…")
+            LoadingCard(message = stringResource(R.string.loading_fleet))
         } else if (buses.isEmpty()) {
             EmptyStateCard(
-                title = "No Active Buses Available",
-                description = "There are currently no active buses operating in the fleet. Please check back later or contact transport administration.",
+                title = stringResource(R.string.no_active_buses_title),
+                description = stringResource(R.string.no_active_buses_desc),
                 icon = Icons.Default.DirectionsBus
             )
         } else {
@@ -298,7 +276,7 @@ fun StudentHomeScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Bus Replacement Notice",
+                                text = stringResource(R.string.bus_replacement_notice),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF92400E)
@@ -308,14 +286,21 @@ fun StudentHomeScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "${swapAlert?.replacementBusId} is operating in place of ${swapAlert?.originalBusId} today",
+                            text = stringResource(
+                                R.string.bus_replacement_operating_today,
+                                swapAlert?.replacementBusId ?: "",
+                                swapAlert?.originalBusId ?: ""
+                            ),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF78350F)
                         )
 
                         Text(
-                            text = "Affects stop: ${selectedStop?.name ?: "All route stops"}",
+                            text = stringResource(
+                                R.string.affects_stop,
+                                selectedStop?.name ?: stringResource(R.string.all_route_stops_label)
+                            ),
                             fontSize = 12.sp,
                             color = Color(0xFF92400E),
                             fontWeight = FontWeight.Medium,
@@ -363,14 +348,17 @@ fun StudentHomeScreen(
                         Spacer(modifier = Modifier.width(14.dp))
                         Column {
                             Text(
-                                text = "No bus service today",
+                                text = stringResource(R.string.no_bus_service_today),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF1E3A8A)
                             )
                             Spacer(modifier = Modifier.height(3.dp))
                             Text(
-                                text = "Holiday — ${todayHolidayName ?: "College Holiday"}",
+                                text = stringResource(
+                                    R.string.holiday_prefix,
+                                    todayHolidayName ?: stringResource(R.string.college_holiday)
+                                ),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFF2563EB)
@@ -411,7 +399,7 @@ fun StudentHomeScreen(
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     SectionHeader(
-                        title = "Select Bus & Route",
+                        title = stringResource(R.string.select_bus_and_route),
                         icon = Icons.Default.DirectionsBus
                     )
 
@@ -422,7 +410,7 @@ fun StudentHomeScreen(
                         onExpandedChange = { busDropdownOpen = !busDropdownOpen }
                     ) {
                         OutlinedTextField(
-                            value = selectedBus?.let { "${it.busNumber} • ${it.registrationNumber}" } ?: "Select a bus",
+                            value = selectedBus?.let { "${it.busNumber} • ${it.registrationNumber}" } ?: stringResource(R.string.select_a_bus),
                             onValueChange = {},
                             readOnly = true,
                             leadingIcon = {
@@ -453,7 +441,7 @@ fun StudentHomeScreen(
                                             )
                                             if (bus.active) {
                                                 Text(
-                                                    text = "In active service",
+                                                    text = stringResource(R.string.in_active_service),
                                                     fontSize = 11.sp,
                                                     color = StatusActiveGreen
                                                 )
@@ -486,7 +474,7 @@ fun StudentHomeScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (route != null) "Route: ${route?.name}" else "No active route assigned to this bus",
+                            text = if (route != null) stringResource(R.string.route_prefix, route?.name ?: "") else stringResource(R.string.no_route_assigned),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = if (route != null) Color(0xFF1E293B) else Color(0xFF94A3B8)
@@ -497,7 +485,7 @@ fun StudentHomeScreen(
 
                     // Boarding Stop Selector
                     Text(
-                        text = "My Boarding Stop (For arrival notices)",
+                        text = stringResource(R.string.my_boarding_stop_label),
                         fontSize = 12.sp,
                         color = Color(0xFF64748B),
                         fontWeight = FontWeight.SemiBold
@@ -510,9 +498,9 @@ fun StudentHomeScreen(
                     ) {
                         OutlinedTextField(
                             value = when {
-                                stops.isEmpty() -> "No active stops on this route"
+                                stops.isEmpty() -> stringResource(R.string.no_active_stops)
                                 selectedStop != null -> "${selectedStop?.order}. ${selectedStop?.name}"
-                                else -> "Choose your boarding stop"
+                                else -> stringResource(R.string.choose_boarding_stop)
                             },
                             onValueChange = {},
                             readOnly = true,
@@ -695,13 +683,13 @@ fun StudentHomeScreen(
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
-                                        text = "Location is Turned Off",
+                                        text = stringResource(R.string.location_turned_off),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,
                                         color = Color(0xFF991B1B)
                                     )
                                     Text(
-                                        text = "Turn on Location to enable automatic bus tracking.",
+                                        text = stringResource(R.string.turn_on_location_desc),
                                         fontSize = 12.sp,
                                         color = Color(0xFFB91C1C)
                                     )
@@ -734,7 +722,7 @@ fun StudentHomeScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed),
                             contentPadding = PaddingValues(vertical = 6.dp)
                         ) {
-                            Text("Open Settings", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.open_settings), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -759,11 +747,11 @@ fun StudentHomeScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
-                                    .background(
-                                        if (isAutoEnabled) StatusActiveGreen.copy(alpha = 0.15f) else CollegePrimary.copy(alpha = 0.1f),
-                                        CircleShape
-                                    ),
+                                .size(36.dp)
+                                .background(
+                                    if (isAutoEnabled) StatusActiveGreen.copy(alpha = 0.15f) else CollegePrimary.copy(alpha = 0.1f),
+                                    CircleShape
+                                ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -776,13 +764,13 @@ fun StudentHomeScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "Automatic Transit Backup",
+                                    text = stringResource(R.string.auto_backup_title),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF0F172A)
                                 )
                                 Text(
-                                    text = if (isAutoEnabled) "Configured for ${autoAssignedBusId ?: "Bus"}" else "One-time setup for your bus",
+                                    text = if (isAutoEnabled) stringResource(R.string.configured_for_bus, autoAssignedBusId ?: "Bus") else stringResource(R.string.one_time_setup),
                                     fontSize = 11.sp,
                                     color = Color(0xFF64748B)
                                 )
@@ -817,7 +805,7 @@ fun StudentHomeScreen(
 
                     if (!isAutoEnabled) {
                         Text(
-                            text = "Help keep tracking accurate when driver GPS dips. Once enabled, your phone seamlessly provides backup GPS when you ride your bus during route hours.",
+                            text = stringResource(R.string.auto_backup_help),
                             fontSize = 12.sp,
                             color = Color(0xFF475569),
                             lineHeight = 16.sp
@@ -829,7 +817,7 @@ fun StudentHomeScreen(
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
                         ) {
-                            Text("Enable Automatic Sharing", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.enable_auto_sharing), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         }
                     } else {
                         val stateDescription = when (autoRideState) {
@@ -859,7 +847,7 @@ fun StudentHomeScreen(
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(vertical = 6.dp)
                             ) {
-                                Text("Transit Settings", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text(stringResource(R.string.transit_settings), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                             Button(
                                 onClick = { viewModel.disableAutoSharing() },
@@ -868,7 +856,7 @@ fun StudentHomeScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed),
                                 contentPadding = PaddingValues(vertical = 6.dp)
                             ) {
-                                Text("Stop Sharing", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                Text(stringResource(R.string.stop_sharing), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                             }
                         }
                     }
@@ -882,7 +870,7 @@ fun StudentHomeScreen(
                     onDismissRequest = { showConsentDialog = false },
                     title = {
                         Text(
-                            text = "Enable Automatic Bus Backup",
+                            text = stringResource(R.string.enable_auto_backup_dialog_title),
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0F172A)
@@ -932,14 +920,14 @@ fun StudentHomeScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("Agree & Enable", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.agree_and_enable), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     },
                     dismissButton = {
                         TextButton(
                             onClick = { showConsentDialog = false }
                         ) {
-                            Text("Not Now", fontSize = 13.sp, color = Color(0xFF64748B))
+                            Text(stringResource(R.string.not_now), fontSize = 13.sp, color = Color(0xFF64748B))
                         }
                     }
                 )
@@ -950,18 +938,18 @@ fun StudentHomeScreen(
                 AlertDialog(
                     onDismissRequest = { showSettingsDialog = false },
                     title = {
-                        Text("Transit Backup Settings", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.transit_backup_settings_title), fontSize = 17.sp, fontWeight = FontWeight.Bold)
                     },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text(
-                                text = "Currently assigned to: ${autoAssignedBusId ?: "None"}",
+                                text = stringResource(R.string.currently_assigned_to, autoAssignedBusId ?: "None"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF0F172A)
                             )
                             Text(
-                                text = "You can switch this anytime to your currently selected bus (${selectedBus?.busNumber ?: "None"}).",
+                                text = stringResource(R.string.switch_anytime_desc, selectedBus?.busNumber ?: "None"),
                                 fontSize = 12.sp,
                                 color = Color(0xFF64748B)
                             )
@@ -973,7 +961,7 @@ fun StudentHomeScreen(
                                     },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("Switch to ${selectedBus?.busNumber}")
+                                    Text(stringResource(R.string.switch_to_bus, selectedBus?.busNumber ?: ""))
                                 }
                             }
                             Button(
@@ -985,13 +973,13 @@ fun StudentHomeScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text("Disable Automatic Sharing", color = Color.White)
+                                Text(stringResource(R.string.disable_auto_sharing), color = Color.White)
                             }
                         }
                     },
                     confirmButton = {
                         TextButton(onClick = { showSettingsDialog = false }) {
-                            Text("Close")
+                            Text(stringResource(R.string.close))
                         }
                     }
                 )
@@ -1008,7 +996,7 @@ fun StudentHomeScreen(
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     SectionHeader(
-                        title = "Operating Windows",
+                        title = stringResource(R.string.operating_windows),
                         icon = Icons.Default.Schedule
                     )
 
@@ -1017,7 +1005,7 @@ fun StudentHomeScreen(
                     val sched = operatingSchedule
                     if (!sched.morning.enabled && !sched.evening.enabled) {
                         Text(
-                            text = "Operating schedule is currently disabled.",
+                            text = stringResource(R.string.operating_schedule_disabled),
                             fontSize = 13.sp,
                             color = Color(0xFF94A3B8)
                         )
@@ -1032,7 +1020,7 @@ fun StudentHomeScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Morning Route",
+                                    text = stringResource(R.string.morning_route),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = Color(0xFF475569)
@@ -1057,7 +1045,7 @@ fun StudentHomeScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Evening Return",
+                                    text = stringResource(R.string.evening_return),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = Color(0xFF475569)
@@ -1111,14 +1099,14 @@ fun StudentHomeScreen(
                         Spacer(modifier = Modifier.width(14.dp))
                         Column {
                             Text(
-                                text = "My Bus Pass",
+                                text = stringResource(R.string.my_bus_pass),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF0F172A)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Offline digital copy of your physical pass",
+                                text = stringResource(R.string.bus_pass_desc),
                                 fontSize = 12.sp,
                                 color = Color(0xFF64748B)
                             )
@@ -1130,7 +1118,7 @@ fun StudentHomeScreen(
                         shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Text("View / Scan", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.view_scan), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -1146,7 +1134,7 @@ fun StudentHomeScreen(
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         SectionHeader(
-                            title = "Route Stops (${stops.size})",
+                            title = stringResource(R.string.route_stops_count, stops.size),
                             icon = Icons.Default.LocationOn
                         )
 
@@ -1190,7 +1178,7 @@ fun StudentHomeScreen(
                                     )
                                     if (isSelectedBoardingStop) {
                                         Text(
-                                            text = "Your Selected Boarding Stop",
+                                            text = stringResource(R.string.selected_boarding_stop_badge),
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = CollegePrimary
@@ -1278,381 +1266,386 @@ private fun ProminentEtaCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         if (isSwapActive) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .background(Color(0xFFFEF3C7), RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFFFEF3C7), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.replacement_tag),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFB45309),
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+                }
+                if (isSwapActive) {
+                    Text(
+                        text = stringResource(R.string.operating_for_bus, originalBusId ?: ""),
+                        fontSize = 11.sp,
+                        color = Color(0xFF78350F),
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Column(
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.wrapContentWidth()
+            ) {
+                StatusBadge(state = trackingState)
+                if (trackingState == TrackingDisplayState.ACTIVE && lastUpdateText.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = lastUpdateText,
+                        fontSize = 11.sp,
+                        color = Color(0xFF64748B),
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Next Stop / Destination Row
+        val nextStopLabel = when {
+            routeEtaResult?.status == EtaStatus.ARRIVED_FINAL_STOP -> stringResource(R.string.final_destination)
+            trackingState == TrackingDisplayState.INACTIVE -> stringResource(R.string.first_scheduled_stop)
+            else -> stringResource(R.string.next_stop)
+        }
+        val nextStopDisplayName = when {
+            routeEtaResult?.status == EtaStatus.ARRIVED_FINAL_STOP ->
+                stops.lastOrNull()?.name ?: stringResource(R.string.campus_stop)
+            nextStopEta != null ->
+                nextStopEta.stop.name
+            stops.isNotEmpty() ->
+                stops.first().name
+            else ->
+                stringResource(R.string.no_route_stops_assigned)
+        }
+
+        Column {
+            Text(
+                text = nextStopLabel,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF64748B),
+                letterSpacing = 0.3.sp
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.NearMe,
+                    contentDescription = null,
+                    tint = CollegePrimary,
+                    modifier = Modifier.size(17.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = nextStopDisplayName,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0F172A),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Prominent ETA & Distance Box
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    when {
+                        routeEtaResult?.status == EtaStatus.ARRIVED_FINAL_STOP -> Color(0xFFF0FDF4)
+                        trackingState == TrackingDisplayState.ACTIVE -> Color(0xFFF8FAFC)
+                        trackingState == TrackingDisplayState.STALE -> Color(0xFFFFFBEB)
+                        else -> Color(0xFFF8FAFC)
+                    },
+                    RoundedCornerShape(14.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = when {
+                        routeEtaResult?.status == EtaStatus.ARRIVED_FINAL_STOP -> Color(0xFFBBF7D0)
+                        trackingState == TrackingDisplayState.ACTIVE -> Color(0xFFE2E8F0)
+                        trackingState == TrackingDisplayState.STALE -> Color(0xFFFDE68A)
+                        else -> Color(0xFFE2E8F0)
+                    },
+                    shape = RoundedCornerShape(14.dp)
+                )
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+        ) {
+            Column {
+                when {
+                    // 1. ARRIVED AT FINAL DESTINATION
+                    routeEtaResult?.status == EtaStatus.ARRIVED_FINAL_STOP -> {
+                        Text(
+                            text = stringResource(R.string.status_label),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF15803D),
+                            letterSpacing = 0.8.sp
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = stringResource(R.string.arrived),
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFF15803D)
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = stringResource(R.string.at_final_destination),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF475569)
+                        )
+                    }
+
+                    // 2. NO ROUTE / NO STOPS
+                    route == null || stops.isEmpty() || routeEtaResult?.status == EtaStatus.NO_ROUTE -> {
+                        Text(
+                            text = stringResource(R.string.estimated_arrival_caps),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF64748B),
+                            letterSpacing = 0.8.sp
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = stringResource(R.string.eta_unavailable),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF64748B)
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = stringResource(R.string.no_route_stops_configured),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+
+                    // 3. ACTIVE BUS WITH LIVE ETA
+                    trackingState == TrackingDisplayState.ACTIVE -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f, fill = false)) {
                                 Text(
-                                    text = "REPLACEMENT",
-                                    fontSize = 10.sp,
+                                    text = stringResource(R.string.eta_label),
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFB45309),
+                                    color = Color(0xFF64748B),
+                                    letterSpacing = 0.8.sp
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = nextStopEta?.etaFormatted ?: "~5 min",
+                                    fontSize = 36.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color(0xFF15803D),
                                     maxLines = 1,
                                     softWrap = false
                                 )
                             }
-                        }
-                    }
-                    if (isSwapActive) {
-                        Text(
-                            text = "Operating for Bus ${originalBusId ?: ""}",
-                            fontSize = 11.sp,
-                            color = Color(0xFF78350F),
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
 
-                Spacer(modifier = Modifier.width(10.dp))
-
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    modifier = Modifier.wrapContentWidth()
-                ) {
-                    StatusBadge(state = trackingState)
-                    if (trackingState == TrackingDisplayState.ACTIVE && lastUpdateText.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = lastUpdateText,
-                            fontSize = 11.sp,
-                            color = Color(0xFF64748B),
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Next Stop / Destination Row
-            val nextStopLabel = when {
-                routeEtaResult?.status == EtaStatus.ARRIVED_FINAL_STOP -> "Final Destination"
-                trackingState == TrackingDisplayState.INACTIVE -> "First Scheduled Stop"
-                else -> "Next Stop"
-            }
-            val nextStopDisplayName = when {
-                routeEtaResult?.status == EtaStatus.ARRIVED_FINAL_STOP ->
-                    stops.lastOrNull()?.name ?: "Campus"
-                nextStopEta != null ->
-                    nextStopEta.stop.name
-                stops.isNotEmpty() ->
-                    stops.first().name
-                else ->
-                    "No route stops assigned"
-            }
-
-            Column {
-                Text(
-                    text = nextStopLabel,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF64748B),
-                    letterSpacing = 0.3.sp
-                )
-                Spacer(modifier = Modifier.height(3.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.NearMe,
-                        contentDescription = null,
-                        tint = CollegePrimary,
-                        modifier = Modifier.size(17.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = nextStopDisplayName,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Prominent ETA & Distance Box
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        when {
-                            routeEtaResult?.status == EtaStatus.ARRIVED_FINAL_STOP -> Color(0xFFF0FDF4)
-                            trackingState == TrackingDisplayState.ACTIVE -> Color(0xFFF8FAFC)
-                            trackingState == TrackingDisplayState.STALE -> Color(0xFFFFFBEB)
-                            else -> Color(0xFFF8FAFC)
-                        },
-                        RoundedCornerShape(14.dp)
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = when {
-                            routeEtaResult?.status == EtaStatus.ARRIVED_FINAL_STOP -> Color(0xFFBBF7D0)
-                            trackingState == TrackingDisplayState.ACTIVE -> Color(0xFFE2E8F0)
-                            trackingState == TrackingDisplayState.STALE -> Color(0xFFFDE68A)
-                            else -> Color(0xFFE2E8F0)
-                        },
-                        shape = RoundedCornerShape(14.dp)
-                    )
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
-            ) {
-                Column {
-                    when {
-                        // 1. ARRIVED AT FINAL DESTINATION
-                        routeEtaResult?.status == EtaStatus.ARRIVED_FINAL_STOP -> {
-                            Text(
-                                text = "STATUS",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF15803D),
-                                letterSpacing = 0.8.sp
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "Arrived",
-                                fontSize = 32.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color(0xFF15803D)
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "At Final Destination",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF475569)
-                            )
-                        }
-
-                        // 2. NO ROUTE / NO STOPS
-                        route == null || stops.isEmpty() || routeEtaResult?.status == EtaStatus.NO_ROUTE -> {
-                            Text(
-                                text = "ESTIMATED ARRIVAL",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF64748B),
-                                letterSpacing = 0.8.sp
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "ETA unavailable",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF64748B)
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "No route stops configured",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF94A3B8)
-                            )
-                        }
-
-                        // 3. ACTIVE BUS WITH LIVE ETA
-                        trackingState == TrackingDisplayState.ACTIVE -> {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f, fill = false)) {
+                            // Distance Pill
+                            val distFormatted = nextStopEta?.distanceFormatted ?: ""
+                            if (distFormatted.isNotBlank() && distFormatted != "—") {
+                                Box(
+                                    modifier = Modifier
+                                        .background(Color(0xFFDCFCE7), RoundedCornerShape(10.dp))
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
                                     Text(
-                                        text = "ETA",
-                                        fontSize = 12.sp,
+                                        text = stringResource(R.string.away_suffix, distFormatted),
+                                        fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF64748B),
-                                        letterSpacing = 0.8.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = nextStopEta?.etaFormatted ?: "~5 min",
-                                        fontSize = 36.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = Color(0xFF15803D),
+                                        color = Color(0xFF166534),
                                         maxLines = 1,
                                         softWrap = false
                                     )
                                 }
-
-                                // Distance Pill
-                                val distFormatted = nextStopEta?.distanceFormatted ?: ""
-                                if (distFormatted.isNotBlank() && distFormatted != "—") {
-                                    Box(
-                                        modifier = Modifier
-                                            .background(Color(0xFFDCFCE7), RoundedCornerShape(10.dp))
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    ) {
-                                        Text(
-                                            text = "$distFormatted away",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF166534),
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Motion / speed row
-                            val speedKmH = ((liveLoc?.speed ?: 0f) * 3.6).toInt()
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Speed,
-                                    contentDescription = null,
-                                    tint = StatusActiveGreen,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = if (speedKmH > 2) "$speedKmH km/h • In Motion" else "Stationary / At Stop",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF475569)
-                                )
-                            }
-
-                            // Boarding stop ETA (if user selected a specific boarding stop different from next stop)
-                            if (selectedStop != null && nextStopEta != null && selectedStop.stopId != nextStopEta.stop.stopId) {
-                                val boardingEta = remember(upcomingStopsEta, selectedStop) {
-                                    upcomingStopsEta.find { it.stop.stopId == selectedStop.stopId }
-                                }
-                                if (boardingEta != null) {
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.LocationOn,
-                                            contentDescription = null,
-                                            tint = CollegePrimary,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "Your Stop (${selectedStop.name}): ETA ${boardingEta.etaFormatted} (${boardingEta.distanceFormatted} away)",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = Color(0xFF334155)
-                                        )
-                                    }
-                                }
                             }
                         }
 
-                        // 4. WAITING FOR GPS
-                        trackingState == TrackingDisplayState.WAITING_FOR_GPS -> {
-                            Text(
-                                text = "ESTIMATED ARRIVAL",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF64748B),
-                                letterSpacing = 0.8.sp
+                        // Motion / speed row
+                        val speedKmH = ((liveLoc?.speed ?: 0f) * 3.6).toInt()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Speed,
+                                contentDescription = null,
+                                tint = StatusActiveGreen,
+                                modifier = Modifier.size(15.dp)
                             )
-                            Spacer(modifier = Modifier.height(3.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "ETA unavailable",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF64748B)
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "Waiting for live location",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF94A3B8)
+                                text = if (speedKmH > 2) stringResource(R.string.in_motion, speedKmH) else stringResource(R.string.stationary_at_stop),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF475569)
                             )
                         }
 
-                        // 5. STALE LOCATION
-                        trackingState == TrackingDisplayState.STALE -> {
-                            Text(
-                                text = "ESTIMATED ARRIVAL",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFB45309),
-                                letterSpacing = 0.8.sp
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "ETA unavailable",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFB45309)
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "Location is stale • Last updated $lastUpdateText",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFFB45309)
-                            )
+                        // Boarding stop ETA (if user selected a specific boarding stop different from next stop)
+                        if (selectedStop != null && nextStopEta != null && selectedStop.stopId != nextStopEta.stop.stopId) {
+                            val boardingEta = remember(upcomingStopsEta, selectedStop) {
+                                upcomingStopsEta.find { it.stop.stopId == selectedStop.stopId }
+                            }
+                            if (boardingEta != null) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocationOn,
+                                        contentDescription = null,
+                                        tint = CollegePrimary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = stringResource(
+                                            R.string.your_stop_eta_format,
+                                            selectedStop.name,
+                                            boardingEta.etaFormatted,
+                                            boardingEta.distanceFormatted
+                                        ),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color(0xFF334155)
+                                    )
+                                }
+                            }
                         }
+                    }
 
-                        // 6. INACTIVE / BUS NOT STARTED
-                        else -> {
-                            Text(
-                                text = "ESTIMATED ARRIVAL",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF64748B),
-                                letterSpacing = 0.8.sp
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "Bus has not started",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF64748B)
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "Refer to scheduled operating times below",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF94A3B8)
-                            )
-                        }
+                    // 4. WAITING FOR GPS
+                    trackingState == TrackingDisplayState.WAITING_FOR_GPS -> {
+                        Text(
+                            text = stringResource(R.string.estimated_arrival_caps),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF64748B),
+                            letterSpacing = 0.8.sp
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = stringResource(R.string.eta_unavailable),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF64748B)
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = stringResource(R.string.waiting_for_location),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+
+                    // 5. STALE LOCATION
+                    trackingState == TrackingDisplayState.STALE -> {
+                        Text(
+                            text = stringResource(R.string.estimated_arrival_caps),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFB45309),
+                            letterSpacing = 0.8.sp
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = stringResource(R.string.eta_unavailable),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFB45309)
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = stringResource(R.string.location_stale_msg, lastUpdateText),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFFB45309)
+                        )
+                    }
+
+                    // 6. INACTIVE / BUS NOT STARTED
+                    else -> {
+                        Text(
+                            text = stringResource(R.string.estimated_arrival_caps),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF64748B),
+                            letterSpacing = 0.8.sp
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = stringResource(R.string.bus_not_started),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF64748B)
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = stringResource(R.string.refer_to_scheduled_times),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF94A3B8)
+                        )
                     }
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
-            // Map Navigation Button: VIEW BUS MAP ->
-            Button(
-                onClick = onNavigateToMap,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (trackingState == TrackingDisplayState.ACTIVE) CollegePrimary else Color(0xFF334155)
-                ),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Map,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "VIEW BUS MAP →",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
-                )
-            }
+        // Map Navigation Button: VIEW BUS MAP ->
+        Button(
+            onClick = onNavigateToMap,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (trackingState == TrackingDisplayState.ACTIVE) CollegePrimary else Color(0xFF334155)
+            ),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Map,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = stringResource(R.string.view_bus_map_action),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
         }
     }
+}
 }
 
 @Composable
@@ -1674,7 +1667,7 @@ private fun DriverInfoCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 SectionHeader(
-                    title = "Assigned Driver",
+                    title = stringResource(R.string.assigned_driver),
                     icon = Icons.Default.Badge
                 )
                 if (driverInfo != null && driverInfo.busTitle.isNotBlank() && driverInfo.busTitle != "—") {
@@ -1685,7 +1678,7 @@ private fun DriverInfoCard(
                         )
                     ) {
                         Text(
-                            text = if (driverInfo.isReplacement) "Replacement: ${driverInfo.busTitle}" else "Your Bus: ${driverInfo.busTitle}",
+                            text = if (driverInfo.isReplacement) stringResource(R.string.replacement_driver_tag, driverInfo.busTitle) else stringResource(R.string.your_bus_tag, driverInfo.busTitle),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (driverInfo.isReplacement) Color(0xFF92400E) else CollegePrimary,
@@ -1707,14 +1700,14 @@ private fun DriverInfoCard(
             ) {
                 Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
-                        text = "DRIVER",
+                        text = stringResource(R.string.driver_caps),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.Gray,
                         letterSpacing = 0.5.sp
                     )
                     Text(
-                        text = driverInfo?.driverName?.ifBlank { "Driver not assigned" } ?: "Driver not assigned",
+                        text = driverInfo?.driverName?.ifBlank { stringResource(R.string.driver_unassigned) } ?: stringResource(R.string.driver_unassigned),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (driverInfo?.isAssigned == true) Color(0xFF1E293B) else Color.Gray,
@@ -1745,7 +1738,7 @@ private fun DriverInfoCard(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Call Driver",
+                            text = stringResource(R.string.call_driver),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -1753,7 +1746,7 @@ private fun DriverInfoCard(
                     }
                 } else if (driverInfo?.isAssigned == true) {
                     Text(
-                        text = "Phone not available",
+                        text = stringResource(R.string.phone_not_available),
                         fontSize = 12.sp,
                         color = Color.Gray,
                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
