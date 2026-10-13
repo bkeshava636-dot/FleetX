@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.college.bustracker.ui.theme.CollegePrimary
 import com.college.bustracker.ui.theme.StatusActiveGreen
 import com.college.bustracker.ui.theme.StatusDangerRed
@@ -82,18 +83,21 @@ fun UpdateDialog(
 
     var showPermissionGuidance by remember { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = {
-        if (downloadState !is DownloadState.Downloading) {
-            onDismiss()
-        }
-    }) {
+    Dialog(
+        onDismissRequest = {
+            if (downloadState !is DownloadState.Downloading) {
+                onDismiss()
+            }
+        },
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Surface(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(24.dp),
             color = Color.White,
             tonalElevation = 8.dp,
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp)
+                .fillMaxWidth(0.92f)
+                .padding(vertical = 16.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -106,7 +110,10 @@ fun UpdateDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(42.dp)
@@ -153,14 +160,14 @@ fun UpdateDialog(
                 // Version Comparison Badge Box
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -173,6 +180,7 @@ fun UpdateDialog(
                                 maxLines = 1,
                                 softWrap = false
                             )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "v$installedVersionName ($installedVersionCode)",
                                 fontSize = 13.sp,
@@ -183,14 +191,20 @@ fun UpdateDialog(
                             )
                         }
 
-                        Icon(
-                            imageVector = Icons.Default.ArrowForward,
-                            contentDescription = null,
-                            tint = Color(0xFF94A3B8),
+                        Box(
                             modifier = Modifier
-                                .padding(horizontal = 6.dp)
-                                .size(16.dp)
-                        )
+                                .padding(horizontal = 8.dp)
+                                .size(28.dp)
+                                .background(Color(0xFFE2E8F0), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowForward,
+                                contentDescription = null,
+                                tint = Color(0xFF64748B),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
 
                         Column(
                             modifier = Modifier.weight(1f),
@@ -204,6 +218,7 @@ fun UpdateDialog(
                                 maxLines = 1,
                                 softWrap = false
                             )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "v${releaseInfo.versionName} (${releaseInfo.versionCode})",
                                 fontSize = 13.sp,
@@ -269,6 +284,42 @@ fun UpdateDialog(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
 
+                val cleanedNotes = remember(releaseInfo.releaseNotes) {
+                    val raw = releaseInfo.releaseNotes
+                    if (raw.isBlank()) {
+                        "• Performance improvements and bug fixes."
+                    } else {
+                        val lines = raw.lines().map { it.trim() }
+                        val filtered = mutableListOf<String>()
+                        var skipSection = false
+                        for (line in lines) {
+                            if (line.startsWith("### Release Information")) {
+                                skipSection = true
+                                continue
+                            }
+                            if (skipSection) {
+                                if (line.startsWith("### ") || line.startsWith("## ")) {
+                                    skipSection = false
+                                } else {
+                                    continue
+                                }
+                            }
+                            if (line.startsWith("versionCode:") || line.startsWith("SHA-256:")) continue
+                            if (line.startsWith("```")) continue
+                            if (line.isBlank()) continue
+                            
+                            when {
+                                line.startsWith("## ") -> filtered.add(line.removePrefix("## ").trim())
+                                line.startsWith("### ") -> filtered.add(line.removePrefix("### ").trim())
+                                line.startsWith("- ") -> filtered.add("• " + line.removePrefix("- ").trim())
+                                line.startsWith("* ") -> filtered.add("• " + line.removePrefix("* ").trim())
+                                else -> filtered.add(line)
+                            }
+                        }
+                        if (filtered.isEmpty()) "• Performance improvements and bug fixes." else filtered.joinToString("\n")
+                    }
+                }
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -278,7 +329,7 @@ fun UpdateDialog(
                         .verticalScroll(rememberScrollState())
                 ) {
                     Text(
-                        text = releaseInfo.releaseNotes.ifBlank { "Performance improvements and bug fixes." },
+                        text = cleanedNotes,
                         fontSize = 12.sp,
                         color = Color(0xFF334155),
                         lineHeight = 16.sp
@@ -300,10 +351,10 @@ fun UpdateDialog(
                                     onDismiss()
                                 },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(vertical = 10.dp)
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(vertical = 12.dp)
                             ) {
-                                Text("Later", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF64748B))
+                                Text("Later", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF64748B), maxLines = 1, softWrap = false)
                             }
 
                             Button(
@@ -311,13 +362,13 @@ fun UpdateDialog(
                                     updateManager.startDownload(context, releaseInfo, scope)
                                 },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary),
-                                contentPadding = PaddingValues(vertical = 10.dp)
+                                contentPadding = PaddingValues(vertical = 12.dp)
                             ) {
                                 Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Update Now", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text("Update Now", fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                             }
                         }
                     }
