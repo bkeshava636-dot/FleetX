@@ -33,6 +33,10 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.VolunteerActivism
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.ui.res.stringResource
+import com.college.bustracker.R
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -49,6 +53,7 @@ import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -119,7 +124,10 @@ fun StudentHomeScreen(
     val todayHolidayName by viewModel.todayHolidayName.collectAsState()
     val driverInfo by viewModel.driverDisplayInfo.collectAsState()
     val operatingSchedule by viewModel.operatingSchedule.collectAsState()
+    val announcements by viewModel.announcements.collectAsState()
 
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var selectedAnnouncementForDetail by remember { mutableStateOf<com.college.bustracker.data.model.Announcement?>(null) }
     var busDropdownOpen by remember { mutableStateOf(false) }
     var stopDropdownOpen by remember { mutableStateOf(false) }
 
@@ -181,6 +189,28 @@ fun StudentHomeScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedButton(
+                    onClick = { showLanguageDialog = true },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0F766E)),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Language,
+                        contentDescription = "Language",
+                        modifier = Modifier.size(13.dp),
+                        tint = Color(0xFF0F766E)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = if (com.college.bustracker.util.LocaleHelper.isKannada()) "ಕನ್ನಡ" else "EN",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+
+                OutlinedButton(
                     onClick = onNavigateToBusPass,
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = CollegePrimary),
@@ -194,7 +224,7 @@ fun StudentHomeScreen(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Pass",
+                        text = stringResource(R.string.bus_pass),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
@@ -216,7 +246,7 @@ fun StudentHomeScreen(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Staff",
+                        text = stringResource(R.string.staff_login),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
@@ -544,6 +574,74 @@ fun StudentHomeScreen(
                                         }
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Campus Announcements Section
+            if (announcements.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Campaign,
+                                    contentDescription = null,
+                                    tint = CollegePrimary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = stringResource(R.string.campus_announcements),
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0F172A)
+                                )
+                            }
+                            val unreadCount = announcements.count {
+                                !com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, it.id)
+                            }
+                            if (unreadCount > 0) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = CollegePrimary
+                                ) {
+                                    Text(
+                                        text = "$unreadCount ${stringResource(R.string.unread_badge)}",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            announcements.forEach { announcement ->
+                                val isRead = com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, announcement.id)
+                                com.college.bustracker.ui.announcement.AnnouncementCard(
+                                    announcement = announcement,
+                                    isUnread = !isRead,
+                                    onClick = {
+                                        com.college.bustracker.data.repository.AnnouncementPreferences.markAsRead(context, announcement.id)
+                                        selectedAnnouncementForDetail = announcement
+                                    }
+                                )
                             }
                         }
                     }
@@ -1119,6 +1217,22 @@ fun StudentHomeScreen(
 
         // FleetX Updates & About Section
         com.college.bustracker.update.ui.UpdateCard()
+    }
+
+    if (showLanguageDialog) {
+        com.college.bustracker.ui.common.LanguageSelectionDialog(
+            onDismiss = { showLanguageDialog = false }
+        )
+    }
+
+    if (selectedAnnouncementForDetail != null) {
+        com.college.bustracker.ui.announcement.AnnouncementDetailDialog(
+            announcement = selectedAnnouncementForDetail!!,
+            onDismiss = { selectedAnnouncementForDetail = null },
+            onMarkAsRead = {
+                com.college.bustracker.data.repository.AnnouncementPreferences.markAsRead(context, selectedAnnouncementForDetail!!.id)
+            }
+        )
     }
 }
 

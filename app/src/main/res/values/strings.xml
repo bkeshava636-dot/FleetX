@@ -1,9 +1,234 @@
 <resources>
     <string name="app_name">FleetX</string>
+    <string name="app_tagline">Campus Transit Portal</string>
+
+    <!-- Notification Channels -->
     <string name="channel_tracking_id">tracking_service_channel</string>
     <string name="channel_tracking_name">FleetX Live Tracking</string>
     <string name="channel_tracking_desc">Displays active GPS tracking status for the driver bus</string>
     <string name="channel_alerts_id">bus_alerts_channel</string>
     <string name="channel_alerts_name">FleetX Swap Alerts</string>
     <string name="channel_alerts_desc">Notifies students about bus swaps and route updates</string>
+    <string name="channel_announcements_id">announcements_channel</string>
+    <string name="channel_announcements_name">FleetX Campus Announcements</string>
+    <string name="channel_announcements_desc">Campus transit announcements, timing changes, and alerts</string>
+
+    <!-- Language Selector -->
+    <string name="language">Language / ಭಾಷೆ</string>
+    <string name="language_en">English</string>
+    <string name="language_kn">ಕನ್ನಡ (Kannada)</string>
+    <string name="select_language">Select Language / ಭಾಷೆ ಆಯ್ಕೆಮಾಡಿ</string>
+    <string name="language_changed_toast">Language changed</string>
+
+    <!-- Common UI Actions -->
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="confirm">Confirm</string>
+    <string name="delete">Delete</string>
+    <string name="edit">Edit</string>
+    <string name="close">Close</string>
+    <string name="retry">Retry</string>
+    <string name="refresh">Refresh</string>
+    <string name="loading">Loading…</string>
+    <string name="search">Search</string>
+    <string name="all">All</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="ok">OK</string>
+    <string name="error">Error</string>
+    <string name="success">Success</string>
+    <string name="warning">Warning</string>
+    <string name="info">Information</string>
+    <string name="dismiss">Dismiss</string>
+    <string name="active">Active</string>
+    <string name="inactive">Inactive</string>
+    <string name="status">Status</string>
+    <string name="date">Date</string>
+    <string name="time">Time</string>
+    <string name="notes">Notes</string>
+    <string name="settings">Settings</string>
+
+    <!-- Student Home UI -->
+    <string name="student_home">Student Home</string>
+    <string name="select_bus">Select Bus</string>
+    <string name="select_stop">Select Stop</string>
+    <string name="all_stops">All Stops</string>
+    <string name="choose_bus_prompt">Choose your college bus to view live tracking</string>
+    <string name="live_bus_tracking">Live Bus Tracking</string>
+    <string name="bus_details">Bus Details</string>
+    <string name="driver_info">Driver Information</string>
+    <string name="driver_name">Driver</string>
+    <string name="driver_phone">Phone</string>
+    <string name="driver_unassigned">Driver not assigned</string>
+    <string name="driver_temporary">Temporary Driver</string>
+    <string name="assigned_bus">Assigned Bus</string>
+    <string name="route_label">Route</string>
+    <string name="estimated_arrival">Estimated Arrival</string>
+    <string name="estimated_arrival_time">Estimated Arrival Time</string>
+    <string name="routes_and_stops">Routes and Stops</string>
+    <string name="next_stop">Next Stop</string>
+    <string name="view_on_map">View on Map</string>
+    <string name="view_map">View Map</string>
+    <string name="staff_login">Staff</string>
+    <string name="bus_pass">Pass</string>
+    <string name="holiday_today">College Holiday Today</string>
+    <string name="no_active_buses_title">No Active Buses Available</string>
+    <string name="no_active_buses_desc">There are currently no active buses operating in the fleet. Please check back later or contact transport administration.</string>
+    <string name="loading_fleet">Loading campus fleet routes…</string>
+    <string name="operating_schedule">Operating Schedule</string>
+    <string name="morning_service">Morning Service</string>
+    <string name="evening_service">Evening Service</string>
+    <string name="crowdsource_ride">Student Ride Sharing</string>
+    <string name="auto_share_ride">Auto Share Location</string>
+    <string name="last_updated">Last updated</string>
+    <string name="bus_swap_alert">Bus Replacement Alert</string>
+    <string name="bus_swap_desc">%1$s is replacing %2$s today.</string>
+    <string name="bus_status_online">Live Tracking Active</string>
+    <string name="bus_status_moving">Bus Moving</string>
+    <string name="bus_status_idle">Bus Idle / Waiting</string>
+    <string name="bus_status_offline">Bus Offline</string>
+    <string name="call_driver">Call Driver</string>
+
+    <!-- Driver UI -->
+    <string name="driver_home">Driver Home</string>
+    <string name="start_tracking">Start Tracking</string>
+    <string name="stop_tracking">Stop Tracking</string>
+    <string name="tracking_in_progress">Tracking in Progress</string>
+    <string name="tracking_stopped">Tracking Stopped</string>
+    <string name="driver_operating_schedule">Driver Operating Schedule</string>
+    <string name="tracking_status">Tracking Status</string>
+    <string name="location_permission">Location Permission</string>
+    <string name="location_permission_required">Location Permission Required</string>
+    <string name="location_permission_desc">FleetX requires location permission to broadcast the bus position to students in real-time.</string>
+    <string name="bus_swap">Bus Swap</string>
+    <string name="request_swap">Request Bus Swap</string>
+    <string name="swap_status">Swap Status</string>
+    <string name="logout">Logout</string>
+    <string name="gps_diagnostics">Diagnostics</string>
+    <string name="current_bus">Current Bus</string>
+    <string name="route_name">Route</string>
+    <string name="driver_profile">Driver Profile</string>
+    <string name="speed">Speed</string>
+    <string name="accuracy">Accuracy</string>
+
+    <!-- Admin UI -->
+    <string name="admin_dashboard">Admin Dashboard</string>
+    <string name="fleet_operations">Fleet Operations</string>
+    <string name="routes_and_transit">Routes &amp; Transit</string>
+    <string name="college_calendar">College Calendar</string>
+    <string name="manage_buses">Manage Buses</string>
+    <string name="manage_drivers">Manage Drivers</string>
+    <string name="manage_routes">Manage Routes</string>
+    <string name="bus_swap_management">Bus Swap Management</string>
+    <string name="add_bus">Add Bus</string>
+    <string name="edit_bus">Edit Bus</string>
+    <string name="delete_bus">Delete Bus</string>
+    <string name="add_driver">Add Driver</string>
+    <string name="edit_driver">Edit Driver</string>
+    <string name="delete_driver">Delete Driver</string>
+    <string name="add_route">Add Route</string>
+    <string name="edit_route">Edit Route</string>
+    <string name="delete_route">Delete Route</string>
+    <string name="manage_stops">Manage Stops</string>
+    <string name="add_stop">Add Stop</string>
+    <string name="stop_requests">Stop Requests</string>
+    <string name="temporary_replacements">Temporary Replacements</string>
+    <string name="active_buses">Active Buses</string>
+    <string name="total_drivers">Total Drivers</string>
+    <string name="active_swaps">Active Swaps</string>
+    <string name="pending_requests">Pending Requests</string>
+    <string name="assign_driver">Assign Driver</string>
+    <string name="unassign_driver">Unassign Driver</string>
+    <string name="reset_password">Reset Password</string>
+    <string name="bus_number">Bus Number</string>
+    <string name="bus_id">Bus ID</string>
+    <string name="route_id">Route ID</string>
+
+    <!-- Feature 2: Announcements & Bus Timing Alerts -->
+    <string name="announcements">Announcements</string>
+    <string name="announcement_management">Announcement Management</string>
+    <string name="campus_announcements">Campus Announcements</string>
+    <string name="publish_announcement">Publish Announcement</string>
+    <string name="create_announcement">Create Announcement</string>
+    <string name="edit_announcement">Edit Announcement</string>
+    <string name="delete_announcement">Delete Announcement</string>
+    <string name="archive_announcement">Archive Announcement</string>
+    <string name="announcement_details">Announcement Details</string>
+    <string name="announcement_title">Title</string>
+    <string name="announcement_message">Message</string>
+    <string name="announcement_title_en">Title (English)</string>
+    <string name="announcement_message_en">Message (English)</string>
+    <string name="announcement_title_kn">Title (Kannada)</string>
+    <string name="announcement_message_kn">Message (Kannada)</string>
+    <string name="announcement_category">Category</string>
+    <string name="announcement_priority">Priority</string>
+    <string name="target_audience">Target Audience</string>
+    <string name="target_item">Target Selection</string>
+    <string name="published_tab">Published</string>
+    <string name="drafts_tab">Drafts</string>
+    <string name="archived_tab">Archived</string>
+    <string name="save_as_draft">Save as Draft</string>
+    <string name="publish_now">Publish Now</string>
+    <string name="expiry_date">Expiry Date &amp; Time</string>
+    <string name="scheduled_publication">Schedule for Later</string>
+    <string name="no_announcements">No Announcements</string>
+    <string name="no_announcements_desc">There are no active announcements right now.</string>
+    <string name="mark_as_read">Mark as Read</string>
+    <string name="unread_badge">New</string>
+    <string name="view_all_announcements">View All</string>
+    <string name="published_at">Published</string>
+    <string name="expires_at">Expires</string>
+
+    <!-- Categories -->
+    <string name="cat_general">General Announcement</string>
+    <string name="cat_timing">Bus Timing Change</string>
+    <string name="cat_delay">Bus Delay</string>
+    <string name="cat_cancellation">Bus Cancellation</string>
+    <string name="cat_route">Route Change</string>
+    <string name="cat_swap">Bus Replacement</string>
+    <string name="cat_holiday">College Holiday</string>
+    <string name="cat_emergency">Emergency Alert</string>
+
+    <!-- Priorities -->
+    <string name="priority_normal">Normal</string>
+    <string name="priority_important">Important</string>
+    <string name="priority_urgent">Urgent</string>
+
+    <!-- Target Audiences -->
+    <string name="audience_all">All Students and Drivers</string>
+    <string name="audience_students">Students Only</string>
+    <string name="audience_drivers">Drivers Only</string>
+    <string name="audience_bus">Selected Bus</string>
+    <string name="audience_route">Selected Route</string>
+    <string name="audience_stop">Selected Stop</string>
+
+    <!-- Dedicated Bus Timing Change Workflow -->
+    <string name="bus_timing_change">Bus Timing Change</string>
+    <string name="bus_timing_alert_workflow">Bus Timing Change Alert</string>
+    <string name="timing_alert_explanation">Publishing this timing alert informs students and drivers immediately. It communicates information without automatically modifying operating schedules.</string>
+    <string name="select_bus_for_timing">Select Affected Bus</string>
+    <string name="timing_change_type">Service Window</string>
+    <string name="morning_departure">Morning Departure</string>
+    <string name="evening_departure">Evening Departure</string>
+    <string name="previous_time">Previous Time</string>
+    <string name="new_time">New Time</string>
+    <string name="effective_date">Effective Date</string>
+    <string name="end_date_optional">End Date (Optional / If Temporary)</string>
+    <string name="reason_for_change">Reason for Change</string>
+    <string name="publish_timing_alert">Publish Timing Alert</string>
+    <string name="timing_alert_preview">Alert Preview</string>
+    <string name="exam_schedule_reason">College Examination Schedule</string>
+    <string name="traffic_delay_reason">Road Maintenance / Traffic Diversion</string>
+    <string name="weather_reason">Inclement Weather</string>
+    <string name="special_event_reason">College Annual Day / Special Event</string>
+
+    <!-- Errors & Validation -->
+    <string name="error_title_required">Title is required</string>
+    <string name="error_message_required">Message is required</string>
+    <string name="error_target_required">Please select a target bus or route</string>
+    <string name="error_failed_to_publish">Failed to publish announcement</string>
+    <string name="error_failed_to_save">Failed to save announcement</string>
+    <string name="announcement_published_success">Announcement published successfully</string>
+    <string name="announcement_saved_success">Announcement saved as draft</string>
+    <string name="announcement_archived_success">Announcement archived</string>
 </resources>

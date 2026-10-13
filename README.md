@@ -22,7 +22,9 @@
   - [3. Driver System & Automated Telemetry](#3-driver-system--automated-telemetry)
   - [4. Background GPS Diagnoser & Health Monitor](#4-background-gps-diagnoser--health-monitor)
   - [5. Admin Command Center](#5-admin-command-center)
-  - [6. Core Infrastructure & Resilience](#6-core-infrastructure--resilience)
+  - [6. Bilingual Support: Kannada & English](#6-bilingual-support-kannada-ಕನ್ನಡ--english)
+  - [7. Campus Announcements & Bus Timing Alerts](#7-campus-announcements--bus-timing-alerts)
+  - [8. Core Infrastructure & Resilience](#8-core-infrastructure--resilience)
 - [System Architecture](#system-architecture)
   - [High-Level Data Flow](#high-level-data-flow)
   - [Automated Schedule & Telemetry Lifecycle](#automated-schedule--telemetry-lifecycle)
@@ -101,9 +103,19 @@ University transit systems often struggle with irregular arrival times, lack of 
 * **Driver Profile Management:** Full profile management, bus assignments, and license record validation.
 * **Institutional Calendar Management:** Configure working days, college holidays, special schedules, and exam timings with automatic calendar synchronization.
 * **Stop Approval Requests:** Review and approve student requests for new bus stop locations.
-* **Fleet Broadcast Notifications:** Issue urgent or scheduled fleet-wide announcements to students and drivers.
 
-### 6. Core Infrastructure & Resilience
+### 6. Bilingual Support: Kannada (ಕನ್ನಡ) & English
+* **Complete App-Wide Localization:** Seamless English and Kannada translation across all Student, Driver, and Administrator flows.
+* **Instant In-App Language Switcher:** Switch between English and ಕನ್ನಡ at any time via header quick-actions or Settings without altering the device's system language or restarting the application.
+* **Persistent & Privacy-First:** Stores the user's language preference locally via `SharedPreferences`, instantly restoring it across app launches without requiring user authentication.
+
+### 7. Campus Announcements & Bus Timing Alerts
+* **Admin Publishing Hub:** Create, edit, schedule, expire, and prioritize (`NORMAL`, `IMPORTANT`, `URGENT`) notices across 8 distinct categories (`TIMING_CHANGE`, `BUS_DELAY`, `BUS_CANCELLATION`, `ROUTE_CHANGE`, `BUS_SWAP`, `HOLIDAY`, `EMERGENCY`, `GENERAL`).
+* **Audience-Targeted Distribution:** Target notices specifically to `All`, `Students Only`, `Drivers Only`, a `Selected Bus`, a `Selected Route`, or a `Selected Stop`.
+* **Dedicated Bus Timing Change Workflow:** Structured dialog enabling transport managers to communicate revised departure/arrival times with bilingual previews, decoupled from operational schedule databases to preserve existing automated alarm configurations.
+* **In-App Feeds & Push Alerts:** High-priority FCM push notifications formatted in the recipient's chosen language, paired with unread indicators and detail modal views for students and drivers.
+
+### 8. Core Infrastructure & Resilience
 * **Dual Firebase Architecture:** Cloud Firestore manages relational schemas (Users, Routes, Bus Swaps, Calendar Exceptions) while Realtime Database handles high-throughput coordinate streams.
 * **Boot Survival:** Dedicated `AutoTrackingBootReceiver` restores exact tracking timers after device reboots.
 * **Crash & Interruption Auditing:** Tracks service stop reasons (`OPERATING_WINDOW_ENDED`, `USER_MANUAL_STOP`, `DRIVER_LOGGED_OUT`, `COLLEGE_HOLIDAY`, `OPERATOR_REPLACED`, etc.).

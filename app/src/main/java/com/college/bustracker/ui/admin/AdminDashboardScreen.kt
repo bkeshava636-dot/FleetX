@@ -63,6 +63,7 @@ import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import com.college.bustracker.data.model.CalendarException
@@ -115,11 +116,20 @@ fun AdminDashboardScreen(
     val pendingStopRequestsCount by viewModel.pendingStopRequestsCount.collectAsState()
     val temporaryAssignments by viewModel.temporaryAssignments.collectAsState()
     val activeReplacementsCount by viewModel.activeReplacementsCount.collectAsState()
+    val publishedAnnouncements by viewModel.publishedAnnouncements.collectAsState()
+    val draftAnnouncements by viewModel.draftAnnouncements.collectAsState()
+    val archivedAnnouncements by viewModel.archivedAnnouncements.collectAsState()
 
-    var selectedSection by remember { mutableStateOf(0) } // 0: Overview, 1: Operations, 2: Routes, 3: Calendar
+    var selectedSection by remember { mutableStateOf(0) } // 0: Overview, 1: Operations, 2: Routes, 3: Calendar, 4: Announcements
     var operationsSubTab by remember { mutableStateOf<String?>(null) } // null (hub), "buses", "drivers", "replacements", "swaps"
     var routesSubTab by remember { mutableStateOf<String?>(null) } // null (hub), "routes", "stops", "stop_requests"
     var selectedRouteForStops by remember { mutableStateOf<Route?>(null) }
+
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var showCreateAnnouncementDialog by remember { mutableStateOf(false) }
+    var showBusTimingChangeDialog by remember { mutableStateOf(false) }
+    var announcementToEdit by remember { mutableStateOf<com.college.bustracker.data.model.Announcement?>(null) }
+    var announcementToDelete by remember { mutableStateOf<com.college.bustracker.data.model.Announcement?>(null) }
 
     var showAddBusDialog by remember { mutableStateOf(false) }
     var showAddDriverDialog by remember { mutableStateOf(false) }
@@ -160,6 +170,11 @@ fun AdminDashboardScreen(
 
     BackHandler(enabled = true) {
         when {
+            showLanguageDialog -> showLanguageDialog = false
+            showCreateAnnouncementDialog -> showCreateAnnouncementDialog = false
+            showBusTimingChangeDialog -> showBusTimingChangeDialog = false
+            announcementToEdit != null -> announcementToEdit = null
+            announcementToDelete != null -> announcementToDelete = null
             showAddBusDialog -> showAddBusDialog = false
             showAddDriverDialog -> showAddDriverDialog = false
             showAddReplacementDialog -> showAddReplacementDialog = false
@@ -201,11 +216,13 @@ fun AdminDashboardScreen(
                     1 -> "Fleet Operations"
                     2 -> "Routes & Transit"
                     3 -> "College Calendar"
+                    4 -> "Announcements & Notices"
                     else -> "Admin Dashboard"
                 },
                 subtitle = "FleetX",
                 todayEvaluation = todayEvaluation,
                 onNavigateToDiagnostics = onNavigateToDiagnostics,
+                onOpenLanguageSelector = { showLanguageDialog = true },
                 onLogout = onLogout
             )
         },
@@ -246,6 +263,9 @@ fun AdminDashboardScreen(
                     },
                     onNavigateToCalendar = {
                         selectedSection = 3
+                    },
+                    onNavigateToAnnouncements = {
+                        selectedSection = 4
                     }
                 )
                 1 -> AdminOperationsScreen(
@@ -364,6 +384,31 @@ fun AdminDashboardScreen(
                     },
                     onDeleteExceptionClick = { ex ->
                         holidayToDelete = ex
+                    }
+                )
+                4 -> AdminAnnouncementScreen(
+                    published = publishedAnnouncements,
+                    drafts = draftAnnouncements,
+                    archived = archivedAnnouncements,
+                    onAddAnnouncementClick = {
+                        announcementToEdit = null
+                        showCreateAnnouncementDialog = true
+                    },
+                    onTimingChangeClick = {
+                        showBusTimingChangeDialog = true
+                    },
+                    onEditAnnouncementClick = { ann ->
+                        announcementToEdit = ann
+                        showCreateAnnouncementDialog = true
+                    },
+                    onPublishAnnouncementClick = { ann ->
+                        viewModel.publishAnnouncement(ann.id) {}
+                    },
+                    onArchiveAnnouncementClick = { ann ->
+                        viewModel.archiveAnnouncement(ann.id) {}
+                    },
+                    onDeleteAnnouncementClick = { ann ->
+                        announcementToDelete = ann
                     }
                 )
             }
@@ -1042,6 +1087,84 @@ fun AdminDashboardScreen(
             dismissButton = {
                 OutlinedButton(onClick = { swapToCancel = null }) {
                     Text("Keep Swap")
+                }
+            }
+        )
+    }
+
+    // Language Selection Dialog
+    if (showLanguageDialog) {
+        com.college.bustracker.ui.common.LanguageSelectionDialog(
+            onDismiss = { showLanguageDialog = false }
+        )
+    }
+
+    // Create / Edit Announcement Dialog
+    if (showCreateAnnouncementDialog) {
+        CreateAnnouncementDialog(
+            announcementToEdit = announcementToEdit,
+            buses = buses,
+            routes = routes,
+            onDismiss = {
+                showCreateAnnouncementDialog = false
+                announcementToEdit = null
+            },
+            onSave = { ann, publishImmediately ->
+                if (ann.id.isBlank()) {
+                    viewModel.createAnnouncement(ann) {
+                        showCreateAnnouncementDialog = false
+                        announcementToEdit = null
+                    }
+                } else {
+                    viewModel.updateAnnouncement(ann) {
+                        showCreateAnnouncementDialog = false
+                        announcementToEdit = null
+                    }
+                }
+            }
+        )
+    }
+
+    // Bus Timing Change Workflow Dialog
+    if (showBusTimingChangeDialog) {
+        BusTimingChangeDialog(
+            buses = buses,
+            onDismiss = { showBusTimingChangeDialog = false },
+            onPublishAlert = { ann ->
+                viewModel.createAnnouncement(ann) {
+                    showBusTimingChangeDialog = false
+                }
+            },
+            onOpenScheduleSettings = {
+                showBusTimingChangeDialog = false
+                selectedSection = 3
+                showEditOperatingScheduleDialog = true
+            }
+        )
+    }
+
+    // Delete Announcement Confirmation Dialog
+    if (announcementToDelete != null) {
+        val ann = announcementToDelete!!
+        AlertDialog(
+            onDismissRequest = { announcementToDelete = null },
+            title = { Text("Delete Announcement", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete this announcement? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteAnnouncement(ann.id) {
+                            announcementToDelete = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { announcementToDelete = null }) {
+                    Text("Cancel")
                 }
             }
         )

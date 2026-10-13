@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Dashboard
@@ -174,6 +175,21 @@ fun AdminBottomNavigation(
                 indicatorColor = Color(0xFFE2E8F0)
             )
         )
+
+        // Tab 4: Announcements
+        NavigationBarItem(
+            selected = selectedSection == 4,
+            onClick = { onSectionSelected(4) },
+            icon = { Icon(Icons.Default.Campaign, contentDescription = "Announcements") },
+            label = { Text("Notices", fontSize = 11.sp, fontWeight = if (selectedSection == 4) FontWeight.Bold else FontWeight.Normal) },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = CollegePrimary,
+                selectedTextColor = CollegePrimary,
+                unselectedIconColor = Color(0xFF64748B),
+                unselectedTextColor = Color(0xFF64748B),
+                indicatorColor = Color(0xFFE2E8F0)
+            )
+        )
     }
 }
 
@@ -186,6 +202,7 @@ fun AdminHeader(
     subtitle: String = "FleetX",
     todayEvaluation: DayEvaluation? = null,
     onNavigateToDiagnostics: (() -> Unit)? = null,
+    onOpenLanguageSelector: (() -> Unit)? = null,
     onLogout: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -256,6 +273,13 @@ fun AdminHeader(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false }
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("Language / ಭಾಷೆ", color = Color(0xFF0F172A), fontWeight = FontWeight.Medium) },
+                        onClick = {
+                            showMenu = false
+                            onOpenLanguageSelector?.invoke()
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("GPS Diagnostics", color = Color(0xFF0F172A), fontWeight = FontWeight.Medium) },
                         onClick = {

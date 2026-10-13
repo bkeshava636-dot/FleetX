@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -34,12 +35,22 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
     private val stopRequestRepo = app.stopRequestRepository
     private val tempAssignRepo = app.temporaryAssignmentRepository
     private val networkMonitor = app.networkMonitor
+    private val announcementRepo = app.announcementRepository
 
     private val _assignedBus = MutableStateFlow<Bus?>(null)
     val assignedBus: StateFlow<Bus?> = _assignedBus.asStateFlow()
 
     private val _assignedRoute = MutableStateFlow<Route?>(null)
     val assignedRoute: StateFlow<Route?> = _assignedRoute.asStateFlow()
+
+    val driverAnnouncements: StateFlow<List<com.college.bustracker.data.model.Announcement>> = combine(
+        announcementRepo.getAnnouncementsFlow(),
+        _assignedBus,
+        _assignedRoute
+    ) { list, bus, route ->
+        val now = System.currentTimeMillis()
+        list.filter { it.isRelevantToDriver(bus?.busId, route?.routeId, now) }
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _capturedStopLocation = MutableStateFlow<android.location.Location?>(null)
     val capturedStopLocation: StateFlow<android.location.Location?> = _capturedStopLocation.asStateFlow()
