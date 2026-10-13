@@ -200,7 +200,7 @@ fun DriverHomeScreen(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Bus Driver Console",
+                    text = stringResource(R.string.driver_console_title),
                     fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color(0xFF0F172A),
@@ -208,7 +208,7 @@ fun DriverHomeScreen(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Safe & timely college transit",
+                    text = stringResource(R.string.driver_console_subtitle),
                     fontSize = 12.sp,
                     color = Color(0xFF64748B),
                     maxLines = 1,
@@ -280,13 +280,16 @@ fun DriverHomeScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "College Holiday Today",
+                            text = stringResource(R.string.holiday_today),
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF92400E),
                             fontSize = 14.sp
                         )
                         Text(
-                            text = "${todayHolidayName ?: "Holiday"} — Bus tracking is disabled today.",
+                            text = stringResource(
+                                R.string.holiday_tracking_disabled,
+                                todayHolidayName ?: stringResource(R.string.holiday_today)
+                            ),
                             fontSize = 12.sp,
                             color = Color(0xFF78350F)
                         )
@@ -320,7 +323,7 @@ fun DriverHomeScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Background Battery Optimization Active",
+                            text = stringResource(R.string.battery_optimization_title),
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
                             color = Color(0xFF92400E)
@@ -328,7 +331,7 @@ fun DriverHomeScreen(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "To guarantee GPS tracking never stops when your screen is locked, allow 'Unrestricted' battery access.",
+                        text = stringResource(R.string.battery_optimization_desc),
                         fontSize = 12.sp,
                         color = Color(0xFF78350F)
                     )
@@ -350,7 +353,7 @@ fun DriverHomeScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB45309)),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("Enable Unrestricted Background GPS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.enable_unrestricted_gps), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -382,13 +385,16 @@ fun DriverHomeScreen(
                     Spacer(modifier = Modifier.width(14.dp))
                     Column {
                         Text(
-                            text = bus?.busNumber ?: "No Bus Assigned",
+                            text = bus?.busNumber ?: stringResource(R.string.no_bus_assigned),
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0F172A)
                         )
                         Text(
-                            text = "Route: ${route?.name ?: if (bus != null) "Route ${bus?.routeId}" else "Unassigned"}",
+                            text = stringResource(
+                                R.string.route_prefix,
+                                route?.name ?: if (bus != null) "Route ${bus?.routeId}" else stringResource(R.string.unassigned_route)
+                            ),
                             fontSize = 13.sp,
                             color = Color(0xFF64748B),
                             fontWeight = FontWeight.Medium
@@ -493,7 +499,7 @@ fun DriverHomeScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "LIVE TRACKING IN PROGRESS",
+                                text = stringResource(R.string.live_tracking_in_progress),
                                 fontWeight = FontWeight.ExtraBold,
                                 color = StatusActiveGreen,
                                 fontSize = 14.sp,
@@ -527,7 +533,7 @@ fun DriverHomeScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "GPS: $gpsStatus",
+                                text = stringResource(R.string.gps_label, gpsStatus),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF1E293B)
@@ -540,7 +546,7 @@ fun DriverHomeScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
-                        text = "Last GPS broadcast: $lastUpdateText",
+                        text = stringResource(R.string.last_gps_broadcast, lastUpdateText),
                         fontSize = 12.sp,
                         color = Color(0xFF065F46)
                     )
@@ -558,7 +564,7 @@ fun DriverHomeScreen(
                         Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "STOP TRACKING SESSION",
+                            text = stringResource(R.string.stop_tracking_session),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp
@@ -584,13 +590,13 @@ fun DriverHomeScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Automatic Scheduled Tracking",
+                            text = stringResource(R.string.auto_scheduled_tracking),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0F172A)
                         )
                         Text(
-                            text = if (isAutoTracking) "Arming foreground service during shift" else "Auto tracking inactive",
+                            text = if (isAutoTracking) stringResource(R.string.auto_tracking_arming) else stringResource(R.string.auto_tracking_inactive),
                             fontSize = 12.sp,
                             color = if (isAutoTracking) StatusActiveGreen else Color(0xFF64748B),
                             fontWeight = FontWeight.Medium
@@ -652,7 +658,7 @@ fun DriverHomeScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Requires 'Allow all the time' location permission to track automatically when app is closed.",
+                                text = stringResource(R.string.requires_bg_location),
                                 fontSize = 11.sp,
                                 color = Color(0xFF92400E),
                                 fontWeight = FontWeight.Medium,
@@ -662,7 +668,7 @@ fun DriverHomeScreen(
                                 onClick = { showBackgroundLocationDialog = true },
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                             ) {
-                                Text("Fix", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFB45309))
+                                Text(stringResource(R.string.fix_button), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFB45309))
                             }
                         }
                     }
@@ -706,11 +712,11 @@ fun DriverHomeScreen(
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     SectionHeader(
-                        title = "Manual Dispatch",
+                        title = stringResource(R.string.manual_dispatch),
                         icon = Icons.Default.PlayArrow
                     )
                     Text(
-                        text = "Use for unscheduled trips, special exams, holidays, or emergency substitute shifts.",
+                        text = stringResource(R.string.manual_dispatch_desc),
                         fontSize = 12.sp,
                         color = Color(0xFF64748B),
                         modifier = Modifier.padding(vertical = 8.dp)
@@ -739,9 +745,9 @@ fun DriverHomeScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = when {
-                                isReplacedNow -> "TRACKING DISABLED (REPLACEMENT ACTIVE)"
+                                isReplacedNow -> stringResource(R.string.tracking_disabled_replacement)
                                 isActingAsTemp -> "START TRACKING (${operatingAsTempBus?.busId})"
-                                else -> "START TRACKING NOW"
+                                else -> stringResource(R.string.start_tracking_now)
                             },
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
@@ -762,11 +768,11 @@ fun DriverHomeScreen(
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 SectionHeader(
-                    title = "Vehicle Substitution",
+                    title = stringResource(R.string.vehicle_substitution),
                     icon = Icons.Default.SwapHoriz
                 )
                 Text(
-                    text = "Report temporary vehicle substitutions so waiting students receive notifications.",
+                    text = stringResource(R.string.vehicle_substitution_desc),
                     fontSize = 12.sp,
                     color = Color(0xFF64748B),
                     modifier = Modifier.padding(vertical = 8.dp)
@@ -793,7 +799,11 @@ fun DriverHomeScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Active Swap: ${activeSwap?.originalBusId} → ${activeSwap?.replacementBusId}",
+                                    text = stringResource(
+                                        R.string.active_swap_format,
+                                        activeSwap?.originalBusId ?: "",
+                                        activeSwap?.replacementBusId ?: ""
+                                    ),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
                                     color = Color(0xFF92400E)
@@ -817,7 +827,7 @@ fun DriverHomeScreen(
                     Icon(Icons.Default.Cached, contentDescription = null, tint = CollegePrimary)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (activeSwap != null) "MANAGE ACTIVE BUS SWAP" else "REPORT BUS SWAP",
+                        text = if (activeSwap != null) stringResource(R.string.manage_active_swap) else stringResource(R.string.report_bus_swap),
                         fontWeight = FontWeight.Bold,
                         color = CollegePrimary,
                         fontSize = 13.sp
@@ -857,11 +867,11 @@ fun DriverHomeScreen(
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 SectionHeader(
-                    title = "Propose Route Stop",
+                    title = stringResource(R.string.propose_route_stop),
                     icon = Icons.Default.AddLocationAlt
                 )
                 Text(
-                    text = "Physically standing at a bus stop? Capture your current GPS location to propose a new stop to the Administrator.",
+                    text = stringResource(R.string.propose_stop_desc),
                     fontSize = 12.sp,
                     color = Color(0xFF64748B),
                     modifier = Modifier.padding(vertical = 8.dp)
@@ -894,12 +904,12 @@ fun DriverHomeScreen(
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("ACQUIRING GPS FIX...", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.acquiring_gps_fix), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     } else {
                         Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "SAVE STOP AT CURRENT LOCATION",
+                            text = stringResource(R.string.save_stop_current_location),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp
@@ -941,13 +951,13 @@ fun DriverHomeScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "GPS Diagnostics",
+                                text = stringResource(R.string.gps_diagnostics),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp,
                                 color = Color(0xFF0F172A)
                             )
                             Text(
-                                text = "Verify background tracking & view reports",
+                                text = stringResource(R.string.gps_diagnostics_subtitle),
                                 fontSize = 12.sp,
                                 color = Color(0xFF64748B)
                             )
@@ -964,7 +974,7 @@ fun DriverHomeScreen(
                     border = BorderStroke(1.2.dp, CollegePrimary.copy(alpha = 0.5f))
                 ) {
                     Text(
-                        text = "OPEN GPS DIAGNOSTICS",
+                        text = stringResource(R.string.gps_diagnostics).uppercase(),
                         fontWeight = FontWeight.Bold,
                         color = CollegePrimary,
                         fontSize = 13.sp

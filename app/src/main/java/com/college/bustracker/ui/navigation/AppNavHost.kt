@@ -92,17 +92,7 @@ fun AppNavHost(
         }
 
         composable(Screen.BusPass.route) {
-            val context = androidx.compose.ui.platform.LocalContext.current
-            val busPassViewModel: com.college.bustracker.pass.ui.BusPassViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        return com.college.bustracker.pass.ui.BusPassViewModel(
-                            com.college.bustracker.pass.storage.BusPassStorage(context.applicationContext)
-                        ) as T
-                    }
-                }
-            )
+            val busPassViewModel: com.college.bustracker.pass.ui.BusPassViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
             com.college.bustracker.pass.ui.BusPassScreen(
                 viewModel = busPassViewModel,
                 onNavigateBack = { navController.popBackStack() }

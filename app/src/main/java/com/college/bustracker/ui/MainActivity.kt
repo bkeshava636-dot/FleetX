@@ -27,6 +27,12 @@ import com.college.bustracker.ui.theme.CollegeSurface
 
 class MainActivity : ComponentActivity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        val lang = com.college.bustracker.util.LocaleHelper.getSavedLanguage(newBase)
+        val context = com.college.bustracker.util.LocaleHelper.applyLocale(newBase, lang)
+        super.attachBaseContext(context)
+    }
+
     private val studentViewModel: StudentViewModel by viewModels()
 
     private val requestPermissionsLauncher = registerForActivityResult(
