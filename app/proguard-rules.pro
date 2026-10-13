@@ -15,6 +15,14 @@
 -keep class androidx.camera.** { *; }
 -dontwarn androidx.camera.**
 
+# ViewModel constructors preservation
+-keep class * extends androidx.lifecycle.ViewModel {
+    <init>(...);
+}
+-keep class * extends androidx.lifecycle.AndroidViewModel {
+    <init>(...);
+}
+
 # Strip debug and verbose logs in release builds
 -assumenosideeffects class android.util.Log {
     public static boolean isLoggable(java.lang.String, int);
