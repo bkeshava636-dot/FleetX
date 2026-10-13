@@ -84,6 +84,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.college.bustracker.R
 import com.college.bustracker.data.model.Bus
 import com.college.bustracker.data.model.BusStop
 import com.college.bustracker.data.model.BusSwap
@@ -212,12 +214,12 @@ fun AdminDashboardScreen(
         topBar = {
             AdminHeader(
                 title = when (selectedSection) {
-                    0 -> "Admin Dashboard"
-                    1 -> "Fleet Operations"
-                    2 -> "Routes & Transit"
-                    3 -> "College Calendar"
-                    4 -> "Announcements & Notices"
-                    else -> "Admin Dashboard"
+                    0 -> stringResource(R.string.admin_dashboard)
+                    1 -> stringResource(R.string.fleet_operations)
+                    2 -> stringResource(R.string.routes_and_transit)
+                    3 -> stringResource(R.string.college_calendar)
+                    4 -> stringResource(R.string.announcements_and_notices)
+                    else -> stringResource(R.string.admin_dashboard)
                 },
                 subtitle = "FleetX",
                 todayEvaluation = todayEvaluation,

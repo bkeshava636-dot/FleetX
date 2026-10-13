@@ -41,10 +41,12 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.college.bustracker.R
 import com.college.bustracker.pass.model.CardQuad
 import com.college.bustracker.pass.model.Point2D
 import com.college.bustracker.ui.theme.CollegePrimary
@@ -101,13 +103,13 @@ fun CornerAdjustmentScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.back),
                             tint = Color.White
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Adjust Card Corners",
+                        text = stringResource(R.string.adjust_card_corners),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -119,7 +121,7 @@ fun CornerAdjustmentScreen(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        text = if (isValid) "Valid Shape ✓" else "Invalid Shape ✕",
+                        text = if (isValid) stringResource(R.string.valid_shape) else stringResource(R.string.invalid_shape),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -129,7 +131,7 @@ fun CornerAdjustmentScreen(
             }
 
             Text(
-                text = "Drag the 4 corner circles to match the edges of your card.",
+                text = stringResource(R.string.drag_corners_guide),
                 fontSize = 12.sp,
                 color = Color.White.copy(alpha = 0.7f),
                 modifier = Modifier.padding(horizontal = 20.dp)
@@ -320,7 +322,7 @@ fun CornerAdjustmentScreen(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Retake", color = Color.White)
+                        Text(stringResource(R.string.retry), color = Color.White)
                     }
 
                     OutlinedButton(
@@ -331,7 +333,7 @@ fun CornerAdjustmentScreen(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Reset", color = Color.White)
+                        Text(stringResource(R.string.refresh), color = Color.White)
                     }
 
                     Button(
@@ -345,7 +347,7 @@ fun CornerAdjustmentScreen(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
                     ) {
-                        Text("Confirm Crop")
+                        Text(stringResource(R.string.confirm_crop))
                     }
                 }
             }
