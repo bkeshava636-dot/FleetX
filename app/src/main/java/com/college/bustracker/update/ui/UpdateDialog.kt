@@ -164,19 +164,22 @@ fun UpdateDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "CURRENT VERSION",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF94A3B8),
-                                letterSpacing = 0.5.sp
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Text(
                                 text = "v$installedVersionName ($installedVersionCode)",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF475569)
+                                color = Color(0xFF475569),
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
 
@@ -184,22 +187,30 @@ fun UpdateDialog(
                             imageVector = Icons.Default.ArrowForward,
                             contentDescription = null,
                             tint = Color(0xFF94A3B8),
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier
+                                .padding(horizontal = 6.dp)
+                                .size(16.dp)
                         )
 
-                        Column(horizontalAlignment = Alignment.End) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.End
+                        ) {
                             Text(
                                 text = "NEW VERSION",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = CollegePrimary,
-                                letterSpacing = 0.5.sp
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Text(
                                 text = "v${releaseInfo.versionName} (${releaseInfo.versionCode})",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = CollegePrimary
+                                color = CollegePrimary,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -222,7 +233,8 @@ fun UpdateDialog(
                         text = "Download size: $sizeMb",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF64748B)
+                        color = Color(0xFF64748B),
+                        maxLines = 1
                     )
 
                     if (!releaseInfo.sha256Checksum.isNullOrBlank()) {
@@ -238,7 +250,9 @@ fun UpdateDialog(
                                 text = "Verified SHA-256",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = StatusActiveGreen
+                                color = StatusActiveGreen,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
