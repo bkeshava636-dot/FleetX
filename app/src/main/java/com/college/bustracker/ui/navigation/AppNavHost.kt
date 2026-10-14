@@ -79,6 +79,7 @@ fun AppNavHost(
         composable(Screen.StudentHome.route) {
             StudentHomeScreen(
                 viewModel = studentViewModel,
+                busPassViewModel = busPassViewModel,
                 onNavigateToMap = { navController.navigate(Screen.StudentMap.route) },
                 onNavigateToStaffLogin = { navController.navigate(Screen.StaffLogin.route) },
                 onNavigateToBusPass = { navController.navigate(Screen.BusPass.route) }

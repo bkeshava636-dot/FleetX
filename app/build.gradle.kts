@@ -145,6 +145,7 @@ dependencies {
     implementation(libs.firebase.database.ktx)
     implementation(libs.firebase.messaging.ktx)
     implementation(libs.firebase.functions.ktx)
+    implementation(libs.firebase.storage.ktx)
 
     // Location & OpenStreetMap
     implementation(libs.play.services.location)

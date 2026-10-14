@@ -7,5 +7,7 @@ data class Route(
     val active: Boolean = true,
     val busId: String = "",
     val stops: List<BusStop> = emptyList(),
-    val schedules: RouteSchedule = RouteSchedule()
+    val schedules: RouteSchedule = RouteSchedule(),
+    val schedulePdfUrl: String? = null,
+    val schedulePdfName: String? = null
 )

@@ -3,7 +3,15 @@ package com.college.bustracker.ui.admin
 import com.college.bustracker.ui.admin.DriverProfileValidator
 
 import android.app.Activity
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.college.bustracker.util.SchedulePdfHelper
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -169,6 +177,28 @@ fun AdminDashboardScreen(
     var replacementToCancel by remember { mutableStateOf<TemporaryAssignment?>(null) }
     var showAddSwapDialog by remember { mutableStateOf(false) }
     var swapToCancel by remember { mutableStateOf<BusSwap?>(null) }
+
+    val coroutineScope = rememberCoroutineScope()
+    var targetRouteForPdf by remember { mutableStateOf<Route?>(null) }
+    var isUploadingPdf by remember { mutableStateOf(false) }
+
+    val pdfPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        val target = targetRouteForPdf
+        if (uri != null && target != null) {
+            isUploadingPdf = true
+            viewModel.uploadRouteSchedulePdf(context, target.routeId, uri) { result ->
+                isUploadingPdf = false
+                result.onSuccess {
+                    Toast.makeText(context, context.getString(R.string.route_pdf_uploaded_success), Toast.LENGTH_SHORT).show()
+                }.onFailure { err ->
+                    Toast.makeText(context, err.message ?: "Upload failed", Toast.LENGTH_LONG).show()
+                }
+                targetRouteForPdf = null
+            }
+        }
+    }
 
     BackHandler(enabled = true) {
         when {
@@ -364,6 +394,26 @@ fun AdminDashboardScreen(
                         viewModel.updateStopRequestDraft(req, name, lat, lng, note) { res ->
                             res.onFailure { err ->
                                 routeActionError = err.message ?: "Failed to update draft"
+                            }
+                        }
+                    },
+                    onUploadSchedulePdf = { route ->
+                        targetRouteForPdf = route
+                        pdfPickerLauncher.launch("application/pdf")
+                    },
+                    onViewSchedulePdf = { route ->
+                        if (!route.schedulePdfUrl.isNullOrBlank()) {
+                            coroutineScope.launch {
+                                SchedulePdfHelper.openPdf(context, route.schedulePdfUrl!!, route.schedulePdfName)
+                            }
+                        }
+                    },
+                    onRemoveSchedulePdf = { route ->
+                        viewModel.removeRouteSchedulePdf(route.routeId) { result ->
+                            result.onSuccess {
+                                Toast.makeText(context, context.getString(R.string.route_pdf_deleted_success), Toast.LENGTH_SHORT).show()
+                            }.onFailure { err ->
+                                Toast.makeText(context, err.message ?: "Failed to remove PDF", Toast.LENGTH_LONG).show()
                             }
                         }
                     }
@@ -2719,6 +2769,40 @@ private fun RouteCard(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (route.schedules.evening.enabled) StatusActiveGreen else StatusDangerRed
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                color = if (!route.schedulePdfUrl.isNullOrBlank()) Color(0xFFEFF6FF) else Color(0xFFF9FAFB),
+                shape = RoundedCornerShape(8.dp),
+                border = if (!route.schedulePdfUrl.isNullOrBlank()) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)) else null,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = null,
+                            tint = if (!route.schedulePdfUrl.isNullOrBlank()) Color(0xFF1D4ED8) else Color.Gray,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (!route.schedulePdfUrl.isNullOrBlank()) (route.schedulePdfName ?: "Timetable PDF attached") else "No timetable PDF uploaded",
+                            fontSize = 12.sp,
+                            fontWeight = if (!route.schedulePdfUrl.isNullOrBlank()) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (!route.schedulePdfUrl.isNullOrBlank()) Color(0xFF1D4ED8) else Color.Gray,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

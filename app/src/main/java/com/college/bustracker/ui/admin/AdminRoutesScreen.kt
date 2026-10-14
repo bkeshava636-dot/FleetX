@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Map
@@ -86,7 +87,10 @@ fun AdminRoutesScreen(
     onDeleteStopClick: (Route, BusStop) -> Unit,
     onApproveStopRequest: (StopRequest, String, Double, Double, String?) -> Unit,
     onRejectStopRequest: (StopRequest, String?) -> Unit,
-    onEditStopRequestDraft: (StopRequest, String, Double, Double, String?) -> Unit
+    onEditStopRequestDraft: (StopRequest, String, Double, Double, String?) -> Unit,
+    onUploadSchedulePdf: ((Route) -> Unit)? = null,
+    onViewSchedulePdf: ((Route) -> Unit)? = null,
+    onRemoveSchedulePdf: ((Route) -> Unit)? = null
 ) {
     when (currentSubTab) {
         "routes" -> {
@@ -100,7 +104,10 @@ fun AdminRoutesScreen(
                     onSelectRouteForStops(route)
                     onSelectSubTab("stops")
                 },
-                onDeleteRouteClick = onDeleteRouteClick
+                onDeleteRouteClick = onDeleteRouteClick,
+                onUploadSchedulePdf = onUploadSchedulePdf,
+                onViewSchedulePdf = onViewSchedulePdf,
+                onRemoveSchedulePdf = onRemoveSchedulePdf
             )
         }
         "stops" -> {
@@ -202,7 +209,10 @@ private fun RoutesSubScreen(
     onAddRouteClick: () -> Unit,
     onEditRouteClick: (Route) -> Unit,
     onManageStopsClick: (Route) -> Unit,
-    onDeleteRouteClick: (Route) -> Unit
+    onDeleteRouteClick: (Route) -> Unit,
+    onUploadSchedulePdf: ((Route) -> Unit)? = null,
+    onViewSchedulePdf: ((Route) -> Unit)? = null,
+    onRemoveSchedulePdf: ((Route) -> Unit)? = null
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
@@ -270,7 +280,10 @@ private fun RoutesSubScreen(
                         stopsCount = route.stops.size,
                         onEdit = { onEditRouteClick(route) },
                         onManageStops = { onManageStopsClick(route) },
-                        onDelete = { onDeleteRouteClick(route) }
+                        onDelete = { onDeleteRouteClick(route) },
+                        onUploadPdf = { onUploadSchedulePdf?.invoke(route) },
+                        onViewPdf = { onViewSchedulePdf?.invoke(route) },
+                        onRemovePdf = { onRemoveSchedulePdf?.invoke(route) }
                     )
                 }
                 item { Spacer(modifier = Modifier.height(16.dp)) }
@@ -286,7 +299,10 @@ private fun RouteCompactRow(
     stopsCount: Int,
     onEdit: () -> Unit,
     onManageStops: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onUploadPdf: (() -> Unit)? = null,
+    onViewPdf: (() -> Unit)? = null,
+    onRemovePdf: (() -> Unit)? = null
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -325,6 +341,36 @@ private fun RouteCompactRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                if (!route.schedulePdfUrl.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFFEFF6FF),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Description,
+                                contentDescription = null,
+                                tint = Color(0xFF1D4ED8),
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = route.schedulePdfName ?: "Timetable PDF",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF1D4ED8),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
             }
 
             Box {
@@ -357,6 +403,37 @@ private fun RouteCompactRow(
                             onEdit()
                         }
                     )
+                    if (!route.schedulePdfUrl.isNullOrBlank()) {
+                        DropdownMenuItem(
+                            text = { Text("View Timetable (PDF)") },
+                            onClick = {
+                                showMenu = false
+                                onViewPdf?.invoke()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Replace Timetable (PDF)") },
+                            onClick = {
+                                showMenu = false
+                                onUploadPdf?.invoke()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Remove Timetable (PDF)", color = StatusDangerRed) },
+                            onClick = {
+                                showMenu = false
+                                onRemovePdf?.invoke()
+                            }
+                        )
+                    } else {
+                        DropdownMenuItem(
+                            text = { Text("Upload Timetable (PDF)") },
+                            onClick = {
+                                showMenu = false
+                                onUploadPdf?.invoke()
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("Delete Route", color = StatusDangerRed) },
                         onClick = {
