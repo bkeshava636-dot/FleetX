@@ -99,7 +99,7 @@ object ApkVerifier {
                 VerificationResult.Success
             } else {
                 VerificationResult.Failure(
-                    "Signing certificate mismatch! The update APK is signed with a different key than the installed app."
+                    "Signing certificate mismatch! The update APK is signed with a different key than the installed app. If you previously installed a debug or unofficial build, uninstall it and install this official release once to permanently sync updates."
                 )
             }
         } catch (e: Exception) {

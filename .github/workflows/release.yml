@@ -71,10 +71,30 @@ jobs:
             "configuration_version": "1"
           }
           EOF
+      - name: Verify FleetX Production Keystore Presence
+        run: |
+          if [ -f "app/keystore/fleetx_release.jks" ]; then
+            echo "SUCCESS: FleetX production keystore is present at app/keystore/fleetx_release.jks"
+          else
+            echo "ERROR: app/keystore/fleetx_release.jks missing!"
+            exit 1
           fi
 
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace
+
+      - name: Verify Release APK Production Signature
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
+          echo "Checking APK at: $APK_PATH"
+          ${ANDROID_HOME}/build-tools/34.0.0/apksigner verify --print-certs "$APK_PATH" > cert_info.txt
+          cat cert_info.txt
+          if grep -q "513e623733f4292ee4c52bf863dca642f83d8ea1f0fcf43a4e921a852fa3eb22" cert_info.txt; then
+            echo "VERIFIED: APK is signed with FleetX Production key (513e62...)"
+          else
+            echo "FATAL: APK signing key mismatch! Aborting release."
+            exit 1
+          fi
 
       - name: Locate APK and Compute Checksum
         id: apk_info
