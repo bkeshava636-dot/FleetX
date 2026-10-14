@@ -90,7 +90,8 @@ fun AdminRoutesScreen(
     onEditStopRequestDraft: (StopRequest, String, Double, Double, String?) -> Unit,
     onUploadSchedulePdf: ((Route) -> Unit)? = null,
     onViewSchedulePdf: ((Route) -> Unit)? = null,
-    onRemoveSchedulePdf: ((Route) -> Unit)? = null
+    onRemoveSchedulePdf: ((Route) -> Unit)? = null,
+    onNavigateToCalendar: (() -> Unit)? = null
 ) {
     when (currentSubTab) {
         "routes" -> {
@@ -149,7 +150,8 @@ fun AdminRoutesScreen(
                 routesCount = routes.size,
                 totalStopsCount = routes.sumOf { it.stops.size },
                 pendingStopRequestsCount = pendingStopRequestsCount,
-                onNavigate = onSelectSubTab
+                onNavigate = onSelectSubTab,
+                onNavigateToCalendar = onNavigateToCalendar
             )
         }
     }
@@ -163,7 +165,8 @@ private fun RoutesHubScreen(
     routesCount: Int,
     totalStopsCount: Int,
     pendingStopRequestsCount: Int,
-    onNavigate: (String) -> Unit
+    onNavigate: (String) -> Unit,
+    onNavigateToCalendar: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -194,6 +197,13 @@ private fun RoutesHubScreen(
             badgeCount = pendingStopRequestsCount,
             badgeColor = StatusWarningOrange,
             onClick = { onNavigate("stop_requests") }
+        )
+
+        AdminMenuRow(
+            icon = Icons.Default.Description,
+            title = "All Routes Timetable (PDF)",
+            subtitle = "Manage college-wide timetable PDF for all students & drivers",
+            onClick = { onNavigateToCalendar?.invoke() }
         )
     }
 }

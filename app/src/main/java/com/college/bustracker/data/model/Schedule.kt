@@ -8,5 +8,7 @@ data class ScheduleWindow(
 
 data class RouteSchedule(
     val morning: ScheduleWindow = ScheduleWindow("07:00", "09:00", true),
-    val evening: ScheduleWindow = ScheduleWindow("16:00", "18:00", true)
+    val evening: ScheduleWindow = ScheduleWindow("16:00", "18:00", true),
+    val allRoutesPdfUrl: String? = null,
+    val allRoutesPdfName: String? = null
 )

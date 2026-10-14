@@ -57,7 +57,15 @@ class OperatingScheduleRepository(
                         enabled = (eveningMap?.get("enabled") as? Boolean) ?: true
                     )
 
-                    val schedule = RouteSchedule(morning = morning, evening = evening)
+                    val allRoutesPdfUrl = snapshot.getString("allRoutesPdfUrl")
+                    val allRoutesPdfName = snapshot.getString("allRoutesPdfName")
+
+                    val schedule = RouteSchedule(
+                        morning = morning,
+                        evening = evening,
+                        allRoutesPdfUrl = allRoutesPdfUrl,
+                        allRoutesPdfName = allRoutesPdfName
+                    )
                     _scheduleFlow.value = schedule
                     OperatingScheduleService.updateCachedSchedule(schedule)
                     trySend(schedule)
@@ -75,7 +83,7 @@ class OperatingScheduleRepository(
         updatedBy: String = ""
     ): Result<Unit> {
         return try {
-            val data = mapOf(
+            val data = mutableMapOf<String, Any?>(
                 "morning" to mapOf(
                     "startTime" to schedule.morning.startTime,
                     "endTime" to schedule.morning.endTime,
@@ -89,6 +97,10 @@ class OperatingScheduleRepository(
                 "updatedAt" to System.currentTimeMillis(),
                 "updatedBy" to updatedBy
             )
+            if (schedule.allRoutesPdfUrl != null) {
+                data["allRoutesPdfUrl"] = schedule.allRoutesPdfUrl
+                data["allRoutesPdfName"] = schedule.allRoutesPdfName
+            }
 
             // Update in-memory and disk cache immediately
             _scheduleFlow.value = schedule
@@ -114,6 +126,52 @@ class OperatingScheduleRepository(
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save operating schedule: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateAllRoutesPdf(
+        pdfUrl: String?,
+        pdfName: String?,
+        updatedBy: String = ""
+    ): Result<Unit> {
+        return try {
+            val current = _scheduleFlow.value
+            val updatedSchedule = current.copy(
+                allRoutesPdfUrl = pdfUrl,
+                allRoutesPdfName = pdfName
+            )
+            _scheduleFlow.value = updatedSchedule
+            OperatingScheduleService.updateCachedSchedule(updatedSchedule)
+
+            val data = mutableMapOf<String, Any?>(
+                "updatedAt" to System.currentTimeMillis(),
+                "updatedBy" to updatedBy
+            )
+            if (pdfUrl != null) {
+                data["allRoutesPdfUrl"] = pdfUrl
+                data["allRoutesPdfName"] = pdfName ?: "all_routes_timetable.pdf"
+            } else {
+                data["allRoutesPdfUrl"] = com.google.firebase.firestore.FieldValue.delete()
+                data["allRoutesPdfName"] = com.google.firebase.firestore.FieldValue.delete()
+            }
+
+            firestore.collection(COLLECTION_CALENDAR_EXCEPTIONS)
+                .document(DOC_OPERATING_SCHEDULE)
+                .set(data, SetOptions.merge())
+                .await()
+
+            try {
+                firestore.collection(COLLECTION_OPERATING_SCHEDULE)
+                    .document(DOC_GLOBAL_SCHEDULE)
+                    .set(data, SetOptions.merge())
+                    .await()
+            } catch (_: Exception) {}
+
+            Log.i(TAG, "Updated all routes timetable PDF: url=$pdfUrl, name=$pdfName")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update all routes timetable PDF: ${e.message}", e)
             Result.failure(e)
         }
     }

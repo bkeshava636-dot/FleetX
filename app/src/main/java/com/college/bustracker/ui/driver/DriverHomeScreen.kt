@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AddLocationAlt
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.Cached
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Place
@@ -69,6 +70,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,6 +88,8 @@ import com.college.bustracker.ui.theme.StatusActiveGreen
 import com.college.bustracker.ui.theme.StatusDangerRed
 import com.college.bustracker.ui.theme.StatusWarningOrange
 import com.college.bustracker.util.ScheduleHelper
+import com.college.bustracker.util.SchedulePdfHelper
+import kotlinx.coroutines.launch
 
 @Composable
 fun DriverHomeScreen(
@@ -121,6 +125,7 @@ fun DriverHomeScreen(
     val operatingSchedule by viewModel.operatingSchedule.collectAsState()
 
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val activity = context as? Activity
     val isOperatingWindow = remember(operatingSchedule, isHolidayToday, isTrackingLive) {
         (ScheduleHelper.isWithinOperatingWindow(operatingSchedule) && !isHolidayToday) || isTrackingLive
@@ -830,6 +835,20 @@ fun DriverHomeScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
+        // Master College Bus Timetable (All Routes PDF) Card
+        if (!operatingSchedule.allRoutesPdfUrl.isNullOrBlank()) {
+            MasterSchedulePdfDriverCard(
+                pdfUrl = operatingSchedule.allRoutesPdfUrl!!,
+                pdfName = operatingSchedule.allRoutesPdfName,
+                onViewPdf = { url, name ->
+                    coroutineScope.launch {
+                        SchedulePdfHelper.openPdf(context, url, name)
+                    }
+                }
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
         // MANUAL TRACKING Card (when not currently live)
         if (!isTrackingLive) {
             Card(
@@ -1312,3 +1331,74 @@ fun DriverHomeScreen(
         )
     }
 }
+
+@Composable
+private fun MasterSchedulePdfDriverCard(
+    pdfUrl: String,
+    pdfName: String?,
+    onViewPdf: (url: String, name: String?) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SectionHeader(
+                    title = stringResource(R.string.master_timetable_title),
+                    icon = Icons.Default.Description
+                )
+                Surface(
+                    color = StatusActiveGreen.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.active_for_all_users),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = StatusActiveGreen,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = stringResource(R.string.master_timetable_desc),
+                fontSize = 12.sp,
+                color = Color(0xFF64748B)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = { onViewPdf(pdfUrl, pdfName) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Description,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = pdfName ?: stringResource(R.string.view_master_timetable_action),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+

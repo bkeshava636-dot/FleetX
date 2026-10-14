@@ -489,4 +489,17 @@
     <string name="uploading_pdf">Uploading timetable PDF…</string>
     <string name="route_pdf_uploaded_success">Route timetable PDF uploaded successfully</string>
     <string name="route_pdf_deleted_success">Route timetable PDF removed</string>
+
+    <!-- College-Wide Master Bus Timetable (All Routes) -->
+    <string name="master_timetable_title">College Bus Timetable (All Routes)</string>
+    <string name="master_timetable_desc">Official timetable for all college buses and routes</string>
+    <string name="view_master_timetable_action">View All Routes Timetable (PDF)</string>
+    <string name="upload_master_timetable_action">Upload All Routes Timetable (PDF)</string>
+    <string name="replace_master_timetable_action">Replace All Routes Timetable (PDF)</string>
+    <string name="delete_master_timetable_action">Delete All Routes Timetable</string>
+    <string name="no_master_timetable_available">No college-wide timetable PDF uploaded yet</string>
+    <string name="master_pdf_uploaded_success">Master timetable PDF uploaded successfully</string>
+    <string name="master_pdf_deleted_success">Master timetable PDF removed</string>
+    <string name="active_for_all_users">Active for all students &amp; drivers</string>
+    <string name="quick_master_pdf_chip">All Routes Timetable (PDF)</string>
 </resources>

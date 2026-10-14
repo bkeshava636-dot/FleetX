@@ -137,6 +137,8 @@ object OperatingScheduleService {
         }
         root.put("morning", morningObj)
         root.put("evening", eveningObj)
+        schedule.allRoutesPdfUrl?.let { root.put("allRoutesPdfUrl", it) }
+        schedule.allRoutesPdfName?.let { root.put("allRoutesPdfName", it) }
         return root.toString()
     }
 
@@ -162,7 +164,15 @@ object OperatingScheduleService {
                 )
             } else ScheduleWindow("16:00", "18:00", true)
 
-            RouteSchedule(morning = morning, evening = evening)
+            val allRoutesPdfUrl = root.optString("allRoutesPdfUrl").takeIf { it.isNotBlank() }
+            val allRoutesPdfName = root.optString("allRoutesPdfName").takeIf { it.isNotBlank() }
+
+            RouteSchedule(
+                morning = morning,
+                evening = evening,
+                allRoutesPdfUrl = allRoutesPdfUrl,
+                allRoutesPdfName = allRoutesPdfName
+            )
         } catch (e: Exception) {
             null
         }

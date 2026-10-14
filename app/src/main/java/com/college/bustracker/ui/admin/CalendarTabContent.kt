@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.Info
@@ -41,6 +42,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -79,7 +81,10 @@ fun CalendarTabContent(
     onEditOperatingScheduleClick: (isMorning: Boolean) -> Unit,
     onAddExceptionClick: () -> Unit,
     onEditExceptionClick: (CalendarException) -> Unit,
-    onDeleteExceptionClick: (CalendarException) -> Unit
+    onDeleteExceptionClick: (CalendarException) -> Unit,
+    onUploadMasterPdfClick: (() -> Unit)? = null,
+    onViewMasterPdfClick: ((url: String, name: String?) -> Unit)? = null,
+    onDeleteMasterPdfClick: (() -> Unit)? = null
 ) {
     val sortedExceptions = remember(exceptions) {
         exceptions.sortedBy { it.date }
@@ -102,6 +107,16 @@ fun CalendarTabContent(
                 schedule = operatingSchedule,
                 onEditMorningClick = { onEditOperatingScheduleClick(true) },
                 onEditEveningClick = { onEditOperatingScheduleClick(false) }
+            )
+        }
+
+        // Master College Bus Timetable (All Routes PDF) Section
+        item {
+            AdminMasterSchedulePdfCard(
+                schedule = operatingSchedule,
+                onUploadClick = { onUploadMasterPdfClick?.invoke() },
+                onViewClick = { url, name -> onViewMasterPdfClick?.invoke(url, name) },
+                onDeleteClick = { onDeleteMasterPdfClick?.invoke() }
             )
         }
 
@@ -947,4 +962,178 @@ fun EditOperatingScheduleDialog(
         }
     )
 }
+
+@Composable
+private fun AdminMasterSchedulePdfCard(
+    schedule: RouteSchedule,
+    onUploadClick: () -> Unit,
+    onViewClick: (url: String, name: String?) -> Unit,
+    onDeleteClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(CollegePrimary.copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = null,
+                            tint = CollegePrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "College Bus Timetable (All Routes)",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Color(0xFF0F172A)
+                        )
+                        Text(
+                            text = "Synced automatically to all students & drivers",
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+
+                if (!schedule.allRoutesPdfUrl.isNullOrBlank()) {
+                    Surface(
+                        color = StatusActiveGreen.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = "LIVE",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = StatusActiveGreen,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (!schedule.allRoutesPdfUrl.isNullOrBlank()) {
+                Surface(
+                    color = Color(0xFFF8FAFC),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(
+                                imageVector = Icons.Default.Description,
+                                contentDescription = null,
+                                tint = CollegePrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = schedule.allRoutesPdfName ?: "master_timetable.pdf",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF1E293B),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "Visible on all student and driver dashboards",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF64748B)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { onViewClick(schedule.allRoutesPdfUrl!!, schedule.allRoutesPdfName) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                    ) {
+                        Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("View PDF", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = onUploadClick,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Replace", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+
+                    IconButton(
+                        onClick = onDeleteClick,
+                        modifier = Modifier
+                            .background(StatusDangerRed.copy(alpha = 0.1f), RoundedCornerShape(10.dp))
+                            .size(40.dp)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete PDF", tint = StatusDangerRed, modifier = Modifier.size(18.dp))
+                    }
+                }
+            } else {
+                Surface(
+                    color = Color(0xFFF8FAFC),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "No master college bus route PDF uploaded yet.",
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = onUploadClick,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Upload All Routes Timetable (PDF)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 

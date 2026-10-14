@@ -799,4 +799,38 @@ class AdminViewModel : ViewModel() {
             onResult(res)
         }
     }
+
+    fun uploadAllRoutesSchedulePdf(
+        context: Context,
+        uri: android.net.Uri,
+        onResult: (Result<String>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val uploadRes = com.college.bustracker.util.SchedulePdfHelper.uploadPdf(context, "master_all_routes", uri)
+            uploadRes.fold(
+                onSuccess = { (url, fileName) ->
+                    val currentUid = app.authRepository.getActiveProfile()?.uid ?: "admin"
+                    val saveRes = operatingScheduleRepo.updateAllRoutesPdf(url, fileName, currentUid)
+                    if (saveRes.isSuccess) {
+                        onResult(Result.success(url))
+                    } else {
+                        onResult(Result.failure(saveRes.exceptionOrNull() ?: Exception("Failed to save master PDF")))
+                    }
+                },
+                onFailure = { err ->
+                    onResult(Result.failure(err))
+                }
+            )
+        }
+    }
+
+    fun removeAllRoutesSchedulePdf(
+        onResult: (Result<Unit>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val currentUid = app.authRepository.getActiveProfile()?.uid ?: "admin"
+            val res = operatingScheduleRepo.updateAllRoutesPdf(null, null, currentUid)
+            onResult(res)
+        }
+    }
 }
