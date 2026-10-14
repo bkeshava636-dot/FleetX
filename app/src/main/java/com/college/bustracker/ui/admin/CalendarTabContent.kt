@@ -84,7 +84,8 @@ fun CalendarTabContent(
     onDeleteExceptionClick: (CalendarException) -> Unit,
     onUploadMasterPdfClick: (() -> Unit)? = null,
     onViewMasterPdfClick: ((url: String, name: String?) -> Unit)? = null,
-    onDeleteMasterPdfClick: (() -> Unit)? = null
+    onDeleteMasterPdfClick: (() -> Unit)? = null,
+    onSaveMasterPdfUrlClick: ((url: String, name: String) -> Unit)? = null
 ) {
     val sortedExceptions = remember(exceptions) {
         exceptions.sortedBy { it.date }
@@ -116,7 +117,8 @@ fun CalendarTabContent(
                 schedule = operatingSchedule,
                 onUploadClick = { onUploadMasterPdfClick?.invoke() },
                 onViewClick = { url, name -> onViewMasterPdfClick?.invoke(url, name) },
-                onDeleteClick = { onDeleteMasterPdfClick?.invoke() }
+                onDeleteClick = { onDeleteMasterPdfClick?.invoke() },
+                onSaveUrlClick = { url, name -> onSaveMasterPdfUrlClick?.invoke(url, name) }
             )
         }
 
@@ -968,8 +970,106 @@ private fun AdminMasterSchedulePdfCard(
     schedule: RouteSchedule,
     onUploadClick: () -> Unit,
     onViewClick: (url: String, name: String?) -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    onSaveUrlClick: (url: String, name: String) -> Unit
 ) {
+    var showLinkUrlDialog by remember { mutableStateOf(false) }
+    var showReplaceOptionsDialog by remember { mutableStateOf(false) }
+    var urlInput by remember { mutableStateOf("") }
+    var nameInput by remember { mutableStateOf("") }
+
+    if (showLinkUrlDialog) {
+        AlertDialog(
+            onDismissRequest = { showLinkUrlDialog = false },
+            title = { Text("Link Timetable (Web / Google Drive)", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            text = {
+                Column {
+                    Text(
+                        "Paste a public Google Drive link, college portal URL, or web PDF link:",
+                        fontSize = 12.sp,
+                        color = Color(0xFF64748B)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = urlInput,
+                        onValueChange = { urlInput = it },
+                        label = { Text("PDF / Google Drive URL") },
+                        placeholder = { Text("https://drive.google.com/...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = nameInput,
+                        onValueChange = { nameInput = it },
+                        label = { Text("Display Name (optional)") },
+                        placeholder = { Text("College Bus Schedule (All Routes)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmed = urlInput.trim()
+                        if (trimmed.isNotBlank()) {
+                            onSaveUrlClick(trimmed, nameInput.trim().ifBlank { "College Bus Timetable.pdf" })
+                            showLinkUrlDialog = false
+                            urlInput = ""
+                            nameInput = ""
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                ) {
+                    Text("Save Link")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showLinkUrlDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showReplaceOptionsDialog) {
+        AlertDialog(
+            onDismissRequest = { showReplaceOptionsDialog = false },
+            title = { Text("Replace Timetable PDF", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            text = {
+                Text(
+                    "Choose how you want to update the college bus timetable:",
+                    fontSize = 13.sp,
+                    color = Color(0xFF475569)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showReplaceOptionsDialog = false
+                        onUploadClick()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                ) {
+                    Text("Upload File")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        showReplaceOptionsDialog = false
+                        urlInput = schedule.allRoutesPdfUrl ?: ""
+                        nameInput = schedule.allRoutesPdfName ?: ""
+                        showLinkUrlDialog = true
+                    }
+                ) {
+                    Text("Paste Web / Drive Link")
+                }
+            }
+        )
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -1086,7 +1186,7 @@ private fun AdminMasterSchedulePdfCard(
                     }
 
                     OutlinedButton(
-                        onClick = onUploadClick,
+                        onClick = { showReplaceOptionsDialog = true },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp)
                     ) {
@@ -1119,15 +1219,28 @@ private fun AdminMasterSchedulePdfCard(
                             fontSize = 12.sp,
                             color = Color(0xFF64748B)
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Button(
-                            onClick = onUploadClick,
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Upload All Routes Timetable (PDF)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = onUploadClick,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Upload PDF", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedButton(
+                                onClick = { showLinkUrlDialog = true },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("Link Web/Drive", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
                         }
                     }
                 }

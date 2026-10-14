@@ -833,4 +833,17 @@ class AdminViewModel : ViewModel() {
             onResult(res)
         }
     }
+
+    fun setAllRoutesSchedulePdfUrl(
+        pdfUrl: String,
+        pdfName: String?,
+        onResult: (Result<Unit>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val currentUid = app.authRepository.getActiveProfile()?.uid ?: "admin"
+            val title = pdfName?.trim()?.takeIf { it.isNotBlank() } ?: "College Bus Timetable.pdf"
+            val res = operatingScheduleRepo.updateAllRoutesPdf(pdfUrl.trim(), title, currentUid)
+            onResult(res)
+        }
+    }
 }

@@ -1,0 +1,11 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /route_schedules/{allPaths=**} {
+      // Anyone (students, drivers, public) can view timetable PDFs
+      allow read: if true;
+      // Admins can upload, replace, or delete timetable PDFs
+      allow write: if request.auth != null;
+    }
+  }
+}
