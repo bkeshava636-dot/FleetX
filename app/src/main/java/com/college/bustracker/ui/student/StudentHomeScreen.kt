@@ -347,9 +347,25 @@ fun StudentHomeScreen(
                             )
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            // Quick Route Timetable PDF Banner (if available)
-                            if (!route?.schedulePdfUrl.isNullOrBlank()) {
+                            // Quick Timetable PDF Banner (Master / Route PDF)
+                            if (!operatingSchedule.allRoutesPdfUrl.isNullOrBlank()) {
                                 QuickTimetablePdfBanner(
+                                    title = stringResource(R.string.quick_master_pdf_chip),
+                                    pdfName = operatingSchedule.allRoutesPdfName,
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            SchedulePdfHelper.openPdf(
+                                                context,
+                                                operatingSchedule.allRoutesPdfUrl!!,
+                                                operatingSchedule.allRoutesPdfName
+                                            )
+                                        }
+                                    }
+                                )
+                                Spacer(modifier = Modifier.height(14.dp))
+                            } else if (!route?.schedulePdfUrl.isNullOrBlank()) {
+                                QuickTimetablePdfBanner(
+                                    title = stringResource(R.string.route_schedule_pdf_title),
                                     pdfName = route?.schedulePdfName,
                                     onClick = {
                                         coroutineScope.launch {
@@ -482,15 +498,30 @@ fun StudentHomeScreen(
 
                         Spacer(modifier = Modifier.height(18.dp))
 
-                        // Route Timetable PDF Card (Admin uploaded schedule viewer)
-                        RouteSchedulePdfCard(
-                            route = route,
+                        // Master Timetable PDF Card (College-Wide / All Routes)
+                        MasterSchedulePdfCard(
+                            pdfUrl = operatingSchedule.allRoutesPdfUrl,
+                            pdfName = operatingSchedule.allRoutesPdfName,
                             onViewPdf = { url, name ->
                                 coroutineScope.launch {
                                     SchedulePdfHelper.openPdf(context, url, name)
                                 }
                             }
                         )
+
+                        // Route-Specific Timetable PDF Card (if route has an individual timetable)
+                        val currentRoute = route
+                        if (currentRoute != null && !currentRoute.schedulePdfUrl.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            RouteSchedulePdfCard(
+                                route = currentRoute,
+                                onViewPdf = { url, name ->
+                                    coroutineScope.launch {
+                                        SchedulePdfHelper.openPdf(context, url, name)
+                                    }
+                                }
+                            )
+                        }
 
                         Spacer(modifier = Modifier.height(14.dp))
 
@@ -656,6 +687,7 @@ private fun StudentTopHeader(
 
 @Composable
 private fun QuickTimetablePdfBanner(
+    title: String? = null,
     pdfName: String?,
     onClick: () -> Unit
 ) {
@@ -689,7 +721,7 @@ private fun QuickTimetablePdfBanner(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = stringResource(R.string.route_schedule_pdf_title),
+                        text = title ?: stringResource(R.string.route_schedule_pdf_title),
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                         color = Color(0xFF1E3A8A)
@@ -784,6 +816,102 @@ private fun RouteSchedulePdfCard(
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = stringResource(R.string.no_schedule_pdf_available),
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MasterSchedulePdfCard(
+    pdfUrl: String?,
+    pdfName: String?,
+    onViewPdf: (url: String, name: String?) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SectionHeader(
+                    title = stringResource(R.string.master_timetable_title),
+                    icon = Icons.Default.Description
+                )
+                if (!pdfUrl.isNullOrBlank()) {
+                    Surface(
+                        color = StatusActiveGreen.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.active_for_all_users),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = StatusActiveGreen,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            if (!pdfUrl.isNullOrBlank()) {
+                Text(
+                    text = stringResource(R.string.master_timetable_desc),
+                    fontSize = 12.sp,
+                    color = Color(0xFF64748B)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = { onViewPdf(pdfUrl, pdfName) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Description,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = pdfName ?: stringResource(R.string.view_master_timetable_action),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            } else {
+                Surface(
+                    color = Color(0xFFF8FAFC),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = null,
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = stringResource(R.string.no_master_timetable_available),
                             fontSize = 12.sp,
                             color = Color(0xFF64748B)
                         )

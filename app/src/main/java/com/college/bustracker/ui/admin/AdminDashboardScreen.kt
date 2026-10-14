@@ -200,6 +200,22 @@ fun AdminDashboardScreen(
         }
     }
 
+    val masterPdfPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            isUploadingPdf = true
+            viewModel.uploadAllRoutesSchedulePdf(context, uri) { result ->
+                isUploadingPdf = false
+                result.onSuccess {
+                    Toast.makeText(context, context.getString(R.string.master_pdf_uploaded_success), Toast.LENGTH_SHORT).show()
+                }.onFailure { err ->
+                    Toast.makeText(context, err.message ?: "Upload failed", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
     BackHandler(enabled = true) {
         when {
             showLanguageDialog -> showLanguageDialog = false
@@ -416,6 +432,9 @@ fun AdminDashboardScreen(
                                 Toast.makeText(context, err.message ?: "Failed to remove PDF", Toast.LENGTH_LONG).show()
                             }
                         }
+                    },
+                    onNavigateToCalendar = {
+                        selectedSection = 3
                     }
                 )
                 3 -> CalendarTabContent(
@@ -436,6 +455,23 @@ fun AdminDashboardScreen(
                     },
                     onDeleteExceptionClick = { ex ->
                         holidayToDelete = ex
+                    },
+                    onUploadMasterPdfClick = {
+                        masterPdfPickerLauncher.launch("application/pdf")
+                    },
+                    onViewMasterPdfClick = { url, name ->
+                        coroutineScope.launch {
+                            com.college.bustracker.util.SchedulePdfHelper.openPdf(context, url, name)
+                        }
+                    },
+                    onDeleteMasterPdfClick = {
+                        viewModel.removeAllRoutesSchedulePdf { result ->
+                            result.onSuccess {
+                                Toast.makeText(context, context.getString(R.string.master_pdf_deleted_success), Toast.LENGTH_SHORT).show()
+                            }.onFailure { err ->
+                                Toast.makeText(context, err.message ?: "Failed to remove PDF", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
                 )
                 4 -> AdminAnnouncementScreen(

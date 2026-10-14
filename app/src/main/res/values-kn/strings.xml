@@ -489,4 +489,17 @@
     <string name="uploading_pdf">ವೇಳಾಪಟ್ಟಿ PDF ಅಪ್‌ಲೋಡ್ ಆಗುತ್ತಿದೆ…</string>
     <string name="route_pdf_uploaded_success">ವೇಳಾಪಟ್ಟಿ PDF ಯಶಸ್ವಿಯಾಗಿ ಅಪ್‌ಲೋಡ್ ಆಗಿದೆ</string>
     <string name="route_pdf_deleted_success">ವೇಳಾಪಟ್ಟಿ PDF ತೆಗೆದುಹಾಕಲಾಗಿದೆ</string>
+
+    <!-- College-Wide Master Bus Timetable (All Routes) -->
+    <string name="master_timetable_title">ಕಾಲೇಜು ಬಸ್ ವೇಳಾಪಟ್ಟಿ (ಎಲ್ಲಾ ಮಾರ್ಗಗಳು)</string>
+    <string name="master_timetable_desc">ಎಲ್ಲಾ ಕಾಲೇಜು ಬಸ್ಸುಗಳು ಮತ್ತು ಮಾರ್ಗಗಳ ಅಧಿಕೃತ ವೇಳಾಪಟ್ಟಿ</string>
+    <string name="view_master_timetable_action">ಎಲ್ಲಾ ಮಾರ್ಗಗಳ ವೇಳಾಪಟ್ಟಿ (PDF) ವೀಕ್ಷಿಸಿ</string>
+    <string name="upload_master_timetable_action">ಮಾಸ್ಟರ್ ವೇಳಾಪಟ್ಟಿ (PDF) ಅಪ್‌ಲೋಡ್ ಮಾಡಿ</string>
+    <string name="replace_master_timetable_action">ಮಾಸ್ಟರ್ ವೇಳಾಪಟ್ಟಿ (PDF) ಬದಲಾಯಿಸಿ</string>
+    <string name="delete_master_timetable_action">ಮಾಸ್ಟರ್ ವೇಳಾಪಟ್ಟಿ ತೆಗೆದುಹಾಕಿ</string>
+    <string name="no_master_timetable_available">ಇನ್ನೂ ಯಾವುದೇ ಕಾಲೇಜು ವ್ಯಾಪ್ತಿಯ ವೇಳಾಪಟ್ಟಿ PDF ಅಪ್‌ಲೋಡ್ ಆಗಿಲ್ಲ</string>
+    <string name="master_pdf_uploaded_success">ಮಾಸ್ಟರ್ ವೇಳಾಪಟ್ಟಿ PDF ಯಶಸ್ವಿಯಾಗಿ ಅಪ್‌ಲೋಡ್ ಆಗಿದೆ</string>
+    <string name="master_pdf_deleted_success">ಮಾಸ್ಟರ್ ವೇಳಾಪಟ್ಟಿ PDF ತೆಗೆದುಹಾಕಲಾಗಿದೆ</string>
+    <string name="active_for_all_users">ಎಲ್ಲಾ ವಿದ್ಯಾರ್ಥಿಗಳು ಮತ್ತು ಚಾಲಕರಿಗೆ ಸಕ್ರಿಯವಾಗಿದೆ</string>
+    <string name="quick_master_pdf_chip">ಎಲ್ಲಾ ಮಾರ್ಗಗಳ ವೇಳಾಪಟ್ಟಿ (PDF)</string>
 </resources>
