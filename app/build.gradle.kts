@@ -16,8 +16,8 @@ android {
         applicationId = "com.college.bustracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10009
-        versionName = "1.0.9"
+        versionCode = 10010
+        versionName = "1.0.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -33,6 +33,7 @@ android {
 
     signingConfigs {
         create("release") {
+            val bundledKeystore = file("keystore/fleetx_release.jks")
             val keystorePropFile = rootProject.file("keystore.properties").takeIf { it.exists() }
                 ?: File(System.getProperty("user.home"), ".secrets/keystore.properties").takeIf { it.exists() }
 
@@ -46,20 +47,29 @@ android {
                 ?: (project.findProperty("MYAPP_RELEASE_STORE_FILE") as String?)
                 ?: System.getenv("RELEASE_STORE_FILE")
 
-            if (keystorePath != null && file(keystorePath).exists()) {
-                storeFile = file(keystorePath)
+            val targetStoreFile = when {
+                keystorePath != null && file(keystorePath).exists() -> file(keystorePath)
+                bundledKeystore.exists() -> bundledKeystore
+                else -> null
+            }
+
+            if (targetStoreFile != null) {
+                storeFile = targetStoreFile
                 storePassword = props.getProperty("storePassword")
                     ?: props.getProperty("RELEASE_STORE_PASSWORD")
                     ?: (project.findProperty("MYAPP_RELEASE_STORE_PASSWORD") as String?)
                     ?: System.getenv("RELEASE_STORE_PASSWORD")
+                    ?: "DqkbM7cUFha7iyIJqi1S6JPoBoupN87vA9#"
                 keyAlias = props.getProperty("keyAlias")
                     ?: props.getProperty("RELEASE_KEY_ALIAS")
                     ?: (project.findProperty("MYAPP_RELEASE_KEY_ALIAS") as String?)
                     ?: System.getenv("RELEASE_KEY_ALIAS")
+                    ?: "fleetx-pilot"
                 keyPassword = props.getProperty("keyPassword")
                     ?: props.getProperty("RELEASE_KEY_PASSWORD")
                     ?: (project.findProperty("MYAPP_RELEASE_KEY_PASSWORD") as String?)
                     ?: System.getenv("RELEASE_KEY_PASSWORD")
+                    ?: "DqkbM7cUFha7iyIJqi1S6JPoBoupN87vA9#"
             }
         }
     }
@@ -73,7 +83,11 @@ android {
                 "proguard-rules.pro"
             )
             val releaseConfig = signingConfigs.getByName("release")
-            signingConfig = if (releaseConfig.storeFile != null) releaseConfig else signingConfigs.getByName("debug")
+            signingConfig = if (releaseConfig.storeFile != null) {
+                releaseConfig
+            } else {
+                throw GradleException("FATAL: Release keystore file not found! Release APKs must be signed with the production FleetX key.")
+            }
         }
         debug {
             isMinifyEnabled = false
