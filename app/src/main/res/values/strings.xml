@@ -474,4 +474,19 @@
     <string name="mobile_data_disabled_during_shift_title">Mobile Data is Disconnected</string>
     <string name="mobile_data_disabled_during_shift_desc">Live tracking cannot broadcast bus updates without mobile data during your shift. Tap below to turn on cellular data.</string>
     <string name="turn_on_mobile_data_action">Turn On Mobile Data</string>
+
+    <!-- Student Dashboard Tabs & PDF Features -->
+    <string name="tab_live_track">Track</string>
+    <string name="tab_bus_pass">Bus Pass</string>
+    <string name="tab_schedule_info">Schedule</string>
+    <string name="route_schedule_pdf_title">Route Timetable (PDF)</string>
+    <string name="route_schedule_pdf_desc">Official route schedule approved by college transport</string>
+    <string name="view_schedule_pdf_action">View Timetable (PDF)</string>
+    <string name="no_schedule_pdf_available">No official PDF timetable uploaded for this route yet</string>
+    <string name="upload_route_pdf_action">Upload Timetable (PDF)</string>
+    <string name="replace_route_pdf_action">Replace Timetable (PDF)</string>
+    <string name="delete_route_pdf_action">Delete PDF</string>
+    <string name="uploading_pdf">Uploading timetable PDF…</string>
+    <string name="route_pdf_uploaded_success">Route timetable PDF uploaded successfully</string>
+    <string name="route_pdf_deleted_success">Route timetable PDF removed</string>
 </resources>

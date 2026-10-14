@@ -99,7 +99,8 @@ import java.util.Locale
 @Composable
 fun BusPassScreen(
     viewModel: BusPassViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    showBackButton: Boolean = true
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
@@ -126,7 +127,8 @@ fun BusPassScreen(
                 onDiscardDraft = { viewModel.discardDraft() },
                 onAttachReceipt = { uri -> viewModel.attachFeeReceipt(context, uri) },
                 onDeleteReceipt = { viewModel.deleteFeeReceipt() },
-                onNavigateBack = onNavigateBack
+                onNavigateBack = onNavigateBack,
+                showBackButton = showBackButton
             )
         }
 
@@ -278,7 +280,8 @@ private fun BusPassIdleContent(
     onDiscardDraft: () -> Unit,
     onAttachReceipt: (android.net.Uri) -> Unit,
     onDeleteReceipt: () -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    showBackButton: Boolean = true
 ) {
     val savedPass = uiState.savedPass
     val context = LocalContext.current
@@ -301,8 +304,10 @@ private fun BusPassIdleContent(
             TopAppBar(
                 title = { Text(stringResource(R.string.my_bus_pass), fontWeight = FontWeight.Bold, fontSize = 20.sp) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+                    if (showBackButton) {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

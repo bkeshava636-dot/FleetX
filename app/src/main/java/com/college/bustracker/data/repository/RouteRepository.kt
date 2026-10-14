@@ -114,6 +114,30 @@ class RouteRepository(
         }
     }
 
+    suspend fun updateSchedulePdf(routeId: String, pdfUrl: String?, pdfName: String?): Result<Unit> {
+        if (routeId.isBlank()) {
+            return Result.failure(IllegalArgumentException("Route ID cannot be blank"))
+        }
+        val current = _localRoutes.value.map {
+            if (it.routeId == routeId) it.copy(schedulePdfUrl = pdfUrl, schedulePdfName = pdfName) else it
+        }
+        _localRoutes.value = current
+        return try {
+            val success = kotlinx.coroutines.withTimeoutOrNull(6000L) {
+                val data = mapOf(
+                    "routeId" to routeId,
+                    "schedulePdfUrl" to pdfUrl,
+                    "schedulePdfName" to pdfName
+                )
+                firestore.collection("routes").document(routeId).set(data, SetOptions.merge()).await()
+                true
+            }
+            if (success == true) Result.success(Unit) else Result.failure(Exception("Network timeout saving PDF"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun deleteRoute(routeId: String) {
         val current = _localRoutes.value.toMutableList()
         current.removeAll { it.routeId == routeId }

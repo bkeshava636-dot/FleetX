@@ -33,6 +33,21 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.VolunteerActivism
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.college.bustracker.pass.ui.BusPassScreen
+import com.college.bustracker.pass.ui.BusPassViewModel
+import com.college.bustracker.util.SchedulePdfHelper
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.ui.res.stringResource
@@ -79,6 +94,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.college.bustracker.data.model.BusStop
+import com.college.bustracker.data.model.BusSwap
 import com.college.bustracker.data.model.LiveLocation
 import com.college.bustracker.data.model.Route
 import com.college.bustracker.data.model.TrackingDisplayState
@@ -102,11 +118,15 @@ import com.college.bustracker.util.StopEta
 @Composable
 fun StudentHomeScreen(
     viewModel: StudentViewModel,
+    busPassViewModel: BusPassViewModel? = null,
     onNavigateToMap: () -> Unit,
     onNavigateToStaffLogin: () -> Unit,
     onNavigateToBusPass: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+
     val buses by viewModel.buses.collectAsState()
     val isLoadingBuses by viewModel.isLoadingBuses.collectAsState()
     val selectedBus by viewModel.selectedBus.collectAsState()
@@ -131,1081 +151,389 @@ fun StudentHomeScreen(
     var busDropdownOpen by remember { mutableStateOf(false) }
     var stopDropdownOpen by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(CollegeSurface)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 18.dp)
-    ) {
-        // App Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+    val stops = remember(route) { route?.stops ?: emptyList() }
+    val isSwapActive = remember(swapAlert) { swapAlert != null && !swapAlert?.replacementBusId.isNullOrBlank() }
+    val displayBusNumber = remember(isSwapActive, swapAlert, selectedBus) {
+        if (isSwapActive) swapAlert?.replacementBusId ?: "" else selectedBus?.busNumber ?: "—"
+    }
+    val formattedBusTitle = remember(displayBusNumber) {
+        when {
+            displayBusNumber.isBlank() || displayBusNumber == "—" -> "BUS —"
+            displayBusNumber.startsWith("bus", ignoreCase = true) -> displayBusNumber.uppercase()
+            else -> "BUS $displayBusNumber"
+        }
+    }
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar(
+                containerColor = Color.White,
+                tonalElevation = 8.dp,
+                modifier = Modifier.border(
+                    width = 1.dp,
+                    color = Color(0xFFE2E8F0),
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                )
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .background(CollegePrimary.copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.DirectionsBus,
-                        contentDescription = null,
-                        tint = CollegePrimary,
-                        modifier = Modifier.size(24.dp)
+                NavigationBarItem(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.DirectionsBus,
+                            contentDescription = stringResource(R.string.tab_live_track)
+                        )
+                    },
+                    label = {
+                        Text(
+                            text = stringResource(R.string.tab_live_track),
+                            fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Medium
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = CollegePrimary,
+                        selectedTextColor = CollegePrimary,
+                        indicatorColor = CollegePrimary.copy(alpha = 0.12f),
+                        unselectedIconColor = Color(0xFF64748B),
+                        unselectedTextColor = Color(0xFF64748B)
                     )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f, fill = false)) {
-                    Text(
-                        text = "FleetX",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF0F172A),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = stringResource(R.string.app_tagline),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF64748B),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
+                )
 
-            Spacer(modifier = Modifier.width(6.dp))
+                NavigationBarItem(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Badge,
+                            contentDescription = stringResource(R.string.tab_bus_pass)
+                        )
+                    },
+                    label = {
+                        Text(
+                            text = stringResource(R.string.tab_bus_pass),
+                            fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Medium
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = CollegePrimary,
+                        selectedTextColor = CollegePrimary,
+                        indicatorColor = CollegePrimary.copy(alpha = 0.12f),
+                        unselectedIconColor = Color(0xFF64748B),
+                        unselectedTextColor = Color(0xFF64748B)
+                    )
+                )
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = { showLanguageDialog = true },
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0F766E)),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Language,
-                        contentDescription = "Language",
-                        modifier = Modifier.size(13.dp),
-                        tint = Color(0xFF0F766E)
+                NavigationBarItem(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = stringResource(R.string.tab_schedule_info)
+                        )
+                    },
+                    label = {
+                        Text(
+                            text = stringResource(R.string.tab_schedule_info),
+                            fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Medium
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = CollegePrimary,
+                        selectedTextColor = CollegePrimary,
+                        indicatorColor = CollegePrimary.copy(alpha = 0.12f),
+                        unselectedIconColor = Color(0xFF64748B),
+                        unselectedTextColor = Color(0xFF64748B)
                     )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = if (com.college.bustracker.util.LocaleHelper.isKannada()) "ಕನ್ನಡ" else "EN",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
-
-                OutlinedButton(
-                    onClick = onNavigateToStaffLogin,
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF334155)),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = null,
-                        modifier = Modifier.size(13.dp),
-                        tint = Color(0xFF475569)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = stringResource(R.string.staff_login),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
+                )
             }
         }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        // Campus Announcements Section (Prominently displayed at top of student dashboard)
-        if (announcements.isNotEmpty()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+    ) { contentPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding)
+        ) {
+            when (selectedTab) {
+                0 -> {
+                    // TAB 0: LIVE TRACK
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(CollegeSurface)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp, vertical = 18.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Campaign,
-                                contentDescription = null,
-                                tint = CollegePrimary,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = stringResource(R.string.campus_announcements),
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0F172A)
-                            )
-                        }
-                        val unreadCount = announcements.count {
-                            !com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, it.id)
-                        }
-                        if (unreadCount > 0) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = CollegePrimary
-                            ) {
-                                Text(
-                                    text = "$unreadCount ${stringResource(R.string.unread_badge)}",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
+                        StudentTopHeader(
+                            onNavigateToStaffLogin = onNavigateToStaffLogin,
+                            onLanguageClick = { showLanguageDialog = true }
+                        )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(18.dp))
 
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        announcements.forEach { announcement ->
-                            val isRead = com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, announcement.id)
-                            com.college.bustracker.ui.announcement.AnnouncementCard(
-                                announcement = announcement,
-                                isUnread = !isRead,
-                                onClick = {
-                                    com.college.bustracker.data.repository.AnnouncementPreferences.markAsRead(context, announcement.id)
-                                    selectedAnnouncementForDetail = announcement
+                        // Campus Announcements Section (Prominently displayed at top)
+                        if (announcements.isNotEmpty()) {
+                            CampusAnnouncementsBanner(
+                                announcements = announcements,
+                                onAnnouncementClick = { ann ->
+                                    com.college.bustracker.data.repository.AnnouncementPreferences.markAsRead(context, ann.id)
+                                    selectedAnnouncementForDetail = ann
                                 }
                             )
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(14.dp))
-        }
-
-        if (isLoadingBuses) {
-            LoadingCard(message = stringResource(R.string.loading_fleet))
-        } else if (buses.isEmpty()) {
-            EmptyStateCard(
-                title = stringResource(R.string.no_active_buses_title),
-                description = stringResource(R.string.no_active_buses_desc),
-                icon = Icons.Default.DirectionsBus
-            )
-        } else {
-            val stops = remember(route) { route?.stops ?: emptyList() }
-            val isSwapActive = remember(swapAlert) { swapAlert != null && !swapAlert?.replacementBusId.isNullOrBlank() }
-            val displayBusNumber = remember(isSwapActive, swapAlert, selectedBus) {
-                if (isSwapActive) swapAlert?.replacementBusId ?: "" else selectedBus?.busNumber ?: "—"
-            }
-            val formattedBusTitle = remember(displayBusNumber) {
-                when {
-                    displayBusNumber.isBlank() || displayBusNumber == "—" -> "BUS —"
-                    displayBusNumber.startsWith("bus", ignoreCase = true) -> displayBusNumber.uppercase()
-                    else -> "BUS $displayBusNumber"
-                }
-            }
-
-            // Location-Specific Bus Swap Banner
-            if (swapAlert != null) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.SwapHoriz,
-                                contentDescription = null,
-                                tint = StatusWarningOrange,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = stringResource(R.string.bus_replacement_notice),
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF92400E)
-                            )
+                            Spacer(modifier = Modifier.height(14.dp))
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = stringResource(
-                                R.string.bus_replacement_operating_today,
-                                swapAlert?.replacementBusId ?: "",
-                                swapAlert?.originalBusId ?: ""
-                            ),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF78350F)
-                        )
-
-                        Text(
-                            text = stringResource(
-                                R.string.affects_stop,
-                                selectedStop?.name ?: stringResource(R.string.all_route_stops_label)
-                            ),
-                            fontSize = 12.sp,
-                            color = Color(0xFF92400E),
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-
-                        if (!swapAlert?.message.isNullOrBlank()) {
-                            Text(
-                                text = swapAlert?.message ?: "",
-                                fontSize = 12.sp,
-                                color = Color(0xFF78350F)
+                        if (isLoadingBuses) {
+                            LoadingCard(message = stringResource(R.string.loading_fleet))
+                        } else if (buses.isEmpty()) {
+                            EmptyStateCard(
+                                title = stringResource(R.string.no_active_buses_title),
+                                description = stringResource(R.string.no_active_buses_desc),
+                                icon = Icons.Default.DirectionsBus
                             )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(14.dp))
-            }
+                        } else {
+                            // Location-Specific Bus Swap Banner
+                            if (swapAlert != null) {
+                                BusSwapAlertBanner(swapAlert = swapAlert, selectedStop = selectedStop)
+                                Spacer(modifier = Modifier.height(14.dp))
+                            }
 
-            // Prominent Student Home Screen Bus ETA Card or Holiday Notice
-            if (isHolidayToday) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .background(Color(0xFFDBEAFE), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Schedule,
-                                contentDescription = null,
-                                tint = Color(0xFF1D4ED8),
-                                modifier = Modifier.size(24.dp)
+                            // Prominent Student Home Screen Bus ETA Card or Holiday Notice
+                            if (isHolidayToday) {
+                                HolidayNoticeCard(todayHolidayName = todayHolidayName)
+                                Spacer(modifier = Modifier.height(14.dp))
+                            } else {
+                                ProminentEtaCard(
+                                    formattedBusTitle = formattedBusTitle,
+                                    isSwapActive = isSwapActive,
+                                    originalBusId = swapAlert?.originalBusId,
+                                    trackingState = trackingState,
+                                    lastUpdateText = lastUpdateText,
+                                    stops = stops,
+                                    route = route,
+                                    routeEtaResult = routeEtaResult,
+                                    nextStopEta = nextStopEta,
+                                    liveLoc = liveLoc,
+                                    selectedStop = selectedStop,
+                                    upcomingStopsEta = upcomingStopsEta,
+                                    onNavigateToMap = onNavigateToMap
+                                )
+                                Spacer(modifier = Modifier.height(14.dp))
+                            }
+
+                            // Driver Information Card
+                            DriverInfoCard(driverInfo = driverInfo)
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Bus & Stop Selector Card
+                            BusAndStopSelectorCard(
+                                buses = buses,
+                                selectedBus = selectedBus,
+                                route = route,
+                                stops = stops,
+                                selectedStop = selectedStop,
+                                busDropdownOpen = busDropdownOpen,
+                                onBusDropdownOpenChange = { busDropdownOpen = it },
+                                onSelectBus = { bus ->
+                                    viewModel.selectBus(bus)
+                                    busDropdownOpen = false
+                                },
+                                stopDropdownOpen = stopDropdownOpen,
+                                onStopDropdownOpenChange = { stopDropdownOpen = it },
+                                onSelectStop = { stop ->
+                                    viewModel.selectStop(stop)
+                                    stopDropdownOpen = false
+                                }
                             )
-                        }
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column {
-                            Text(
-                                text = stringResource(R.string.no_bus_service_today),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E3A8A)
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = stringResource(
-                                    R.string.holiday_prefix,
-                                    todayHolidayName ?: stringResource(R.string.college_holiday)
-                                ),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF2563EB)
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(14.dp))
-            } else {
-                ProminentEtaCard(
-                    formattedBusTitle = formattedBusTitle,
-                    isSwapActive = isSwapActive,
-                    originalBusId = swapAlert?.originalBusId,
-                    trackingState = trackingState,
-                    lastUpdateText = lastUpdateText,
-                    stops = stops,
-                    route = route,
-                    routeEtaResult = routeEtaResult,
-                    nextStopEta = nextStopEta,
-                    liveLoc = liveLoc,
-                    selectedStop = selectedStop,
-                    upcomingStopsEta = upcomingStopsEta,
-                    onNavigateToMap = onNavigateToMap
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-            }
+                            Spacer(modifier = Modifier.height(14.dp))
 
-            // Driver Information Card
-            DriverInfoCard(driverInfo = driverInfo)
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Bus & Stop Selector Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    SectionHeader(
-                        title = stringResource(R.string.select_bus_and_route),
-                        icon = Icons.Default.DirectionsBus
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    ExposedDropdownMenuBox(
-                        expanded = busDropdownOpen,
-                        onExpandedChange = { busDropdownOpen = !busDropdownOpen }
-                    ) {
-                        OutlinedTextField(
-                            value = selectedBus?.let { "${it.busNumber} • ${it.registrationNumber}" } ?: stringResource(R.string.select_a_bus),
-                            onValueChange = {},
-                            readOnly = true,
-                            leadingIcon = {
-                                Icon(Icons.Default.DirectionsBus, contentDescription = null, tint = CollegePrimary)
-                            },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = busDropdownOpen) },
-                            modifier = Modifier
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
-                                .fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = CollegePrimary,
-                                unfocusedBorderColor = Color(0xFFCBD5E1)
-                            )
-                        )
-                        ExposedDropdownMenu(
-                            expanded = busDropdownOpen,
-                            onDismissRequest = { busDropdownOpen = false }
-                        ) {
-                            buses.forEach { bus ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(
-                                                text = "${bus.busNumber} • ${bus.registrationNumber}",
-                                                fontWeight = FontWeight.SemiBold,
-                                                fontSize = 14.sp
-                                            )
-                                            if (bus.active) {
-                                                Text(
-                                                    text = stringResource(R.string.in_active_service),
-                                                    fontSize = 11.sp,
-                                                    color = StatusActiveGreen
-                                                )
-                                            }
-                                        }
-                                    },
+                            // Quick Route Timetable PDF Banner (if available)
+                            if (!route?.schedulePdfUrl.isNullOrBlank()) {
+                                QuickTimetablePdfBanner(
+                                    pdfName = route?.schedulePdfName,
                                     onClick = {
-                                        viewModel.selectBus(bus)
-                                        busDropdownOpen = false
+                                        coroutineScope.launch {
+                                            SchedulePdfHelper.openPdf(
+                                                context,
+                                                route!!.schedulePdfUrl!!,
+                                                route?.schedulePdfName
+                                            )
+                                        }
                                     }
                                 )
+                                Spacer(modifier = Modifier.height(14.dp))
                             }
-                        }
-                    }
 
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Route Summary Indicator
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(CollegePrimary, CircleShape)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (route != null) stringResource(R.string.route_prefix, route?.name ?: "") else stringResource(R.string.no_route_assigned),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (route != null) Color(0xFF1E293B) else Color(0xFF94A3B8)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Boarding Stop Selector
-                    Text(
-                        text = stringResource(R.string.my_boarding_stop_label),
-                        fontSize = 12.sp,
-                        color = Color(0xFF64748B),
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    ExposedDropdownMenuBox(
-                        expanded = stopDropdownOpen,
-                        onExpandedChange = { if (stops.isNotEmpty()) stopDropdownOpen = !stopDropdownOpen }
-                    ) {
-                        OutlinedTextField(
-                            value = when {
-                                stops.isEmpty() -> stringResource(R.string.no_active_stops)
-                                selectedStop != null -> "${selectedStop?.order}. ${selectedStop?.name}"
-                                else -> stringResource(R.string.choose_boarding_stop)
-                            },
-                            onValueChange = {},
-                            readOnly = true,
-                            enabled = stops.isNotEmpty(),
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.LocationOn,
-                                    contentDescription = null,
-                                    tint = if (stops.isNotEmpty()) CollegePrimary else Color(0xFFCBD5E1)
-                                )
-                            },
-                            trailingIcon = {
-                                if (stops.isNotEmpty()) {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = stopDropdownOpen)
-                                }
-                            },
-                            modifier = Modifier
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
-                                .fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = CollegePrimary,
-                                unfocusedBorderColor = Color(0xFFCBD5E1)
-                            )
-                        )
-                        if (stops.isNotEmpty()) {
-                            ExposedDropdownMenu(
-                                expanded = stopDropdownOpen,
-                                onDismissRequest = { stopDropdownOpen = false }
-                            ) {
-                                stops.forEach { stop ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(20.dp)
-                                                        .background(CollegePrimary.copy(alpha = 0.1f), CircleShape),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = "${stop.order}",
-                                                        fontSize = 11.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = CollegePrimary
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.width(10.dp))
-                                                Text(
-                                                    text = stop.name,
-                                                    fontSize = 13.sp,
-                                                    fontWeight = FontWeight.Medium
-                                                )
-                                            }
-                                        },
-                                        onClick = {
-                                            viewModel.selectStop(stop)
-                                            stopDropdownOpen = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Automatic Student Transit Backup Card
-            val isAutoEnabled by viewModel.isAutoSharingEnabled.collectAsState()
-            val autoRideState by viewModel.automaticRideState.collectAsState()
-            val autoAssignedBusId by viewModel.autoAssignedBusId.collectAsState()
-            val isLocationServicesEnabled by viewModel.isLocationServicesEnabled.collectAsState()
-
-            var showConsentDialog by remember { mutableStateOf(false) }
-            var showSettingsDialog by remember { mutableStateOf(false) }
-            var locationWarningDismissed by remember { mutableStateOf(false) }
-
-            // Location Services OFF Banner
-            if (!isLocationServicesEnabled && isAutoEnabled && !locationWarningDismissed) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .background(StatusDangerRed.copy(alpha = 0.12f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.LocationOn,
-                                        contentDescription = null,
-                                        tint = StatusDangerRed,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        text = stringResource(R.string.location_turned_off),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        color = Color(0xFF991B1B)
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.turn_on_location_desc),
-                                        fontSize = 12.sp,
-                                        color = Color(0xFFB91C1C)
-                                    )
-                                }
-                            }
-                            IconButton(
-                                onClick = { locationWarningDismissed = true },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Dismiss",
-                                    tint = Color(0xFF991B1B),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Button(
-                            onClick = {
-                                val intent = Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                }
-                                context.startActivity(intent)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed),
-                            contentPadding = PaddingValues(vertical = 6.dp)
-                        ) {
-                            Text(stringResource(R.string.open_settings), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isAutoEnabled) Color(0xFFF0FDF4) else Color.White
-                ),
-                border = if (isAutoEnabled) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)) else null,
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                .size(36.dp)
-                                .background(
-                                    if (isAutoEnabled) StatusActiveGreen.copy(alpha = 0.15f) else CollegePrimary.copy(alpha = 0.1f),
-                                    CircleShape
-                                ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.VolunteerActivism,
-                                    contentDescription = null,
-                                    tint = if (isAutoEnabled) StatusActiveGreen else CollegePrimary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = stringResource(R.string.auto_backup_title),
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0F172A)
-                                )
-                                Text(
-                                    text = if (isAutoEnabled) stringResource(R.string.configured_for_bus, autoAssignedBusId ?: "Bus") else stringResource(R.string.one_time_setup),
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF64748B)
-                                )
-                            }
-                        }
-
-                        if (isAutoEnabled) {
-                            val (badgeText, badgeBg, badgeTextColor) = when (autoRideState) {
-                                AutomaticRideState.CONTRIBUTING -> Triple("Active Contributor", StatusGreenContainer, StatusActiveGreen)
-                                AutomaticRideState.POSSIBLY_RIDING -> Triple("Verifying Transit", Color(0xFFFEF3C7), Color(0xFFB45309))
-                                AutomaticRideState.WAITING_FOR_BUS -> Triple("Ready on Route", Color(0xFFDCFCE7), Color(0xFF15803D))
-                                AutomaticRideState.WAITING_FOR_WINDOW -> Triple("Standby Window", Color(0xFFF1F5F9), Color(0xFF475569))
-                                AutomaticRideState.ENDING_RIDE -> Triple("Ride Concluded", Color(0xFFFFEDD5), Color(0xFFC2410C))
-                                else -> Triple("Enabled", Color(0xFFDCFCE7), Color(0xFF15803D))
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .background(badgeBg, RoundedCornerShape(12.dp))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = badgeText,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = badgeTextColor
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    if (!isAutoEnabled) {
-                        Text(
-                            text = stringResource(R.string.auto_backup_help),
-                            fontSize = 12.sp,
-                            color = Color(0xFF475569),
-                            lineHeight = 16.sp
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(
-                            onClick = { showConsentDialog = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
-                        ) {
-                            Text(stringResource(R.string.enable_auto_sharing), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    } else {
-                        val stateDescription = when (autoRideState) {
-                            AutomaticRideState.CONTRIBUTING -> "Your phone is currently riding and contributing backup telemetry for ${autoAssignedBusId ?: "your bus"}."
-                            AutomaticRideState.POSSIBLY_RIDING -> "Analyzing route alignment and velocity matching to confirm boarding."
-                            AutomaticRideState.WAITING_FOR_BUS -> "Monitoring scheduled route windows. Will start automatically when you board ${autoAssignedBusId ?: "your bus"}."
-                            AutomaticRideState.WAITING_FOR_WINDOW -> "Currently outside route schedule hours. Passive monitoring is fully sleeping (0% battery drain)."
-                            AutomaticRideState.ENDING_RIDE -> "Disembarkation detected. Telemetry upload concluded."
-                            else -> "Automatic ride monitoring active."
-                        }
-                        Text(
-                            text = stateDescription,
-                            fontSize = 12.sp,
-                            color = Color(0xFF334155),
-                            lineHeight = 16.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = { showSettingsDialog = true },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(vertical = 6.dp)
-                            ) {
-                                Text(stringResource(R.string.transit_settings), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                            Button(
-                                onClick = { viewModel.disableAutoSharing() },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed),
-                                contentPadding = PaddingValues(vertical = 6.dp)
-                            ) {
-                                Text(stringResource(R.string.stop_sharing), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // One-Time Consent Dialog
-            if (showConsentDialog) {
-                val busNumber = selectedBus?.busNumber ?: "Selected Bus"
-                AlertDialog(
-                    onDismissRequest = { showConsentDialog = false },
-                    title = {
-                        Text(
-                            text = stringResource(R.string.enable_auto_backup_dialog_title),
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
-                        )
-                    },
-                    text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(
-                                text = "Contribute backup GPS for $busNumber seamlessly without manual toggling.",
-                                fontSize = 13.sp,
-                                color = Color(0xFF334155)
-                            )
-                            Row(verticalAlignment = Alignment.Top) {
-                                Text("🕒 ", fontSize = 14.sp)
-                                Text(
-                                    text = "Scheduled Hours Only: Operates exclusively during morning and evening route windows. 0% battery drain otherwise.",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF64748B)
-                                )
-                            }
-                            Row(verticalAlignment = Alignment.Top) {
-                                Text("🔒 ", fontSize = 14.sp)
-                                Text(
-                                    text = "Privacy Protected: Anonymous telemetry only. Your personal location is never visible to students or logged.",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF64748B)
-                                )
-                            }
-                            Row(verticalAlignment = Alignment.Top) {
-                                Text("🤖 ", fontSize = 14.sp)
-                                Text(
-                                    text = "Automatic Detection: Begins when motion matches the bus route, and stops automatically when you disembark.",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF64748B)
-                                )
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                selectedBus?.busId?.let { id ->
-                                    viewModel.enableAutoSharing(id)
-                                }
-                                showConsentDialog = false
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(stringResource(R.string.agree_and_enable), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(
-                            onClick = { showConsentDialog = false }
-                        ) {
-                            Text(stringResource(R.string.not_now), fontSize = 13.sp, color = Color(0xFF64748B))
-                        }
-                    }
-                )
-            }
-
-            // Transit Settings Dialog
-            if (showSettingsDialog) {
-                AlertDialog(
-                    onDismissRequest = { showSettingsDialog = false },
-                    title = {
-                        Text(stringResource(R.string.transit_backup_settings_title), fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    },
-                    text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text(
-                                text = stringResource(R.string.currently_assigned_to, autoAssignedBusId ?: "None"),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF0F172A)
-                            )
-                            Text(
-                                text = stringResource(R.string.switch_anytime_desc, selectedBus?.busNumber ?: "None"),
-                                fontSize = 12.sp,
-                                color = Color(0xFF64748B)
-                            )
-                            if (selectedBus != null && selectedBus?.busId != autoAssignedBusId) {
-                                OutlinedButton(
-                                    onClick = {
-                                        selectedBus?.busId?.let { viewModel.changeAutoSharingBus(it) }
-                                        showSettingsDialog = false
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(stringResource(R.string.switch_to_bus, selectedBus?.busNumber ?: ""))
-                                }
-                            }
-                            Button(
-                                onClick = {
-                                    viewModel.disableAutoSharing()
-                                    showSettingsDialog = false
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed),
+                            // My Bus Pass Quick Access Card (Takes student to Tab 1)
+                            Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                                onClick = { selectedTab = 1 }
                             ) {
-                                Text(stringResource(R.string.disable_auto_sharing), color = Color.White)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .background(CollegePrimary.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Badge,
+                                                contentDescription = null,
+                                                tint = CollegePrimary,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(14.dp))
+                                        Column {
+                                            Text(
+                                                text = stringResource(R.string.my_bus_pass),
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF0F172A)
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = stringResource(R.string.bus_pass_desc),
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF64748B)
+                                            )
+                                        }
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = { selectedTab = 1 },
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(stringResource(R.string.view_scan), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
                             }
                         }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showSettingsDialog = false }) {
-                            Text(stringResource(R.string.close))
-                        }
-                    }
-                )
-            }
 
-            Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
-            // Operating Schedule Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    SectionHeader(
-                        title = stringResource(R.string.operating_windows),
-                        icon = Icons.Default.Schedule
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    val sched = operatingSchedule
-                    if (!sched.morning.enabled && !sched.evening.enabled) {
-                        Text(
-                            text = stringResource(R.string.operating_schedule_disabled),
-                            fontSize = 13.sp,
-                            color = Color(0xFF94A3B8)
-                        )
-                    } else {
-                        if (sched.morning.enabled) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp))
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.morning_route),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color(0xFF475569)
-                                )
-                                Text(
-                                    text = "${sched.morning.startTime} – ${sched.morning.endTime}",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0F172A)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-
-                        if (sched.evening.enabled) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp))
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.evening_return),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color(0xFF475569)
-                                )
-                                Text(
-                                    text = "${sched.evening.startTime} – ${sched.evening.endTime}",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0F172A)
-                                )
-                            }
-                        }
+                        // FleetX Updates & About Section
+                        com.college.bustracker.update.ui.UpdateCard()
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // My Bus Pass Quick Access Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                onClick = onNavigateToBusPass
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Box(
+                1 -> {
+                    // TAB 1: BUS PASS
+                    if (busPassViewModel != null) {
+                        BusPassScreen(
+                            viewModel = busPassViewModel,
+                            onNavigateBack = { selectedTab = 0 },
+                            showBackButton = false
+                        )
+                    } else {
+                        Column(
                             modifier = Modifier
-                                .size(44.dp)
-                                .background(CollegePrimary.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
+                                .fillMaxSize()
+                                .background(CollegeSurface)
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Badge,
                                 contentDescription = null,
                                 tint = CollegePrimary,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(56.dp)
                             )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = onNavigateToBusPass,
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                            ) {
+                                Text(stringResource(R.string.view_scan))
+                            }
                         }
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column {
-                            Text(
-                                text = stringResource(R.string.my_bus_pass),
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0F172A)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = stringResource(R.string.bus_pass_desc),
-                                fontSize = 12.sp,
-                                color = Color(0xFF64748B)
-                            )
-                        }
-                    }
-
-                    OutlinedButton(
-                        onClick = onNavigateToBusPass,
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text(stringResource(R.string.view_scan), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
-            }
 
-            // Route Stops Timeline Card
-            if (stops.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(14.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        SectionHeader(
-                            title = stringResource(R.string.route_stops_count, stops.size),
-                            icon = Icons.Default.LocationOn
+                2 -> {
+                    // TAB 2: SCHEDULE & INFO
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(CollegeSurface)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp, vertical = 18.dp)
+                    ) {
+                        StudentTopHeader(
+                            onNavigateToStaffLogin = onNavigateToStaffLogin,
+                            onLanguageClick = { showLanguageDialog = true }
+                        )
+
+                        Spacer(modifier = Modifier.height(18.dp))
+
+                        // Route Timetable PDF Card (Admin uploaded schedule viewer)
+                        RouteSchedulePdfCard(
+                            route = route,
+                            onViewPdf = { url, name ->
+                                coroutineScope.launch {
+                                    SchedulePdfHelper.openPdf(context, url, name)
+                                }
+                            }
                         )
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        stops.forEachIndexed { index, stop ->
-                            val isSelectedBoardingStop = selectedStop?.stopId == stop.stopId
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        if (isSelectedBoardingStop) CollegePrimary.copy(alpha = 0.06f) else Color.Transparent,
-                                        RoundedCornerShape(8.dp)
-                                    )
-                                    .padding(horizontal = 6.dp, vertical = 5.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .background(
-                                            if (isSelectedBoardingStop) CollegePrimary else CollegePrimary.copy(alpha = 0.12f),
-                                            CircleShape
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "${stop.order}",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isSelectedBoardingStop) Color.White else CollegePrimary
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text(
-                                        text = stop.name,
-                                        fontSize = 13.sp,
-                                        fontWeight = if (isSelectedBoardingStop) FontWeight.Bold else FontWeight.Medium,
-                                        color = Color(0xFF0F172A)
-                                    )
-                                    if (isSelectedBoardingStop) {
-                                        Text(
-                                            text = stringResource(R.string.selected_boarding_stop_badge),
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = CollegePrimary
-                                        )
-                                    }
-                                }
-                            }
-                            if (index < stops.size - 1) {
-                                Box(
-                                    modifier = Modifier
-                                        .padding(start = 17.dp)
-                                        .width(2.dp)
-                                        .height(12.dp)
-                                        .background(Color(0xFFCBD5E1))
-                                )
-                            }
+                        // Operating Windows Card
+                        OperatingScheduleCard(operatingSchedule = operatingSchedule)
+
+                        // Route Stops Timeline Card
+                        if (stops.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            RouteStopsTimelineCard(
+                                stops = stops,
+                                selectedStop = selectedStop
+                            )
                         }
+
+                        // Campus Announcements Card
+                        if (announcements.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            CampusAnnouncementsBanner(
+                                announcements = announcements,
+                                onAnnouncementClick = { ann ->
+                                    com.college.bustracker.data.repository.AnnouncementPreferences.markAsRead(context, ann.id)
+                                    selectedAnnouncementForDetail = ann
+                                }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Automatic Student Transit Backup Card
+                        AutomaticStudentTransitBackupCard(
+                            viewModel = viewModel,
+                            selectedBus = selectedBus
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // FleetX Updates & About Section
+                        com.college.bustracker.update.ui.UpdateCard()
                     }
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // FleetX Updates & About Section
-        com.college.bustracker.update.ui.UpdateCard()
     }
 
     if (showLanguageDialog) {
@@ -1220,6 +548,1126 @@ fun StudentHomeScreen(
             onDismiss = { selectedAnnouncementForDetail = null },
             onMarkAsRead = {
                 com.college.bustracker.data.repository.AnnouncementPreferences.markAsRead(context, selectedAnnouncementForDetail!!.id)
+            }
+        )
+    }
+}
+
+@Composable
+private fun StudentTopHeader(
+    onNavigateToStaffLogin: () -> Unit,
+    onLanguageClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .background(CollegePrimary.copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DirectionsBus,
+                    contentDescription = null,
+                    tint = CollegePrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                    text = "FleetX",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFF0F172A),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = stringResource(R.string.app_tagline),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF64748B),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(6.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedButton(
+                onClick = onLanguageClick,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0F766E)),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Language,
+                    contentDescription = "Language",
+                    modifier = Modifier.size(13.dp),
+                    tint = Color(0xFF0F766E)
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = if (com.college.bustracker.util.LocaleHelper.isKannada()) "ಕನ್ನಡ" else "EN",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+
+            OutlinedButton(
+                onClick = onNavigateToStaffLogin,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF334155)),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    modifier = Modifier.size(13.dp),
+                    tint = Color(0xFF475569)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.staff_login),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickTimetablePdfBanner(
+    pdfName: String?,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color(0xFFDBEAFE), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Description,
+                        contentDescription = null,
+                        tint = Color(0xFF1D4ED8),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = stringResource(R.string.route_schedule_pdf_title),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = Color(0xFF1E3A8A)
+                    )
+                    Text(
+                        text = pdfName ?: stringResource(R.string.route_schedule_pdf_desc),
+                        fontSize = 12.sp,
+                        color = Color(0xFF2563EB),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Icon(
+                imageVector = Icons.Default.OpenInNew,
+                contentDescription = null,
+                tint = Color(0xFF1D4ED8),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun RouteSchedulePdfCard(
+    route: Route?,
+    onViewPdf: (url: String, name: String?) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            SectionHeader(
+                title = stringResource(R.string.route_schedule_pdf_title),
+                icon = Icons.Default.Description
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            if (route == null) {
+                Text(
+                    text = stringResource(R.string.no_route_assigned),
+                    fontSize = 13.sp,
+                    color = Color(0xFF64748B)
+                )
+            } else if (!route.schedulePdfUrl.isNullOrBlank()) {
+                Text(
+                    text = stringResource(R.string.route_schedule_pdf_desc),
+                    fontSize = 12.sp,
+                    color = Color(0xFF64748B)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = { onViewPdf(route.schedulePdfUrl!!, route.schedulePdfName) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Description,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = route.schedulePdfName ?: stringResource(R.string.view_schedule_pdf_action),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            } else {
+                Surface(
+                    color = Color(0xFFF8FAFC),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = null,
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = stringResource(R.string.no_schedule_pdf_available),
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CampusAnnouncementsBanner(
+    announcements: List<com.college.bustracker.data.model.Announcement>,
+    onAnnouncementClick: (com.college.bustracker.data.model.Announcement) -> Unit
+) {
+    val context = LocalContext.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Campaign,
+                        contentDescription = null,
+                        tint = CollegePrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.campus_announcements),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
+                    )
+                }
+                val unreadCount = announcements.count {
+                    !com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, it.id)
+                }
+                if (unreadCount > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = CollegePrimary
+                    ) {
+                        Text(
+                            text = "$unreadCount ${stringResource(R.string.unread_badge)}",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                announcements.forEach { announcement ->
+                    val isRead = com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, announcement.id)
+                    com.college.bustracker.ui.announcement.AnnouncementCard(
+                        announcement = announcement,
+                        isUnread = !isRead,
+                        onClick = { onAnnouncementClick(announcement) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BusSwapAlertBanner(
+    swapAlert: BusSwap?,
+    selectedStop: BusStop?
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.SwapHoriz,
+                    contentDescription = null,
+                    tint = StatusWarningOrange,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.bus_replacement_notice),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF92400E)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = stringResource(
+                    R.string.bus_replacement_operating_today,
+                    swapAlert?.replacementBusId ?: "",
+                    swapAlert?.originalBusId ?: ""
+                ),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF78350F)
+            )
+
+            Text(
+                text = stringResource(
+                    R.string.affects_stop,
+                    selectedStop?.name ?: stringResource(R.string.all_route_stops_label)
+                ),
+                fontSize = 12.sp,
+                color = Color(0xFF92400E),
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+
+            if (!swapAlert?.message.isNullOrBlank()) {
+                Text(
+                    text = swapAlert?.message ?: "",
+                    fontSize = 12.sp,
+                    color = Color(0xFF78350F)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HolidayNoticeCard(todayHolidayName: String?) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(Color(0xFFDBEAFE), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Schedule,
+                    contentDescription = null,
+                    tint = Color(0xFF1D4ED8),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column {
+                Text(
+                    text = stringResource(R.string.no_bus_service_today),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E3A8A)
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = stringResource(
+                        R.string.holiday_prefix,
+                        todayHolidayName ?: stringResource(R.string.college_holiday)
+                    ),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF2563EB)
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BusAndStopSelectorCard(
+    buses: List<com.college.bustracker.data.model.Bus>,
+    selectedBus: com.college.bustracker.data.model.Bus?,
+    route: Route?,
+    stops: List<BusStop>,
+    selectedStop: BusStop?,
+    busDropdownOpen: Boolean,
+    onBusDropdownOpenChange: (Boolean) -> Unit,
+    onSelectBus: (com.college.bustracker.data.model.Bus) -> Unit,
+    stopDropdownOpen: Boolean,
+    onStopDropdownOpenChange: (Boolean) -> Unit,
+    onSelectStop: (BusStop) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            SectionHeader(
+                title = stringResource(R.string.select_bus_and_route),
+                icon = Icons.Default.DirectionsBus
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            ExposedDropdownMenuBox(
+                expanded = busDropdownOpen,
+                onExpandedChange = onBusDropdownOpenChange
+            ) {
+                OutlinedTextField(
+                    value = selectedBus?.let { "${it.busNumber} • ${it.registrationNumber}" } ?: stringResource(R.string.select_a_bus),
+                    onValueChange = {},
+                    readOnly = true,
+                    leadingIcon = {
+                        Icon(Icons.Default.DirectionsBus, contentDescription = null, tint = CollegePrimary)
+                    },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = busDropdownOpen) },
+                    modifier = Modifier
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CollegePrimary,
+                        unfocusedBorderColor = Color(0xFFCBD5E1)
+                    )
+                )
+                ExposedDropdownMenu(
+                    expanded = busDropdownOpen,
+                    onDismissRequest = { onBusDropdownOpenChange(false) }
+                ) {
+                    buses.forEach { bus ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(
+                                        text = "${bus.busNumber} • ${bus.registrationNumber}",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp
+                                    )
+                                    if (bus.active) {
+                                        Text(
+                                            text = stringResource(R.string.in_active_service),
+                                            fontSize = 11.sp,
+                                            color = StatusActiveGreen
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = { onSelectBus(bus) }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Route Summary Indicator
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(CollegePrimary, CircleShape)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (route != null) stringResource(R.string.route_prefix, route.name) else stringResource(R.string.no_route_assigned),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (route != null) Color(0xFF1E293B) else Color(0xFF94A3B8)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Boarding Stop Selector
+            Text(
+                text = stringResource(R.string.my_boarding_stop_label),
+                fontSize = 12.sp,
+                color = Color(0xFF64748B),
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            ExposedDropdownMenuBox(
+                expanded = stopDropdownOpen,
+                onExpandedChange = { if (stops.isNotEmpty()) onStopDropdownOpenChange(!stopDropdownOpen) }
+            ) {
+                OutlinedTextField(
+                    value = when {
+                        stops.isEmpty() -> stringResource(R.string.no_active_stops)
+                        selectedStop != null -> "${selectedStop.order}. ${selectedStop.name}"
+                        else -> stringResource(R.string.choose_boarding_stop)
+                    },
+                    onValueChange = {},
+                    readOnly = true,
+                    enabled = stops.isNotEmpty(),
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = if (stops.isNotEmpty()) CollegePrimary else Color(0xFFCBD5E1)
+                        )
+                    },
+                    trailingIcon = {
+                        if (stops.isNotEmpty()) {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = stopDropdownOpen)
+                        }
+                    },
+                    modifier = Modifier
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CollegePrimary,
+                        unfocusedBorderColor = Color(0xFFCBD5E1)
+                    )
+                )
+                if (stops.isNotEmpty()) {
+                    ExposedDropdownMenu(
+                        expanded = stopDropdownOpen,
+                        onDismissRequest = { onStopDropdownOpenChange(false) }
+                    ) {
+                        stops.forEach { stop ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .background(CollegePrimary.copy(alpha = 0.1f), CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "${stop.order}",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = CollegePrimary
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(
+                                            text = stop.name,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                },
+                                onClick = { onSelectStop(stop) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OperatingScheduleCard(
+    operatingSchedule: com.college.bustracker.data.model.RouteSchedule
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            SectionHeader(
+                title = stringResource(R.string.operating_windows),
+                icon = Icons.Default.Schedule
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val sched = operatingSchedule
+            if (!sched.morning.enabled && !sched.evening.enabled) {
+                Text(
+                    text = stringResource(R.string.operating_schedule_disabled),
+                    fontSize = 13.sp,
+                    color = Color(0xFF94A3B8)
+                )
+            } else {
+                if (sched.morning.enabled) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.morning_route),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF475569)
+                        )
+                        Text(
+                            text = "${sched.morning.startTime} – ${sched.morning.endTime}",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                if (sched.evening.enabled) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.evening_return),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF475569)
+                        )
+                        Text(
+                            text = "${sched.evening.startTime} – ${sched.evening.endTime}",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteStopsTimelineCard(
+    stops: List<BusStop>,
+    selectedStop: BusStop?
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            SectionHeader(
+                title = stringResource(R.string.route_stops_count, stops.size),
+                icon = Icons.Default.LocationOn
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            stops.forEachIndexed { index, stop ->
+                val isSelectedBoardingStop = selectedStop?.stopId == stop.stopId
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            if (isSelectedBoardingStop) CollegePrimary.copy(alpha = 0.06f) else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 5.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(
+                                if (isSelectedBoardingStop) CollegePrimary else CollegePrimary.copy(alpha = 0.12f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "${stop.order}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelectedBoardingStop) Color.White else CollegePrimary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = stop.name,
+                            fontSize = 13.sp,
+                            fontWeight = if (isSelectedBoardingStop) FontWeight.Bold else FontWeight.Medium,
+                            color = Color(0xFF0F172A)
+                        )
+                        if (isSelectedBoardingStop) {
+                            Text(
+                                text = stringResource(R.string.selected_boarding_stop_badge),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = CollegePrimary
+                            )
+                        }
+                    }
+                }
+                if (index < stops.size - 1) {
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 17.dp)
+                            .width(2.dp)
+                            .height(12.dp)
+                            .background(Color(0xFFCBD5E1))
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AutomaticStudentTransitBackupCard(
+    viewModel: StudentViewModel,
+    selectedBus: com.college.bustracker.data.model.Bus?
+) {
+    val context = LocalContext.current
+    val isAutoEnabled by viewModel.isAutoSharingEnabled.collectAsState()
+    val autoRideState by viewModel.automaticRideState.collectAsState()
+    val autoAssignedBusId by viewModel.autoAssignedBusId.collectAsState()
+    val isLocationServicesEnabled by viewModel.isLocationServicesEnabled.collectAsState()
+
+    var showConsentDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    var locationWarningDismissed by remember { mutableStateOf(false) }
+
+    // Location Services OFF Banner
+    if (!isLocationServicesEnabled && isAutoEnabled && !locationWarningDismissed) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(StatusDangerRed.copy(alpha = 0.12f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = StatusDangerRed,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = stringResource(R.string.location_turned_off),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = Color(0xFF991B1B)
+                            )
+                            Text(
+                                text = stringResource(R.string.turn_on_location_desc),
+                                fontSize = 12.sp,
+                                color = Color(0xFFB91C1C)
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = { locationWarningDismissed = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Dismiss",
+                            tint = Color(0xFF991B1B),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Button(
+                    onClick = {
+                        val intent = Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed),
+                    contentPadding = PaddingValues(vertical = 6.dp)
+                ) {
+                    Text(stringResource(R.string.open_settings), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isAutoEnabled) Color(0xFFF0FDF4) else Color.White
+        ),
+        border = if (isAutoEnabled) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(
+                                if (isAutoEnabled) StatusActiveGreen.copy(alpha = 0.15f) else CollegePrimary.copy(alpha = 0.1f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VolunteerActivism,
+                            contentDescription = null,
+                            tint = if (isAutoEnabled) StatusActiveGreen else CollegePrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = stringResource(R.string.auto_backup_title),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
+                        Text(
+                            text = if (isAutoEnabled) stringResource(R.string.configured_for_bus, autoAssignedBusId ?: "Bus") else stringResource(R.string.one_time_setup),
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+
+                if (isAutoEnabled) {
+                    val (badgeText, badgeBg, badgeTextColor) = when (autoRideState) {
+                        AutomaticRideState.CONTRIBUTING -> Triple("Active Contributor", StatusGreenContainer, StatusActiveGreen)
+                        AutomaticRideState.POSSIBLY_RIDING -> Triple("Verifying Transit", Color(0xFFFEF3C7), Color(0xFFB45309))
+                        AutomaticRideState.WAITING_FOR_BUS -> Triple("Ready on Route", Color(0xFFDCFCE7), Color(0xFF15803D))
+                        AutomaticRideState.WAITING_FOR_WINDOW -> Triple("Standby Window", Color(0xFFF1F5F9), Color(0xFF475569))
+                        AutomaticRideState.ENDING_RIDE -> Triple("Ride Concluded", Color(0xFFFFEDD5), Color(0xFFC2410C))
+                        else -> Triple("Enabled", Color(0xFFDCFCE7), Color(0xFF15803D))
+                    }
+                    Box(
+                        modifier = Modifier
+                            .background(badgeBg, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = badgeText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = badgeTextColor
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            if (!isAutoEnabled) {
+                Text(
+                    text = stringResource(R.string.auto_backup_help),
+                    fontSize = 12.sp,
+                    color = Color(0xFF475569),
+                    lineHeight = 16.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = { showConsentDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                ) {
+                    Text(stringResource(R.string.enable_auto_sharing), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+            } else {
+                val stateDescription = when (autoRideState) {
+                    AutomaticRideState.CONTRIBUTING -> "Your phone is currently riding and contributing backup telemetry for ${autoAssignedBusId ?: "your bus"}."
+                    AutomaticRideState.POSSIBLY_RIDING -> "Analyzing route alignment and velocity matching to confirm boarding."
+                    AutomaticRideState.WAITING_FOR_BUS -> "Monitoring scheduled route windows. Will start automatically when you board ${autoAssignedBusId ?: "your bus"}."
+                    AutomaticRideState.WAITING_FOR_WINDOW -> "Currently outside route schedule hours. Passive monitoring is fully sleeping (0% battery drain)."
+                    AutomaticRideState.ENDING_RIDE -> "Disembarkation detected. Telemetry upload concluded."
+                    else -> "Automatic ride monitoring active."
+                }
+                Text(
+                    text = stateDescription,
+                    fontSize = 12.sp,
+                    color = Color(0xFF334155),
+                    lineHeight = 16.sp
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showSettingsDialog = true },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(vertical = 6.dp)
+                    ) {
+                        Text(stringResource(R.string.transit_settings), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Button(
+                        onClick = { viewModel.disableAutoSharing() },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed),
+                        contentPadding = PaddingValues(vertical = 6.dp)
+                    ) {
+                        Text(stringResource(R.string.stop_sharing), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+
+    // One-Time Consent Dialog
+    if (showConsentDialog) {
+        val busNumber = selectedBus?.busNumber ?: "Selected Bus"
+        AlertDialog(
+            onDismissRequest = { showConsentDialog = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.enable_auto_backup_dialog_title),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0F172A)
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Contribute backup GPS for $busNumber seamlessly without manual toggling.",
+                        fontSize = 13.sp,
+                        color = Color(0xFF334155)
+                    )
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text("🕒 ", fontSize = 14.sp)
+                        Text(
+                            text = "Scheduled Hours Only: Operates exclusively during morning and evening route windows. 0% battery drain otherwise.",
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text("🔒 ", fontSize = 14.sp)
+                        Text(
+                            text = "Privacy Protected: Anonymous telemetry only. Your personal location is never visible to students or logged.",
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text("🤖 ", fontSize = 14.sp)
+                        Text(
+                            text = "Automatic Detection: Begins when motion matches the bus route, and stops automatically when you disembark.",
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        selectedBus?.busId?.let { id ->
+                            viewModel.enableAutoSharing(id)
+                        }
+                        showConsentDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(stringResource(R.string.agree_and_enable), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showConsentDialog = false }
+                ) {
+                    Text(stringResource(R.string.not_now), fontSize = 13.sp, color = Color(0xFF64748B))
+                }
+            }
+        )
+    }
+
+    // Transit Settings Dialog
+    if (showSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showSettingsDialog = false },
+            title = {
+                Text(stringResource(R.string.transit_backup_settings_title), fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.currently_assigned_to, autoAssignedBusId ?: "None"),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF0F172A)
+                    )
+                    Text(
+                        text = stringResource(R.string.switch_anytime_desc, selectedBus?.busNumber ?: "None"),
+                        fontSize = 12.sp,
+                        color = Color(0xFF64748B)
+                    )
+                    if (selectedBus != null && selectedBus.busId != autoAssignedBusId) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.changeAutoSharingBus(selectedBus.busId)
+                                showSettingsDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.switch_to_bus, selectedBus.busNumber))
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            viewModel.disableAutoSharing()
+                            showSettingsDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(stringResource(R.string.disable_auto_sharing), color = Color.White)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSettingsDialog = false }) {
+                    Text(stringResource(R.string.close))
+                }
             }
         )
     }

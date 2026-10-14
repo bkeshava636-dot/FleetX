@@ -765,4 +765,38 @@ class AdminViewModel : ViewModel() {
             onResult(res)
         }
     }
+
+    fun uploadRouteSchedulePdf(
+        context: android.content.Context,
+        routeId: String,
+        uri: android.net.Uri,
+        onResult: (Result<String>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val uploadRes = com.college.bustracker.util.SchedulePdfHelper.uploadPdf(context, routeId, uri)
+            uploadRes.fold(
+                onSuccess = { (url, fileName) ->
+                    val saveRes = routeRepo.updateSchedulePdf(routeId, url, fileName)
+                    if (saveRes.isSuccess) {
+                        onResult(Result.success(url))
+                    } else {
+                        onResult(Result.failure(saveRes.exceptionOrNull() ?: Exception("Failed to save PDF to route")))
+                    }
+                },
+                onFailure = { err ->
+                    onResult(Result.failure(err))
+                }
+            )
+        }
+    }
+
+    fun removeRouteSchedulePdf(
+        routeId: String,
+        onResult: (Result<Unit>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val res = routeRepo.updateSchedulePdf(routeId, null, null)
+            onResult(res)
+        }
+    }
 }

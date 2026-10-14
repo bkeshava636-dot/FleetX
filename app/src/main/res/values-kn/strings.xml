@@ -474,4 +474,19 @@
     <string name="mobile_data_disabled_during_shift_title">ಮೊಬೈಲ್ ಡೇಟಾ ಆಫ್ ಆಗಿದೆ</string>
     <string name="mobile_data_disabled_during_shift_desc">ಕಾರ್ಯಾಚರಣೆಯ ವೇಳಾಪಟ್ಟಿಯ ಸಮಯದಲ್ಲಿ ಲೈವ್ ಟ್ರ್ಯಾಕಿಂಗ್ ಅಪ್‌ಡೇಟ್ ಕಳುಹಿಸಲು ಮೊಬೈಲ್ ಡೇಟಾ ಅಗತ್ಯವಿದೆ. ಡೇಟಾ ಆನ್ ಮಾಡಲು ಕೆಳಗೆ ಟ್ಯಾಪ್ ಮಾಡಿ.</string>
     <string name="turn_on_mobile_data_action">ಮೊಬೈಲ್ ಡೇಟಾ ಆನ್ ಮಾಡಿ</string>
+
+    <!-- Student Dashboard Tabs & PDF Features -->
+    <string name="tab_live_track">ಟ್ರ್ಯಾಕ್</string>
+    <string name="tab_bus_pass">ಬಸ್ ಪಾಸ್</string>
+    <string name="tab_schedule_info">ವೇಳಾಪಟ್ಟಿ</string>
+    <string name="route_schedule_pdf_title">ಮಾರ್ಗ ವೇಳಾಪಟ್ಟಿ (PDF)</string>
+    <string name="route_schedule_pdf_desc">ಕಾಲೇಜು ಸಾರಿಗೆ ಇಲಾಖೆಯ ಅಧಿಕೃತ ವೇಳಾಪಟ್ಟಿ</string>
+    <string name="view_schedule_pdf_action">ವೇಳಾಪಟ್ಟಿ PDF ವೀಕ್ಷಿಸಿ</string>
+    <string name="no_schedule_pdf_available">ಈ ಮಾರ್ಗಕ್ಕೆ ಅಧಿಕೃತ ವೇಳಾಪಟ್ಟಿ PDF ಲಭ್ಯವಿಲ್ಲ</string>
+    <string name="upload_route_pdf_action">ವೇಳಾಪಟ್ಟಿ PDF ಅಪ್‌ಲೋಡ್ ಮಾಡಿ</string>
+    <string name="replace_route_pdf_action">ವೇಳಾಪಟ್ಟಿ PDF ಬದಲಾಯಿಸಿ</string>
+    <string name="delete_route_pdf_action">PDF ತೆಗೆದುಹಾಕಿ</string>
+    <string name="uploading_pdf">ವೇಳಾಪಟ್ಟಿ PDF ಅಪ್‌ಲೋಡ್ ಆಗುತ್ತಿದೆ…</string>
+    <string name="route_pdf_uploaded_success">ವೇಳಾಪಟ್ಟಿ PDF ಯಶಸ್ವಿಯಾಗಿ ಅಪ್‌ಲೋಡ್ ಆಗಿದೆ</string>
+    <string name="route_pdf_deleted_success">ವೇಳಾಪಟ್ಟಿ PDF ತೆಗೆದುಹಾಕಲಾಗಿದೆ</string>
 </resources>

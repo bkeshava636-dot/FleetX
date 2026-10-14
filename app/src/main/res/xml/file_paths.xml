@@ -2,4 +2,6 @@
 <paths>
     <files-path name="gps_diagnostics" path="gps_diagnostics/" />
     <cache-path name="updates" path="updates/" />
+    <cache-path name="schedules" path="schedules/" />
+    <files-path name="schedules" path="schedules/" />
 </paths>
