@@ -236,6 +236,75 @@ fun StudentHomeScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
+        // Campus Announcements Section (Prominently displayed at top of student dashboard)
+        if (announcements.isNotEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Campaign,
+                                contentDescription = null,
+                                tint = CollegePrimary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.campus_announcements),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A)
+                            )
+                        }
+                        val unreadCount = announcements.count {
+                            !com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, it.id)
+                        }
+                        if (unreadCount > 0) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = CollegePrimary
+                            ) {
+                                Text(
+                                    text = "$unreadCount ${stringResource(R.string.unread_badge)}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        announcements.forEach { announcement ->
+                            val isRead = com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, announcement.id)
+                            com.college.bustracker.ui.announcement.AnnouncementCard(
+                                announcement = announcement,
+                                isUnread = !isRead,
+                                onClick = {
+                                    com.college.bustracker.data.repository.AnnouncementPreferences.markAsRead(context, announcement.id)
+                                    selectedAnnouncementForDetail = announcement
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
         if (isLoadingBuses) {
             LoadingCard(message = stringResource(R.string.loading_fleet))
         } else if (buses.isEmpty()) {
@@ -562,74 +631,6 @@ fun StudentHomeScreen(
                                         }
                                     )
                                 }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Campus Announcements Section
-            if (announcements.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(14.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Campaign,
-                                    contentDescription = null,
-                                    tint = CollegePrimary,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = stringResource(R.string.campus_announcements),
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0F172A)
-                                )
-                            }
-                            val unreadCount = announcements.count {
-                                !com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, it.id)
-                            }
-                            if (unreadCount > 0) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = CollegePrimary
-                                ) {
-                                    Text(
-                                        text = "$unreadCount ${stringResource(R.string.unread_badge)}",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            announcements.forEach { announcement ->
-                                val isRead = com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, announcement.id)
-                                com.college.bustracker.ui.announcement.AnnouncementCard(
-                                    announcement = announcement,
-                                    isUnread = !isRead,
-                                    onClick = {
-                                        com.college.bustracker.data.repository.AnnouncementPreferences.markAsRead(context, announcement.id)
-                                        selectedAnnouncementForDetail = announcement
-                                    }
-                                )
                             }
                         }
                     }

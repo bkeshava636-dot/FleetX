@@ -464,4 +464,14 @@
     <string name="enter_admin_id_label">ನಿರ್ವಾಹಕರ ಐಡಿ ನಮೂದಿಸಿ</string>
     <string name="send_reset_link">ಮರುಹೊಂದಿಸುವ ಲಿಂಕ್ ಕಳುಹಿಸಿ</string>
     <string name="announcements_and_notices">ಪ್ರಕಟಣೆಗಳು ಮತ್ತು ಸೂಚನೆಗಳು</string>
+    <string name="action_write_announcement">ಹೊಸ ಪ್ರಕಟಣೆ</string>
+    <string name="action_timing_change">ಸಮಯ ಬದಲಾವಣೆ</string>
+
+    <!-- Driver Operating Connectivity Strings -->
+    <string name="location_disabled_during_shift_title">ಜಿಪಿಎಸ್ ಆಫ್ ಆಗಿದೆ</string>
+    <string name="location_disabled_during_shift_desc">ಕಾರ್ಯಾಚರಣೆಯ ವೇಳಾಪಟ್ಟಿಯ ಸಮಯದಲ್ಲಿ ಬಸ್ ಟ್ರ್ಯಾಕಿಂಗ್‌ಗೆ ಜಿಪಿಎಸ್ ಆನ್ ಆಗಿರಬೇಕು. ಜಿಪಿಎಸ್ ಆನ್ ಮಾಡಲು ಕೆಳಗೆ ಟ್ಯಾಪ್ ಮಾಡಿ.</string>
+    <string name="turn_on_gps_action">ಜಿಪಿಎಸ್ ಆನ್ ಮಾಡಿ</string>
+    <string name="mobile_data_disabled_during_shift_title">ಮೊಬೈಲ್ ಡೇಟಾ ಆಫ್ ಆಗಿದೆ</string>
+    <string name="mobile_data_disabled_during_shift_desc">ಕಾರ್ಯಾಚರಣೆಯ ವೇಳಾಪಟ್ಟಿಯ ಸಮಯದಲ್ಲಿ ಲೈವ್ ಟ್ರ್ಯಾಕಿಂಗ್ ಅಪ್‌ಡೇಟ್ ಕಳುಹಿಸಲು ಮೊಬೈಲ್ ಡೇಟಾ ಅಗತ್ಯವಿದೆ. ಡೇಟಾ ಆನ್ ಮಾಡಲು ಕೆಳಗೆ ಟ್ಯಾಪ್ ಮಾಡಿ.</string>
+    <string name="turn_on_mobile_data_action">ಮೊಬೈಲ್ ಡೇಟಾ ಆನ್ ಮಾಡಿ</string>
 </resources>

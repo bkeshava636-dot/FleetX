@@ -42,6 +42,11 @@ import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.LocationOff
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.NetworkCell
+import androidx.compose.material.icons.filled.SignalCellularConnectedNoInternet0Bar
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.res.stringResource
 import com.college.bustracker.R
 import androidx.compose.material3.AlertDialog
@@ -111,8 +116,23 @@ fun DriverHomeScreen(
     val stopSubmissionMsg by viewModel.stopSubmissionMessage.collectAsState()
     val stopSubmissionErr by viewModel.stopSubmissionError.collectAsState()
     val driverAnnouncements by viewModel.driverAnnouncements.collectAsState()
+    val isLocationServicesEnabled by viewModel.isLocationServicesEnabled.collectAsState()
+    val isMobileDataEnabled by viewModel.isMobileDataEnabled.collectAsState()
+    val operatingSchedule by viewModel.operatingSchedule.collectAsState()
 
     val context = LocalContext.current
+    val activity = context as? Activity
+    val isOperatingWindow = remember(operatingSchedule, isHolidayToday, isTrackingLive) {
+        (ScheduleHelper.isWithinOperatingWindow(operatingSchedule) && !isHolidayToday) || isTrackingLive
+    }
+
+    // Automatically prompt location turn-on resolution if GPS is off during active operating window
+    LaunchedEffect(isOperatingWindow, isLocationServicesEnabled) {
+        if (isOperatingWindow && !isLocationServicesEnabled && activity != null) {
+            com.college.bustracker.util.DriverConnectivityHelper.promptEnableLocation(activity)
+        }
+    }
+
     var showLanguageDialog by remember { mutableStateOf(false) }
     var selectedAnnouncementForDetail by remember { mutableStateOf<com.college.bustracker.data.model.Announcement?>(null) }
     var showStopConfirmationDialog by remember { mutableStateOf(false) }
@@ -178,8 +198,6 @@ fun DriverHomeScreen(
             (context as? Activity)?.moveTaskToBack(true)
         }
     }
-
-    val operatingSchedule by viewModel.operatingSchedule.collectAsState()
 
     val nextSessionText = remember(operatingSchedule) {
         ScheduleHelper.getNextSessionDescription(operatingSchedule)
@@ -258,6 +276,184 @@ fun DriverHomeScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // 1. Announcements Banner (Prominently displayed at top of driver dashboard)
+        if (driverAnnouncements.isNotEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Campaign,
+                                contentDescription = null,
+                                tint = CollegePrimary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.announcements),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A)
+                            )
+                        }
+                        val unreadCount = driverAnnouncements.count {
+                            !com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, it.id)
+                        }
+                        if (unreadCount > 0) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = CollegePrimary
+                            ) {
+                                Text(
+                                    text = "$unreadCount ${stringResource(R.string.unread_badge)}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        driverAnnouncements.forEach { announcement ->
+                            val isRead = com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, announcement.id)
+                            com.college.bustracker.ui.announcement.AnnouncementCard(
+                                announcement = announcement,
+                                isUnread = !isRead,
+                                onClick = {
+                                    com.college.bustracker.data.repository.AnnouncementPreferences.markAsRead(context, announcement.id)
+                                    selectedAnnouncementForDetail = announcement
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        // 2. Urgent GPS Location Turned Off Banner during operating window
+        if (!isLocationServicesEnabled && isOperatingWindow) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
+                border = BorderStroke(1.dp, Color(0xFFFECACA)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOff,
+                            contentDescription = null,
+                            tint = StatusDangerRed,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.location_disabled_during_shift_title),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color(0xFF991B1B)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.location_disabled_during_shift_desc),
+                        fontSize = 12.sp,
+                        color = Color(0xFF7F1D1D)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = {
+                            if (activity != null) {
+                                com.college.bustracker.util.DriverConnectivityHelper.promptEnableLocation(activity)
+                            } else {
+                                com.college.bustracker.util.DriverConnectivityHelper.openLocationSettings(context)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.turn_on_gps_action),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        // 3. Urgent Mobile Data Disconnected Banner during operating window
+        if ((!isMobileDataEnabled || !isInternet) && isOperatingWindow) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB)),
+                border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.SignalCellularConnectedNoInternet0Bar,
+                            contentDescription = null,
+                            tint = Color(0xFFD97706),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.mobile_data_disabled_during_shift_title),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color(0xFF92400E)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.mobile_data_disabled_during_shift_desc),
+                        fontSize = 12.sp,
+                        color = Color(0xFF78350F)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = {
+                            com.college.bustracker.util.DriverConnectivityHelper.tryEnableMobileData(context)
+                            com.college.bustracker.util.DriverConnectivityHelper.openMobileDataSettings(context)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.NetworkCell, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.turn_on_mobile_data_action),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
 
         // Holiday Notice Banner
         if (isHolidayToday) {
@@ -405,74 +601,6 @@ fun DriverHomeScreen(
         }
 
         Spacer(modifier = Modifier.height(14.dp))
-
-        // Driver Announcements Section
-        if (driverAnnouncements.isNotEmpty()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Campaign,
-                                contentDescription = null,
-                                tint = CollegePrimary,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = stringResource(R.string.announcements),
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0F172A)
-                            )
-                        }
-                        val unreadCount = driverAnnouncements.count {
-                            !com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, it.id)
-                        }
-                        if (unreadCount > 0) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = CollegePrimary
-                            ) {
-                                Text(
-                                    text = "$unreadCount ${stringResource(R.string.unread_badge)}",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        driverAnnouncements.forEach { announcement ->
-                            val isRead = com.college.bustracker.data.repository.AnnouncementPreferences.isAnnouncementRead(context, announcement.id)
-                            com.college.bustracker.ui.announcement.AnnouncementCard(
-                                announcement = announcement,
-                                isUnread = !isRead,
-                                onClick = {
-                                    com.college.bustracker.data.repository.AnnouncementPreferences.markAsRead(context, announcement.id)
-                                    selectedAnnouncementForDetail = announcement
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(14.dp))
-        }
 
         // Live Tracking HUD (when active)
         if (isTrackingLive) {

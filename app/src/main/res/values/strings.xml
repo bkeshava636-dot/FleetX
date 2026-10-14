@@ -464,4 +464,14 @@
     <string name="enter_admin_id_label">Enter Admin ID</string>
     <string name="send_reset_link">Send Reset Link</string>
     <string name="announcements_and_notices">Announcements &amp; Notices</string>
+    <string name="action_write_announcement">Write Notice</string>
+    <string name="action_timing_change">Change Timings</string>
+
+    <!-- Driver Operating Connectivity Strings -->
+    <string name="location_disabled_during_shift_title">GPS Location is Turned Off</string>
+    <string name="location_disabled_during_shift_desc">Bus tracking requires device location during your active shift. Tap below to turn on GPS.</string>
+    <string name="turn_on_gps_action">Turn On Location (GPS)</string>
+    <string name="mobile_data_disabled_during_shift_title">Mobile Data is Disconnected</string>
+    <string name="mobile_data_disabled_during_shift_desc">Live tracking cannot broadcast bus updates without mobile data during your shift. Tap below to turn on cellular data.</string>
+    <string name="turn_on_mobile_data_action">Turn On Mobile Data</string>
 </resources>
