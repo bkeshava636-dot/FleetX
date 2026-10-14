@@ -839,30 +839,26 @@ private fun MasterSchedulePdfCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SectionHeader(
-                    title = stringResource(R.string.master_timetable_title),
-                    icon = Icons.Default.Description
-                )
-                if (!pdfUrl.isNullOrBlank()) {
-                    Surface(
-                        color = StatusActiveGreen.copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(6.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.active_for_all_users),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = StatusActiveGreen,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+            SectionHeader(
+                title = stringResource(R.string.master_timetable_title),
+                icon = Icons.Default.Description,
+                action = {
+                    if (!pdfUrl.isNullOrBlank()) {
+                        Surface(
+                            color = StatusActiveGreen.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.active_for_all_users),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = StatusActiveGreen,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     }
                 }
-            }
+            )
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -2238,34 +2234,30 @@ private fun DriverInfoCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SectionHeader(
-                    title = stringResource(R.string.assigned_driver),
-                    icon = Icons.Default.Badge
-                )
-                if (driverInfo != null && driverInfo.busTitle.isNotBlank() && driverInfo.busTitle != "—") {
-                    Card(
-                        shape = RoundedCornerShape(8.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (driverInfo.isReplacement) Color(0xFFFEF3C7) else Color(0xFFEFF6FF)
-                        )
-                    ) {
-                        Text(
-                            text = if (driverInfo.isReplacement) stringResource(R.string.replacement_driver_tag, driverInfo.busTitle) else stringResource(R.string.your_bus_tag, driverInfo.busTitle),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (driverInfo.isReplacement) Color(0xFF92400E) else CollegePrimary,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+            SectionHeader(
+                title = stringResource(R.string.assigned_driver),
+                icon = Icons.Default.Badge,
+                action = {
+                    if (driverInfo != null && driverInfo.busTitle.isNotBlank() && driverInfo.busTitle != "—") {
+                        Card(
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (driverInfo.isReplacement) Color(0xFFFEF3C7) else Color(0xFFEFF6FF)
+                            )
+                        ) {
+                            Text(
+                                text = if (driverInfo.isReplacement) stringResource(R.string.replacement_driver_tag, driverInfo.busTitle) else stringResource(R.string.your_bus_tag, driverInfo.busTitle),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (driverInfo.isReplacement) Color(0xFF92400E) else CollegePrimary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
-            }
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
 

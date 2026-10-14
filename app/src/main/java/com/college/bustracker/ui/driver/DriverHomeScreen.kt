@@ -1345,28 +1345,24 @@ private fun MasterSchedulePdfDriverCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SectionHeader(
-                    title = stringResource(R.string.master_timetable_title),
-                    icon = Icons.Default.Description
-                )
-                Surface(
-                    color = StatusActiveGreen.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(6.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.active_for_all_users),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = StatusActiveGreen,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
+            SectionHeader(
+                title = stringResource(R.string.master_timetable_title),
+                icon = Icons.Default.Description,
+                action = {
+                    Surface(
+                        color = StatusActiveGreen.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.active_for_all_users),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = StatusActiveGreen,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
                 }
-            }
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
