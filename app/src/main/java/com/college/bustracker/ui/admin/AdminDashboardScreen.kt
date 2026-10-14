@@ -472,6 +472,15 @@ fun AdminDashboardScreen(
                                 Toast.makeText(context, err.message ?: "Failed to remove PDF", Toast.LENGTH_LONG).show()
                             }
                         }
+                    },
+                    onSaveMasterPdfUrlClick = { url, name ->
+                        viewModel.setAllRoutesSchedulePdfUrl(url, name) { result ->
+                            result.onSuccess {
+                                Toast.makeText(context, context.getString(R.string.master_pdf_uploaded_success), Toast.LENGTH_SHORT).show()
+                            }.onFailure { err ->
+                                Toast.makeText(context, err.message ?: "Failed to link PDF URL", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
                 )
                 4 -> AdminAnnouncementScreen(
