@@ -150,11 +150,9 @@ fun DriverHomeScreen(
     if (showBackgroundLocationDialog) {
         AlertDialog(
             onDismissRequest = { showBackgroundLocationDialog = false },
-            title = { Text("Set Location to 'Allow all the time'", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.bg_location_dialog_title), fontWeight = FontWeight.Bold) },
             text = {
-                Text(
-                    "To automatically start bus tracking on schedule while your screen is locked or FleetX is closed, Android requires Location access set to 'Allow all the time'.\n\n1. Tap 'Open Settings' below\n2. Select 'Permissions' -> 'Location'\n3. Choose 'Allow all the time'"
-                )
+                Text(stringResource(R.string.bg_location_dialog_desc))
             },
             confirmButton = {
                 Button(
@@ -169,12 +167,12 @@ fun DriverHomeScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
                 ) {
-                    Text("Open Settings")
+                    Text(stringResource(R.string.open_settings_action))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showBackgroundLocationDialog = false }) {
-                    Text("Later")
+                    Text(stringResource(R.string.later_action))
                 }
             }
         )
@@ -183,14 +181,14 @@ fun DriverHomeScreen(
     if (holidayWarning != null) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissHolidayWarning() },
-            title = { Text("Tracking Unavailable", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.tracking_unavailable_title), fontWeight = FontWeight.Bold) },
             text = { Text(holidayWarning!!) },
             confirmButton = {
                 Button(
                     onClick = { viewModel.dismissHolidayWarning() },
                     colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
                 ) {
-                    Text("OK")
+                    Text(stringResource(R.string.ok_action))
                 }
             }
         )
@@ -893,7 +891,7 @@ fun DriverHomeScreen(
                         Text(
                             text = when {
                                 isReplacedNow -> stringResource(R.string.tracking_disabled_replacement)
-                                isActingAsTemp -> "START TRACKING (${operatingAsTempBus?.busId})"
+                                isActingAsTemp -> stringResource(R.string.start_tracking_temp, operatingAsTempBus?.busId ?: "")
                                 else -> stringResource(R.string.start_tracking_now)
                             },
                             fontSize = 13.sp,
@@ -1141,10 +1139,10 @@ fun DriverHomeScreen(
         AlertDialog(
             onDismissRequest = { showStopConfirmationDialog = false },
             title = {
-                Text(text = "Stop Tracking?", fontWeight = FontWeight.Bold)
+                Text(text = stringResource(R.string.stop_tracking_dialog_title), fontWeight = FontWeight.Bold)
             },
             text = {
-                Text("Are you sure you want to end live tracking for ${bus?.busNumber}? Students will no longer see live updates.")
+                Text(stringResource(R.string.stop_tracking_dialog_desc, bus?.busNumber ?: ""))
             },
             confirmButton = {
                 Button(
@@ -1154,12 +1152,12 @@ fun DriverHomeScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed)
                 ) {
-                    Text("Stop Session")
+                    Text(stringResource(R.string.stop_session_action))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showStopConfirmationDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel_action))
                 }
             }
         )
@@ -1168,6 +1166,7 @@ fun DriverHomeScreen(
     // Save Stop Dialog (Captures current GPS and asks for stop name)
     val locToSave = capturedStopLocation
     if (locToSave != null) {
+        val stopRequiredMsg = stringResource(R.string.stop_name_required)
         AlertDialog(
             onDismissRequest = {
                 if (!isSubmittingStop) viewModel.clearCapturedStopLocation()
@@ -1181,7 +1180,7 @@ fun DriverHomeScreen(
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Propose Bus Stop", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text(stringResource(R.string.propose_bus_stop_title), fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 }
             },
             text = {
@@ -1193,20 +1192,28 @@ fun DriverHomeScreen(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "Assigned: ${bus?.busNumber ?: "Bus"} • ${route?.name ?: "Route"}",
+                                text = stringResource(
+                                    R.string.assigned_bus_route_label,
+                                    bus?.busNumber ?: "Bus",
+                                    route?.name ?: "Route"
+                                ),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF334155)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "GPS: Lat ${"%.5f".format(locToSave.latitude)}, Lng ${"%.5f".format(locToSave.longitude)}",
+                                text = stringResource(
+                                    R.string.gps_coords_format,
+                                    "%.5f".format(locToSave.latitude),
+                                    "%.5f".format(locToSave.longitude)
+                                ),
                                 fontSize = 12.sp,
                                 color = Color(0xFF64748B)
                             )
                             if (locToSave.hasAccuracy()) {
                                 Text(
-                                    text = "Accuracy: ±${locToSave.accuracy.toInt()} meters",
+                                    text = stringResource(R.string.gps_accuracy_format, locToSave.accuracy.toInt()),
                                     fontSize = 11.sp,
                                     color = Color(0xFF0D9488)
                                 )
@@ -1222,8 +1229,8 @@ fun DriverHomeScreen(
                             proposedStopName = it
                             stopNameError = null
                         },
-                        label = { Text("Stop Name") },
-                        placeholder = { Text("e.g. Gandhi Circle, Gate 3") },
+                        label = { Text(stringResource(R.string.stop_name_label)) },
+                        placeholder = { Text(stringResource(R.string.stop_name_placeholder)) },
                         isError = stopNameError != null,
                         supportingText = stopNameError?.let { { Text(it, color = StatusDangerRed) } },
                         modifier = Modifier.fillMaxWidth(),
@@ -1236,7 +1243,7 @@ fun DriverHomeScreen(
                 Button(
                     onClick = {
                         if (proposedStopName.trim().isBlank()) {
-                            stopNameError = "Please enter a stop name"
+                            stopNameError = stopRequiredMsg
                             return@Button
                         }
                         viewModel.submitStopRequest(proposedStopName)
@@ -1247,9 +1254,9 @@ fun DriverHomeScreen(
                     if (isSubmittingStop) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Submitting...")
+                        Text(stringResource(R.string.submitting_ellipsis))
                     } else {
-                        Text("Submit to Admin")
+                        Text(stringResource(R.string.submit_to_admin_action))
                     }
                 }
             },
@@ -1258,7 +1265,7 @@ fun DriverHomeScreen(
                     onClick = { viewModel.clearCapturedStopLocation() },
                     enabled = !isSubmittingStop
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel_action))
                 }
             }
         )
@@ -1268,14 +1275,14 @@ fun DriverHomeScreen(
     if (locationCaptureError != null) {
         AlertDialog(
             onDismissRequest = { locationCaptureError = null },
-            title = { Text("GPS Capture Failed", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.gps_capture_failed_title), fontWeight = FontWeight.Bold) },
             text = { Text(locationCaptureError!!) },
             confirmButton = {
                 Button(
                     onClick = { locationCaptureError = null },
                     colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
                 ) {
-                    Text("OK")
+                    Text(stringResource(R.string.ok_action))
                 }
             }
         )
@@ -1285,14 +1292,14 @@ fun DriverHomeScreen(
     if (stopSubmissionMsg != null) {
         AlertDialog(
             onDismissRequest = { viewModel.clearStopSubmissionFeedback() },
-            title = { Text("Success", fontWeight = FontWeight.Bold, color = StatusActiveGreen) },
+            title = { Text(stringResource(R.string.submission_success_title), fontWeight = FontWeight.Bold, color = StatusActiveGreen) },
             text = { Text(stopSubmissionMsg!!) },
             confirmButton = {
                 Button(
                     onClick = { viewModel.clearStopSubmissionFeedback() },
                     colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
                 ) {
-                    Text("OK")
+                    Text(stringResource(R.string.ok_action))
                 }
             }
         )
@@ -1302,14 +1309,14 @@ fun DriverHomeScreen(
     if (stopSubmissionErr != null) {
         AlertDialog(
             onDismissRequest = { viewModel.clearStopSubmissionFeedback() },
-            title = { Text("Submission Failed", fontWeight = FontWeight.Bold, color = StatusDangerRed) },
+            title = { Text(stringResource(R.string.submission_failed_title), fontWeight = FontWeight.Bold, color = StatusDangerRed) },
             text = { Text(stopSubmissionErr!!) },
             confirmButton = {
                 Button(
                     onClick = { viewModel.clearStopSubmissionFeedback() },
                     colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed)
                 ) {
-                    Text("OK")
+                    Text(stringResource(R.string.ok_action))
                 }
             }
         )
