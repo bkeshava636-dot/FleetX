@@ -131,6 +131,7 @@ jobs:
           name: FleetX ${{ steps.apk_info.outputs.tag_name }}
           draft: false
           prerelease: false
+          make_latest: true
           body: |
             ## FleetX Campus Transit Portal - Release ${{ steps.apk_info.outputs.tag_name }}
             
