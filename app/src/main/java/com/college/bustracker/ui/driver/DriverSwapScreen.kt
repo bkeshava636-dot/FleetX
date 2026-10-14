@@ -65,6 +65,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.college.bustracker.R
 import com.college.bustracker.data.model.BusSwap
 import com.college.bustracker.ui.common.EmptyStateCard
 import com.college.bustracker.ui.common.SectionHeader
@@ -151,20 +153,20 @@ fun DriverSwapScreen(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.back_action),
                     tint = Color(0xFF1E293B)
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(
-                    text = if (activeSwap != null && !isEditMode) "Active Vehicle Swap" else if (isEditMode) "Edit Vehicle Swap" else "Report Vehicle Swap",
+                    text = if (activeSwap != null && !isEditMode) stringResource(R.string.active_vehicle_swap_title) else if (isEditMode) stringResource(R.string.edit_vehicle_swap_title) else stringResource(R.string.report_vehicle_swap_title),
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0F172A)
                 )
                 Text(
-                    text = if (activeSwap != null && !isEditMode) "Single active swap currently broadcasting" else "Broadcast substitute bus to waiting students",
+                    text = if (activeSwap != null && !isEditMode) stringResource(R.string.single_swap_broadcasting_subtitle) else stringResource(R.string.broadcast_substitute_bus_subtitle),
                     fontSize = 12.sp,
                     color = Color(0xFF64748B)
                 )
@@ -257,7 +259,7 @@ fun DriverSwapScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "ACTIVE VEHICLE SWAP ALERT",
+                                text = stringResource(R.string.active_vehicle_swap_alert),
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF92400E),
                                 fontSize = 12.sp,
@@ -271,7 +273,7 @@ fun DriverSwapScreen(
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
-                                text = "ACTIVE",
+                                text = stringResource(R.string.active_badge),
                                 color = Color.White,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
@@ -293,10 +295,10 @@ fun DriverSwapScreen(
                     // Scope Information
                     val isAllStops = activeSwap?.scopeType == BusSwap.SCOPE_ALL_STOPS || (activeSwap?.affectedStopIds?.isEmpty() == true)
                     val scopeText = if (isAllStops) {
-                        "Target Scope: All Route Stops (${stops.size} stops)"
+                        stringResource(R.string.scope_all_stops_format, stops.size)
                     } else {
                         val names = activeSwap?.affectedStopIds?.mapNotNull { id -> stops.find { it.stopId == id }?.name ?: id }?.joinToString(", ") ?: ""
-                        "Target Scope: ${activeSwap?.affectedStopIds?.size} Selected Stop(s) ($names)"
+                        stringResource(R.string.scope_selected_stops_format, activeSwap?.affectedStopIds?.size ?: 0, names)
                     }
                     Text(
                         text = scopeText,
@@ -309,14 +311,14 @@ fun DriverSwapScreen(
 
                     if (!activeSwap?.message.isNullOrBlank()) {
                         Text(
-                            text = "Reason: ${activeSwap?.message}",
+                            text = stringResource(R.string.swap_reason_prefix, activeSwap?.message ?: ""),
                             fontSize = 13.sp,
                             color = Color(0xFF78350F)
                         )
                     }
 
                     Text(
-                        text = "Date: ${activeSwap?.date}",
+                        text = stringResource(R.string.swap_date_prefix, activeSwap?.date ?: ""),
                         fontSize = 11.sp,
                         color = Color(0xFF92400E),
                         modifier = Modifier.padding(top = 4.dp)
@@ -342,7 +344,7 @@ fun DriverSwapScreen(
                         ) {
                             Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("EDIT ALERT", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.edit_alert_action), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
 
                         OutlinedButton(
@@ -358,7 +360,7 @@ fun DriverSwapScreen(
                         ) {
                             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("CANCEL ALERT", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.cancel_alert_action), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -375,7 +377,7 @@ fun DriverSwapScreen(
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     SectionHeader(
-                        title = if (isEditMode) "Edit Swap Configuration" else "Swap Configuration",
+                        title = if (isEditMode) stringResource(R.string.edit_swap_config_title) else stringResource(R.string.swap_config_title),
                         icon = Icons.Default.SwapHoriz
                     )
 
@@ -383,7 +385,7 @@ fun DriverSwapScreen(
 
                     // Step 1: Current Assigned Bus
                     Text(
-                        text = "1. Current Assigned Bus",
+                        text = stringResource(R.string.step1_current_bus),
                         fontSize = 12.sp,
                         color = Color(0xFF64748B),
                         fontWeight = FontWeight.SemiBold
@@ -415,7 +417,7 @@ fun DriverSwapScreen(
 
                     // Step 2: Select Replacement Bus
                     Text(
-                        text = "2. Select Replacement Bus",
+                        text = stringResource(R.string.step2_select_replacement_bus),
                         fontSize = 12.sp,
                         color = Color(0xFF64748B),
                         fontWeight = FontWeight.SemiBold
@@ -424,8 +426,8 @@ fun DriverSwapScreen(
 
                     if (replacementOptions.isEmpty()) {
                         EmptyStateCard(
-                            title = "No Replacement Buses Available",
-                            description = "There are no other active fleet buses registered in Firestore. Contact administration to add active buses.",
+                            title = stringResource(R.string.no_replacement_buses_title),
+                            description = stringResource(R.string.no_replacement_buses_desc),
                             icon = Icons.Default.DirectionsBus
                         )
                     } else {
@@ -456,7 +458,7 @@ fun DriverSwapScreen(
                                         text = {
                                             Column {
                                                 Text(bus.busNumber, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                                Text("Plate: ${bus.registrationNumber}", fontSize = 11.sp, color = Color(0xFF64748B))
+                                                Text(stringResource(R.string.plate_format, bus.registrationNumber), fontSize = 11.sp, color = Color(0xFF64748B))
                                             }
                                         },
                                         onClick = {
@@ -473,7 +475,7 @@ fun DriverSwapScreen(
 
                     // Step 3: Stop Scope Selection (ALL_STOPS vs SELECTED_STOPS)
                     Text(
-                        text = "3. Target Notification Scope",
+                        text = stringResource(R.string.step3_target_scope),
                         fontSize = 12.sp,
                         color = Color(0xFF64748B),
                         fontWeight = FontWeight.SemiBold
@@ -513,8 +515,8 @@ fun DriverSwapScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Column {
-                                    Text("All Stops", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
-                                    Text("Entire route (${stops.size})", fontSize = 10.sp, color = Color(0xFF64748B))
+                                    Text(stringResource(R.string.all_stops_scope_title), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                                    Text(stringResource(R.string.entire_route_desc, stops.size), fontSize = 10.sp, color = Color(0xFF64748B))
                                 }
                             }
                         }
@@ -550,8 +552,8 @@ fun DriverSwapScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Column {
-                                    Text("Specific Stops", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
-                                    Text("Select subset", fontSize = 10.sp, color = Color(0xFF64748B))
+                                    Text(stringResource(R.string.specific_stops_scope_title), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                                    Text(stringResource(R.string.select_subset_desc), fontSize = 10.sp, color = Color(0xFF64748B))
                                 }
                             }
                         }
@@ -566,7 +568,7 @@ fun DriverSwapScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Select Affected Stops (${affectedStopIds.size}/${stops.size})",
+                                text = stringResource(R.string.select_affected_stops_format, affectedStopIds.size, stops.size),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF64748B)
@@ -583,7 +585,7 @@ fun DriverSwapScreen(
                                     }
                                 ) {
                                     Text(
-                                        text = if (affectedStopIds.size == stops.size) "Deselect All" else "Select All",
+                                        text = if (affectedStopIds.size == stops.size) stringResource(R.string.deselect_all_action) else stringResource(R.string.select_all_action),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = CollegePrimary
@@ -594,7 +596,7 @@ fun DriverSwapScreen(
 
                         if (stops.isEmpty()) {
                             Text(
-                                text = "No route stops configured.",
+                                text = stringResource(R.string.no_route_stops_configured),
                                 color = Color(0xFF94A3B8),
                                 fontSize = 12.sp,
                                 modifier = Modifier.padding(vertical = 4.dp)
@@ -607,7 +609,7 @@ fun DriverSwapScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 1.dp)
-                                ) {
+                                 ) {
                                     Checkbox(
                                         checked = isChecked,
                                         onCheckedChange = { checked ->
@@ -635,7 +637,7 @@ fun DriverSwapScreen(
 
                     // Step 4: Reason / Notice
                     Text(
-                        text = "4. Reason / Notice (Optional)",
+                        text = stringResource(R.string.reason_notice_optional),
                         fontSize = 12.sp,
                         color = Color(0xFF64748B),
                         fontWeight = FontWeight.SemiBold
@@ -644,7 +646,7 @@ fun DriverSwapScreen(
                     OutlinedTextField(
                         value = optionalMessage,
                         onValueChange = { optionalMessage = it },
-                        placeholder = { Text("e.g. Scheduled maintenance, puncture", color = Color(0xFF94A3B8), fontSize = 14.sp) },
+                        placeholder = { Text(stringResource(R.string.reason_placeholder), color = Color(0xFF94A3B8), fontSize = 14.sp) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -674,7 +676,7 @@ fun DriverSwapScreen(
                             ) {
                                 Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Cancel", fontWeight = FontWeight.SemiBold)
+                                Text(stringResource(R.string.cancel_action), fontWeight = FontWeight.SemiBold)
                             }
 
                             Button(
@@ -691,7 +693,7 @@ fun DriverSwapScreen(
                                 } else {
                                     Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Save Changes", fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.save_changes_action), fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -713,7 +715,7 @@ fun DriverSwapScreen(
                                 )
                             } else {
                                 Text(
-                                    text = "BROADCAST VEHICLE SWAP",
+                                    text = stringResource(R.string.broadcast_vehicle_swap_action),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
                                     letterSpacing = 0.5.sp
@@ -730,24 +732,24 @@ fun DriverSwapScreen(
     if (showSendConfirmationDialog) {
         val repBusId = replacementOptions.find { it.busNumber == selectedReplacement }?.busId ?: selectedReplacement
         val scopeDesc = if (selectedScopeType == BusSwap.SCOPE_ALL_STOPS) {
-            "All route stops (${stops.size} stops)"
+            stringResource(R.string.entire_route_desc, stops.size)
         } else {
-            "${affectedStopIds.size} selected stops (${affectedStopIds.mapNotNull { id -> stops.find { it.stopId == id }?.name }.joinToString(", ")})"
+            "${affectedStopIds.size} (${affectedStopIds.mapNotNull { id -> stops.find { it.stopId == id }?.name }.joinToString(", ")})"
         }
 
         AlertDialog(
             onDismissRequest = { if (!isSwapLoading) showSendConfirmationDialog = false },
             icon = { Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = CollegePrimary, modifier = Modifier.size(32.dp)) },
-            title = { Text("Send Bus Swap Alert?", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+            title = { Text(stringResource(R.string.send_bus_swap_alert_title), fontWeight = FontWeight.Bold, fontSize = 18.sp) },
             text = {
                 Column {
-                    Text("Please confirm the swap details before broadcasting:", fontSize = 13.sp, color = Color(0xFF475569))
+                    Text(stringResource(R.string.confirm_swap_details_intro), fontSize = 13.sp, color = Color(0xFF475569))
                     Spacer(modifier = Modifier.height(10.dp))
-                    Text("• Original Bus: ${assignedBus?.busNumber ?: "Assigned Bus"}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    Text("• Replacement Bus: $selectedReplacement", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    Text("• Scope: $scopeDesc", fontSize = 13.sp)
+                    Text(stringResource(R.string.orig_bus_prefix, assignedBus?.busNumber ?: "Assigned Bus"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.rep_bus_prefix, selectedReplacement), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.scope_prefix, scopeDesc), fontSize = 13.sp)
                     if (optionalMessage.isNotBlank()) {
-                        Text("• Reason: $optionalMessage", fontSize = 13.sp)
+                        Text(stringResource(R.string.reason_prefix, optionalMessage), fontSize = 13.sp)
                     }
                 }
             },
@@ -766,7 +768,7 @@ fun DriverSwapScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary),
                     enabled = !isSwapLoading
                 ) {
-                    Text("Confirm & Broadcast", fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.confirm_and_broadcast_action), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -774,7 +776,7 @@ fun DriverSwapScreen(
                     onClick = { showSendConfirmationDialog = false },
                     enabled = !isSwapLoading
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel_action))
                 }
             }
         )
@@ -784,23 +786,23 @@ fun DriverSwapScreen(
     if (showUpdateConfirmationDialog && activeSwap != null) {
         val repBusId = replacementOptions.find { it.busNumber == selectedReplacement }?.busId ?: selectedReplacement
         val scopeDesc = if (selectedScopeType == BusSwap.SCOPE_ALL_STOPS) {
-            "All route stops (${stops.size} stops)"
+            stringResource(R.string.entire_route_desc, stops.size)
         } else {
-            "${affectedStopIds.size} selected stops"
+            stringResource(R.string.scope_selected_stops_format, affectedStopIds.size, "")
         }
 
         AlertDialog(
             onDismissRequest = { if (!isSwapLoading) showUpdateConfirmationDialog = false },
             icon = { Icon(Icons.Default.Edit, contentDescription = null, tint = CollegePrimary, modifier = Modifier.size(32.dp)) },
-            title = { Text("Update Bus Swap Alert?", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+            title = { Text(stringResource(R.string.update_bus_swap_alert_title), fontWeight = FontWeight.Bold, fontSize = 18.sp) },
             text = {
                 Column {
-                    Text("Update active swap with the following changes?", fontSize = 13.sp, color = Color(0xFF475569))
+                    Text(stringResource(R.string.update_active_swap_intro), fontSize = 13.sp, color = Color(0xFF475569))
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("• Replacement: $selectedReplacement", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    Text("• Scope: $scopeDesc", fontSize = 13.sp)
+                    Text(stringResource(R.string.rep_bus_prefix, selectedReplacement), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.scope_prefix, scopeDesc), fontSize = 13.sp)
                     if (optionalMessage.isNotBlank()) {
-                        Text("• Reason: $optionalMessage", fontSize = 13.sp)
+                        Text(stringResource(R.string.reason_prefix, optionalMessage), fontSize = 13.sp)
                     }
                 }
             },
@@ -822,7 +824,7 @@ fun DriverSwapScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary),
                     enabled = !isSwapLoading
                 ) {
-                    Text("Save Changes", fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.save_changes_action), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -830,7 +832,7 @@ fun DriverSwapScreen(
                     onClick = { showUpdateConfirmationDialog = false },
                     enabled = !isSwapLoading
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel_action))
                 }
             }
         )
@@ -842,14 +844,17 @@ fun DriverSwapScreen(
             onDismissRequest = { if (!isSwapLoading) showCancelConfirmationDialog = false },
             title = {
                 Text(
-                    text = "Cancel Bus Swap Alert?",
+                    text = stringResource(R.string.cancel_bus_swap_alert_title),
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
                 )
             },
             text = {
                 Text(
-                    text = "Are you sure you want to cancel the swap alert for ${assignedBus?.busNumber ?: activeSwap?.originalBusId}?\n\nStudents will immediately be notified that normal bus service has resumed.",
+                    text = stringResource(
+                        R.string.cancel_swap_confirm_desc,
+                        assignedBus?.busNumber ?: activeSwap?.originalBusId ?: ""
+                    ),
                     fontSize = 13.sp,
                     color = Color(0xFF475569)
                 )
@@ -867,7 +872,7 @@ fun DriverSwapScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed),
                     enabled = !isSwapLoading
                 ) {
-                    Text("Yes, Cancel Swap", fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.yes_cancel_swap_action), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -875,7 +880,7 @@ fun DriverSwapScreen(
                     onClick = { showCancelConfirmationDialog = false },
                     enabled = !isSwapLoading
                 ) {
-                    Text("Keep Active")
+                    Text(stringResource(R.string.keep_active_action))
                 }
             }
         )

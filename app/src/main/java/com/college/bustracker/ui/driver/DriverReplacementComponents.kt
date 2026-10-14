@@ -65,6 +65,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.res.stringResource
+import com.college.bustracker.R
 import com.college.bustracker.data.model.Bus
 import com.college.bustracker.data.model.RouteSchedule
 import com.college.bustracker.data.model.TemporaryAssignment
@@ -107,11 +109,11 @@ fun DriverReplacementCard(
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             SectionHeader(
-                title = "Temporary Replacement",
+                title = stringResource(R.string.temporary_replacement_title),
                 icon = Icons.Default.PersonOutline
             )
             Text(
-                text = "Temporarily transfer route operation to another active driver for a set period. Permanent assignment remains unchanged.",
+                text = stringResource(R.string.temporary_replacement_desc),
                 fontSize = 12.sp,
                 color = Color(0xFF64748B),
                 modifier = Modifier.padding(vertical = 8.dp)
@@ -161,13 +163,13 @@ fun DriverReplacementCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = if (isCurrentlyActive) "● ACTIVE REPLACEMENT" else "UPCOMING REPLACEMENT",
+                                text = if (isCurrentlyActive) stringResource(R.string.active_replacement_badge) else stringResource(R.string.upcoming_replacement_badge),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp,
                                 color = if (isCurrentlyActive) Color(0xFF1D4ED8) else Color(0xFF475569)
                             )
                             Text(
-                                text = "Perm: ${assignedBus?.busNumber ?: activeReplacement.busId}",
+                                text = stringResource(R.string.perm_bus_label, assignedBus?.busNumber ?: activeReplacement.busId),
                                 fontSize = 11.sp,
                                 color = Color(0xFF64748B),
                                 fontWeight = FontWeight.SemiBold
@@ -177,14 +179,14 @@ fun DriverReplacementCard(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Temporary Driver: ${activeReplacement.replacementDriverName}",
+                            text = stringResource(R.string.temporary_driver_label, activeReplacement.replacementDriverName),
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
                             color = Color(0xFF0F172A)
                         )
                         if (!activeReplacement.replacementDriverPhone.isNullOrBlank()) {
                             Text(
-                                text = "Contact: ${activeReplacement.replacementDriverPhone}",
+                                text = stringResource(R.string.contact_label, activeReplacement.replacementDriverPhone ?: ""),
                                 fontSize = 12.sp,
                                 color = Color(0xFF475569)
                             )
@@ -211,7 +213,7 @@ fun DriverReplacementCard(
                         ) {
                             Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Cancel Replacement", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.cancel_replacement_action), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -242,13 +244,13 @@ fun DriverReplacementCard(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Temporary Operator for ${operatingAsTempBus.busId}",
+                                text = stringResource(R.string.temp_operator_for, operatingAsTempBus.busId),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
                                 color = Color(0xFF065F46)
                             )
                             Text(
-                                text = "Active until ${TemporaryDurationHelper.formatFullDateTime(operatingAsTempBus.endAt)}",
+                                text = stringResource(R.string.active_until_format, TemporaryDurationHelper.formatFullDateTime(operatingAsTempBus.endAt)),
                                 fontSize = 11.sp,
                                 color = Color(0xFF047857)
                             )
@@ -268,7 +270,7 @@ fun DriverReplacementCard(
                     Icon(Icons.Default.PersonOutline, contentDescription = null, tint = CollegePrimary)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "TEMPORARY REPLACEMENT",
+                        text = stringResource(R.string.temporary_replacement_button),
                         fontWeight = FontWeight.Bold,
                         color = CollegePrimary,
                         fontSize = 13.sp
@@ -287,10 +289,12 @@ fun DriverReplacementCard(
         val replDriver = targetAssignment.replacementDriverName.ifBlank { "Replacement Driver" }
         val timeWindowStr = TemporaryDurationHelper.formatCancelWindow(targetAssignment.startAt, targetAssignment.endAt)
 
+        val msgCancelled = stringResource(R.string.temp_replacement_cancelled)
+        val msgFailed = stringResource(R.string.failed_to_cancel_replacement)
         AlertDialog(
             onDismissRequest = { showCancelConfirm = false },
             title = {
-                Text("Cancel Temporary Replacement?", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text(stringResource(R.string.cancel_temp_replacement_dialog_title), fontWeight = FontWeight.Bold, fontSize = 17.sp)
             },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -316,7 +320,7 @@ fun DriverReplacementCard(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "$permDriver will become the effective driver again.",
+                        text = stringResource(R.string.will_revert_driver_desc, permDriver),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF64748B)
@@ -329,17 +333,17 @@ fun DriverReplacementCard(
                         showCancelConfirm = false
                         onCancelReplacement(targetAssignment.assignmentId) { success, err ->
                             if (success) {
-                                actionMessage = "Temporary replacement cancelled."
+                                actionMessage = msgCancelled
                                 actionError = null
                             } else {
-                                actionError = err ?: "Failed to cancel replacement"
+                                actionError = err ?: msgFailed
                             }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("CANCEL REPLACEMENT", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(stringResource(R.string.cancel_replacement_confirm_action), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             },
             dismissButton = {
@@ -347,13 +351,14 @@ fun DriverReplacementCard(
                     onClick = { showCancelConfirm = false },
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("KEEP REPLACEMENT", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    Text(stringResource(R.string.keep_replacement_action), fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                 }
             }
         )
     }
 
     if (showDialog && assignedBus != null) {
+        val msgSuccess = stringResource(R.string.temp_replacement_activated_success)
         DriverReplacementDialog(
             bus = assignedBus,
             eligibleDrivers = eligibleDrivers,
@@ -364,7 +369,7 @@ fun DriverReplacementCard(
                 onActivateReplacement(replacementUid, startAt, endAt) { success, err ->
                     if (success) {
                         showDialog = false
-                        actionMessage = "Temporary replacement activated successfully!"
+                        actionMessage = msgSuccess
                         actionError = null
                     } else {
                         actionError = err
@@ -434,26 +439,26 @@ fun DriverReplacementDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Temporary Replacement",
+                            text = stringResource(R.string.temporary_replacement_title),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0F172A)
                         )
                         Text(
-                            text = "Direct action — no approval workflow needed",
+                            text = stringResource(R.string.temp_replacement_subtitle),
                             fontSize = 11.sp,
                             color = Color(0xFF64748B)
                         )
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cancel_action))
                     }
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Bus field (locked)
-                Text(text = "Bus", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+                Text(text = stringResource(R.string.bus_label), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
                 Spacer(modifier = Modifier.height(4.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -467,7 +472,7 @@ fun DriverReplacementDialog(
                         Icon(Icons.Default.DirectionsBus, contentDescription = null, tint = CollegePrimary)
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "${bus.busNumber.ifBlank { bus.busId }} (Permanently Assigned)",
+                            text = stringResource(R.string.bus_permanently_assigned, bus.busNumber.ifBlank { bus.busId }),
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp,
                             color = Color(0xFF1E293B)
@@ -478,7 +483,7 @@ fun DriverReplacementDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Replacement Driver selector
-                Text(text = "Replacement Driver", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+                Text(text = stringResource(R.string.replacement_driver_label), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
                 Spacer(modifier = Modifier.height(4.dp))
                 Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
@@ -490,7 +495,7 @@ fun DriverReplacementDialog(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = selectedDriver?.let { "${it.name} (${it.customId.ifBlank { it.uid }})" }
-                                ?: "Select Replacement Driver",
+                                ?: stringResource(R.string.select_replacement_driver_placeholder),
                             fontWeight = FontWeight.Medium,
                             fontSize = 13.sp,
                             color = if (selectedDriver != null) Color(0xFF0F172A) else Color(0xFF94A3B8),
@@ -506,7 +511,7 @@ fun DriverReplacementDialog(
                     ) {
                         if (eligibleDrivers.isEmpty()) {
                             DropdownMenuItem(
-                                text = { Text("No other active drivers available") },
+                                text = { Text(stringResource(R.string.no_eligible_drivers_available)) },
                                 onClick = { isDriverDropdownExpanded = false }
                             )
                         } else {
@@ -531,7 +536,7 @@ fun DriverReplacementDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Start Date + Time
-                Text(text = "Start Date & Time", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+                Text(text = stringResource(R.string.start_date_time_label), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
@@ -576,7 +581,7 @@ fun DriverReplacementDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Duration quick selector
-                Text(text = "Duration", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+                Text(text = stringResource(R.string.duration_label), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier
@@ -585,10 +590,16 @@ fun DriverReplacementDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     DurationOption.values().forEach { opt ->
+                        val optLabel = when (opt) {
+                            DurationOption.ONE_DAY -> stringResource(R.string.duration_one_day)
+                            DurationOption.TWO_DAYS -> stringResource(R.string.duration_two_days)
+                            DurationOption.THREE_DAYS -> stringResource(R.string.duration_three_days)
+                            DurationOption.CUSTOM -> stringResource(R.string.duration_custom_range)
+                        }
                         FilterChip(
                             selected = selectedDuration == opt,
                             onClick = { selectedDuration = opt },
-                            label = { Text(opt.label, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                            label = { Text(optLabel, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = CollegePrimary,
                                 selectedLabelColor = Color.White
@@ -600,7 +611,7 @@ fun DriverReplacementDialog(
                 // If CUSTOM, show End Date + Time pickers
                 if (selectedDuration == DurationOption.CUSTOM) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text(text = "Custom End Date & Time", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+                    Text(text = stringResource(R.string.custom_end_date_time_label), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
@@ -653,7 +664,7 @@ fun DriverReplacementDialog(
                     border = CardDefaults.outlinedCardBorder()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text(text = "EFFECTIVE WINDOW", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B))
+                        Text(text = stringResource(R.string.effective_window_label), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B))
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "${TemporaryDurationHelper.formatDateTime(computedWindow.startDate, computedWindow.startTime)} →\n${TemporaryDurationHelper.formatDateTime(computedWindow.endDate, computedWindow.endTime)}",
@@ -705,7 +716,7 @@ fun DriverReplacementDialog(
                     if (isLoading) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
                     } else {
-                        Text("REVIEW & ACTIVATE", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(stringResource(R.string.review_and_activate_action), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
             }
@@ -721,13 +732,17 @@ fun DriverReplacementDialog(
 
         AlertDialog(
             onDismissRequest = { showConfirmationDialog = false },
-            title = { Text("Confirm Replacement Activation", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.confirm_replacement_activation_title), fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     Text(summary, fontSize = 13.sp, lineHeight = 20.sp)
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "During this time window, ${selectedDriver!!.name} will be the only authorized operator to send GPS for ${bus.busNumber}. Your permanent assignment will not be altered.",
+                        text = stringResource(
+                            R.string.replacement_window_explanation,
+                            selectedDriver!!.name,
+                            bus.busNumber.ifBlank { bus.busId }
+                        ),
                         fontSize = 11.sp,
                         color = Color(0xFF64748B)
                     )
@@ -745,12 +760,12 @@ fun DriverReplacementDialog(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
                 ) {
-                    Text("Activate Replacement")
+                    Text(stringResource(R.string.activate_replacement_action))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showConfirmationDialog = false }) {
-                    Text("Back")
+                    Text(stringResource(R.string.back_action))
                 }
             }
         )
