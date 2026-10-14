@@ -292,6 +292,13 @@ class StudentViewModel : ViewModel() {
                 delay(5000L)
             }
         }
+
+        // Notify students immediately when a new active announcement or timing alert is published
+        viewModelScope.launch {
+            announcements.collect { list ->
+                com.college.bustracker.util.AnnouncementNotificationHelper.notifyIfNew(app.applicationContext, list)
+            }
+        }
     }
 
     fun selectBus(bus: Bus, preferredStopId: String? = null) {

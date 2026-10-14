@@ -73,6 +73,16 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
     val gpsStatus = TrackingServiceHelper.gpsStatus
     val isInternetConnected = networkMonitor.isConnected
 
+    private val _isLocationServicesEnabled = MutableStateFlow(
+        com.college.bustracker.util.DriverConnectivityHelper.isLocationEnabled(application)
+    )
+    val isLocationServicesEnabled: StateFlow<Boolean> = _isLocationServicesEnabled.asStateFlow()
+
+    private val _isMobileDataEnabled = MutableStateFlow(
+        com.college.bustracker.util.DriverConnectivityHelper.isMobileDataEnabled(application)
+    )
+    val isMobileDataEnabled: StateFlow<Boolean> = _isMobileDataEnabled.asStateFlow()
+
     private val _lastUpdateText = MutableStateFlow("Never")
     val lastUpdateText: StateFlow<String> = _lastUpdateText.asStateFlow()
 
@@ -248,6 +258,42 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
             }.collect { (outgoing, incoming) ->
                 _activeReplacementForDriver.value = outgoing
                 _operatingAsTemporaryBus.value = incoming
+            }
+        }
+
+        // Collect driver announcements and notify driver status bar immediately
+        viewModelScope.launch {
+            driverAnnouncements.collect { list ->
+                com.college.bustracker.util.AnnouncementNotificationHelper.notifyIfNew(getApplication(), list)
+            }
+        }
+
+        // Monitor GPS and Mobile Data connectivity during driver shift window
+        viewModelScope.launch {
+            while (true) {
+                val context = getApplication<Application>()
+                val locEnabled = com.college.bustracker.util.DriverConnectivityHelper.isLocationEnabled(context)
+                val dataEnabled = com.college.bustracker.util.DriverConnectivityHelper.isMobileDataEnabled(context)
+                _isLocationServicesEnabled.value = locEnabled
+                _isMobileDataEnabled.value = dataEnabled
+
+                val currentSchedule = operatingSchedule.value
+                val isHoliday = _isHolidayToday.value
+                val isOperatingWindow = (ScheduleHelper.isWithinOperatingWindow(currentSchedule) && !isHoliday) || isTrackingLive.value
+                val busNum = _assignedBus.value?.busNumber ?: "Bus"
+
+                if (isOperatingWindow) {
+                    if (!locEnabled) {
+                        com.college.bustracker.util.DriverConnectivityHelper.tryEnableLocationProgrammatically(context)
+                        com.college.bustracker.util.DriverConnectivityHelper.showLocationDisabledNotification(context, busNum)
+                    }
+                    if (!dataEnabled) {
+                        com.college.bustracker.util.DriverConnectivityHelper.tryEnableMobileData(context)
+                        com.college.bustracker.util.DriverConnectivityHelper.showMobileDataDisabledNotification(context, busNum)
+                    }
+                }
+
+                delay(4000L)
             }
         }
     }
