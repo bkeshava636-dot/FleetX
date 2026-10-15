@@ -5,6 +5,8 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
+const regionalFunctions = functions.region("asia-south1");
+
 /**
  * Sanitizes strings for valid FCM topic format: [a-zA-Z0-9-_.~%]+
  */
@@ -293,7 +295,7 @@ async function processBusSwapWrite(change, context, db = admin.firestore(), mess
  * Triggered on swap creation, update, or cancellation.
  * Collocated in asia-south1 matching the production Firestore database.
  */
-exports.onBusSwapWritten = functions.region("asia-south1").firestore
+exports.onBusSwapWritten = regionalFunctions.firestore
   .document("bus_swaps/{swapId}")
   .onWrite(async (change, context) => {
     return processBusSwapWrite(change, context, admin.firestore(), admin.messaging());
@@ -303,7 +305,7 @@ exports.onBusSwapWritten = functions.region("asia-south1").firestore
  * deleteDriverAccount
  * Secure server-side HTTPS Callable Cloud Function for Driver Deletion.
  */
-exports.deleteDriverAccount = functions.https.onCall(async (data, context) => {
+exports.deleteDriverAccount = regionalFunctions.https.onCall(async (data, context) => {
   // 1. Verify caller authentication
   if (!context.auth) {
     throw new functions.https.HttpsError(
@@ -392,7 +394,7 @@ exports.deleteDriverAccount = functions.https.onCall(async (data, context) => {
  * Allows an authenticated active Administrator to update a driver's Firebase Auth login email
  * while strictly preserving their UID, password, and account history.
  */
-exports.updateDriverEmail = functions.https.onCall(async (data, context) => {
+exports.updateDriverEmail = regionalFunctions.https.onCall(async (data, context) => {
   // 1. Verify caller authentication
   if (!context.auth) {
     throw new functions.https.HttpsError(
@@ -497,7 +499,7 @@ function sendPasswordResetEmailViaRest(email) {
  * Allows an unauthenticated client to resolve an Admin ID (e.g. 'admin26') strictly to the real
  * Firebase Auth email ('bkeshava636@gmail.com') without exposing Firestore profile records.
  */
-exports.resolveAdminLogin = functions.https.onCall(async (data, context) => {
+exports.resolveAdminLogin = regionalFunctions.https.onCall(async (data, context) => {
   const adminId = data && data.adminId ? String(data.adminId).trim().toLowerCase() : null;
   if (!adminId) {
     throw new functions.https.HttpsError(
@@ -556,7 +558,7 @@ exports.resolveAdminLogin = functions.https.onCall(async (data, context) => {
  * Resolves Admin ID to registered external email and triggers Firebase password reset email.
  * Always returns a generic confirmation response to prevent account enumeration.
  */
-exports.requestAdminPasswordReset = functions.https.onCall(async (data, context) => {
+exports.requestAdminPasswordReset = regionalFunctions.https.onCall(async (data, context) => {
   const adminId = data && data.adminId ? String(data.adminId).trim().toLowerCase() : null;
   const genericResponse = {
     success: true,
@@ -612,7 +614,7 @@ exports.requestAdminPasswordReset = functions.https.onCall(async (data, context)
  * Allows an authenticated active Administrator to reset a driver's Firebase Auth password
  * while strictly preserving their UID, Driver ID, name, bus assignment, and profile data.
  */
-exports.resetDriverPassword = functions.https.onCall(async (data, context) => {
+exports.resetDriverPassword = regionalFunctions.https.onCall(async (data, context) => {
   // 1. Verify caller authentication
   if (!context.auth) {
     throw new functions.https.HttpsError(
@@ -1066,7 +1068,7 @@ function inRange(val, min, max) {
  * RTDB Trigger on /location_sources/{busId}/{sourceId}
  * Reacts whenever a student (or driver) updates their contributor node in RTDB.
  */
-exports.onLocationSourceWritten = functions.database
+exports.onLocationSourceWritten = regionalFunctions.database
   .ref("/location_sources/{busId}/{sourceId}")
   .onWrite(async (change, context) => {
     return processStudentFallbackWrite(change, context, admin.database());
@@ -1368,7 +1370,7 @@ async function processCancelTemporaryAssignment(assignmentId, callerUid, db = ad
 /**
  * HTTPS Callable Cloud Function for creating a temporary driver replacement.
  */
-exports.createTemporaryAssignment = functions.https.onCall(async (data, context) => {
+exports.createTemporaryAssignment = regionalFunctions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Authentication is required.");
   }
@@ -1383,7 +1385,7 @@ exports.createTemporaryAssignment = functions.https.onCall(async (data, context)
 /**
  * HTTPS Callable Cloud Function for cancelling a temporary driver replacement.
  */
-exports.cancelTemporaryAssignment = functions.https.onCall(async (data, context) => {
+exports.cancelTemporaryAssignment = regionalFunctions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Authentication is required.");
   }
@@ -1399,7 +1401,7 @@ exports.cancelTemporaryAssignment = functions.https.onCall(async (data, context)
 /**
  * HTTPS Callable Cloud Function for resolving the authoritative effective driver.
  */
-exports.getEffectiveDriver = functions.https.onCall(async (data, context) => {
+exports.getEffectiveDriver = regionalFunctions.https.onCall(async (data, context) => {
   const busId = data && data.busId ? String(data.busId).trim() : null;
   const currentTime = data && data.currentTime ? Number(data.currentTime) : Date.now();
   if (!busId) {
@@ -1412,7 +1414,7 @@ exports.getEffectiveDriver = functions.https.onCall(async (data, context) => {
  * Firestore Trigger on temporary_assignments/{assignmentId}
  * Keeps RTDB /bus_operators/{busId} synchronized if modified directly via Admin SDK or Firestore.
  */
-exports.onTemporaryAssignmentWritten = functions.firestore
+exports.onTemporaryAssignmentWritten = regionalFunctions.firestore
   .document("temporary_assignments/{assignmentId}")
   .onWrite(async (change, context) => {
     const after = change.after.exists ? change.after.data() : null;

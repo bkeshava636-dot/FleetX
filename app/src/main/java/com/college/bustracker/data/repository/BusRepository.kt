@@ -33,7 +33,7 @@ interface ServerAuthDeleter {
  * Deletes user by UID server-side using Firebase Admin SDK.
  */
 class FirebaseFunctionsAuthDeleter(
-    private val functionsProvider: () -> FirebaseFunctions = { FirebaseFunctions.getInstance() }
+    private val functionsProvider: () -> FirebaseFunctions = { FirebaseFunctions.getInstance("asia-south1") }
 ) : ServerAuthDeleter {
     override suspend fun deleteUserByUid(driverUid: String): Result<Unit> {
         return try {
@@ -61,7 +61,7 @@ interface ServerAuthUpdater {
  * Updates user email server-side using Firebase Admin SDK.
  */
 class FirebaseFunctionsAuthUpdater(
-    private val functionsProvider: () -> FirebaseFunctions = { FirebaseFunctions.getInstance() }
+    private val functionsProvider: () -> FirebaseFunctions = { FirebaseFunctions.getInstance("asia-south1") }
 ) : ServerAuthUpdater {
     override suspend fun updateDriverEmail(driverUid: String, newEmail: String): Result<Unit> {
         return try {
@@ -89,7 +89,7 @@ interface ServerDriverPasswordResetter {
  * Resets driver password server-side using Firebase Admin SDK.
  */
 class FirebaseFunctionsDriverPasswordResetter(
-    private val functionsProvider: () -> FirebaseFunctions = { FirebaseFunctions.getInstance() }
+    private val functionsProvider: () -> FirebaseFunctions = { FirebaseFunctions.getInstance("asia-south1") }
 ) : ServerDriverPasswordResetter {
     override suspend fun resetDriverPassword(driverUid: String, newPassword: String): Result<Unit> {
         return try {

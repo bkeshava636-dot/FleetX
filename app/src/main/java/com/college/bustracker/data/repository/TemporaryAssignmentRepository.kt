@@ -32,7 +32,7 @@ data class EffectiveOperatorInfo(
 class TemporaryAssignmentRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val database: FirebaseDatabase = FirebaseDatabase.getInstance(),
-    private val functionsProvider: () -> FirebaseFunctions = { FirebaseFunctions.getInstance() }
+    private val functionsProvider: () -> FirebaseFunctions = { FirebaseFunctions.getInstance("asia-south1") }
 ) {
 
     companion object {
