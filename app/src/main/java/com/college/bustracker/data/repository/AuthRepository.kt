@@ -37,7 +37,7 @@ interface ServerAdminAuthResolver {
  * - 'requestAdminPasswordReset' for server-side password reset email dispatch.
  */
 class FirebaseFunctionsAdminAuthResolver(
-    private val functionsProvider: () -> FirebaseFunctions = { FirebaseFunctions.getInstance() }
+    private val functionsProvider: () -> FirebaseFunctions = { FirebaseFunctions.getInstance("asia-south1") }
 ) : ServerAdminAuthResolver {
     override suspend fun resolveAdminEmail(adminId: String): Result<String> {
         return try {
