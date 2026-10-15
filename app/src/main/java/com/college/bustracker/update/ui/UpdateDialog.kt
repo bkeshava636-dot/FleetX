@@ -97,14 +97,15 @@ fun UpdateDialog(
             tonalElevation = 8.dp,
             modifier = Modifier
                 .fillMaxWidth(0.92f)
+                .heightIn(max = 620.dp)
                 .padding(vertical = 16.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(22.dp)
+                    .padding(20.dp)
             ) {
-                // Header Row
+                // Header Row (Pinned at top)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -155,190 +156,196 @@ fun UpdateDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Version Comparison Badge Box
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+                // Scrollable Middle Content Area (Adapts to any screen height and font scale)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
                 ) {
+                    // Version Comparison Badge Box
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "CURRENT VERSION",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF94A3B8),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "v$installedVersionName ($installedVersionCode)",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF475569),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 8.dp)
+                                    .size(28.dp)
+                                    .background(Color(0xFFE2E8F0), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowForward,
+                                    contentDescription = null,
+                                    tint = Color(0xFF64748B),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.End
+                            ) {
+                                Text(
+                                    text = "NEW VERSION",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = CollegePrimary,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "v${releaseInfo.versionName} (${releaseInfo.versionCode})",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = CollegePrimary,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Metadata Details (Size + Checksum status)
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "CURRENT VERSION",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF94A3B8),
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "v$installedVersionName ($installedVersionCode)",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF475569),
-                                maxLines = 1,
-                                softWrap = false
-                            )
+                        val sizeMb = if (releaseInfo.apkAsset.sizeBytes > 0) {
+                            String.format(Locale.US, "%.1f MB", releaseInfo.apkAsset.sizeBytes / (1024.0 * 1024.0))
+                        } else {
+                            "Standard APK"
                         }
+                        Text(
+                            text = "Download size: $sizeMb",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF64748B),
+                            maxLines = 1
+                        )
 
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 8.dp)
-                                .size(28.dp)
-                                .background(Color(0xFFE2E8F0), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowForward,
-                                contentDescription = null,
-                                tint = Color(0xFF64748B),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            horizontalAlignment = Alignment.End
-                        ) {
-                            Text(
-                                text = "NEW VERSION",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = CollegePrimary,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "v${releaseInfo.versionName} (${releaseInfo.versionCode})",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = CollegePrimary,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Metadata Details (Size + Checksum status)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val sizeMb = if (releaseInfo.apkAsset.sizeBytes > 0) {
-                        String.format(Locale.US, "%.1f MB", releaseInfo.apkAsset.sizeBytes / (1024.0 * 1024.0))
-                    } else {
-                        "Standard APK"
-                    }
-                    Text(
-                        text = "Download size: $sizeMb",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF64748B),
-                        maxLines = 1
-                    )
-
-                    if (!releaseInfo.sha256Checksum.isNullOrBlank()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Security,
-                                contentDescription = null,
-                                tint = StatusActiveGreen,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Verified SHA-256",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = StatusActiveGreen,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Release Notes
-                Text(
-                    text = "Release Notes",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1E293B)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-
-                val cleanedNotes = remember(releaseInfo.releaseNotes) {
-                    val raw = releaseInfo.releaseNotes
-                    if (raw.isBlank()) {
-                        "• Performance improvements and bug fixes."
-                    } else {
-                        val lines = raw.lines().map { it.trim() }
-                        val filtered = mutableListOf<String>()
-                        var skipSection = false
-                        for (line in lines) {
-                            if (line.startsWith("### Release Information")) {
-                                skipSection = true
-                                continue
+                        if (!releaseInfo.sha256Checksum.isNullOrBlank()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Security,
+                                    contentDescription = null,
+                                    tint = StatusActiveGreen,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Verified SHA-256",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = StatusActiveGreen,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
-                            if (skipSection) {
-                                if (line.startsWith("### ") || line.startsWith("## ")) {
-                                    skipSection = false
-                                } else {
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Release Notes
+                    Text(
+                        text = "Release Notes",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1E293B)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    val cleanedNotes = remember(releaseInfo.releaseNotes) {
+                        val raw = releaseInfo.releaseNotes
+                        if (raw.isBlank()) {
+                            "• Performance improvements and bug fixes."
+                        } else {
+                            val lines = raw.lines().map { it.trim() }
+                            val filtered = mutableListOf<String>()
+                            var skipSection = false
+                            for (line in lines) {
+                                if (line.startsWith("### Release Information")) {
+                                    skipSection = true
                                     continue
                                 }
+                                if (skipSection) {
+                                    if (line.startsWith("### ") || line.startsWith("## ")) {
+                                        skipSection = false
+                                    } else {
+                                        continue
+                                    }
+                                }
+                                if (line.startsWith("versionCode:") || line.startsWith("SHA-256:")) continue
+                                if (line.startsWith("```")) continue
+                                if (line.isBlank()) continue
+                                
+                                when {
+                                    line.startsWith("## ") -> filtered.add(line.removePrefix("## ").trim())
+                                    line.startsWith("### ") -> filtered.add(line.removePrefix("### ").trim())
+                                    line.startsWith("- ") -> filtered.add("• " + line.removePrefix("- ").trim())
+                                    line.startsWith("* ") -> filtered.add("• " + line.removePrefix("* ").trim())
+                                    else -> filtered.add(line)
+                                }
                             }
-                            if (line.startsWith("versionCode:") || line.startsWith("SHA-256:")) continue
-                            if (line.startsWith("```")) continue
-                            if (line.isBlank()) continue
-                            
-                            when {
-                                line.startsWith("## ") -> filtered.add(line.removePrefix("## ").trim())
-                                line.startsWith("### ") -> filtered.add(line.removePrefix("### ").trim())
-                                line.startsWith("- ") -> filtered.add("• " + line.removePrefix("- ").trim())
-                                line.startsWith("* ") -> filtered.add("• " + line.removePrefix("* ").trim())
-                                else -> filtered.add(line)
-                            }
+                            if (filtered.isEmpty()) "• Performance improvements and bug fixes." else filtered.joinToString("\n")
                         }
-                        if (filtered.isEmpty()) "• Performance improvements and bug fixes." else filtered.joinToString("\n")
                     }
-                }
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 140.dp)
-                        .background(Color(0xFFF1F5F9), RoundedCornerShape(10.dp))
-                        .padding(12.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Text(
-                        text = cleanedNotes,
-                        fontSize = 12.sp,
-                        color = Color(0xFF334155),
-                        lineHeight = 16.sp
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF1F5F9), RoundedCornerShape(10.dp))
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = cleanedNotes,
+                            fontSize = 12.sp,
+                            color = Color(0xFF334155),
+                            lineHeight = 16.sp
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Download & Verification Status / Controls
+                // Download & Verification Status / Controls (Pinned at bottom, always visible)
                 when (val state = downloadState) {
                     is DownloadState.Idle -> {
                         Row(
