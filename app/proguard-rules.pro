@@ -8,6 +8,10 @@
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
+-keep class com.google.android.gms.maps.** { *; }
+-dontwarn com.google.android.gms.maps.**
+-keep class com.google.maps.android.** { *; }
+-dontwarn com.google.maps.android.**
 
 # Keep data models and pass models
 -keep class com.college.bustracker.data.model.** { *; }
