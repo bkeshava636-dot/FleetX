@@ -23,6 +23,25 @@ class AutoTrackingBootReceiver : BroadcastReceiver() {
             Log.i(TAG, "[AUTO_TRACK] $nowIso Device boot/package update ($action); restoring driver and student auto-tracking triggers")
             com.college.bustracker.diagnostics.GpsDiagnosticManager.onBootReceived(context, action ?: "UNKNOWN_BOOT_ACTION")
 
+            // 0. Restore Active Tracking Session if device rebooted while tracking was on
+            val persistentPrefs = context.getSharedPreferences(LocationTrackingService.PREFS_PERSISTENT_TRACKING, Context.MODE_PRIVATE)
+            val wasSessionActive = persistentPrefs.getBoolean(LocationTrackingService.KEY_IS_SESSION_ACTIVE, false)
+            val savedBusId = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_BUS_ID, "") ?: ""
+            if (wasSessionActive && savedBusId.isNotBlank() && AutoTrackingScheduler.isDriverLoggedIn(context)) {
+                val savedRouteId = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_ROUTE_ID, "") ?: ""
+                val savedDriverId = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_DRIVER_ID, "") ?: ""
+                val savedMode = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_MODE, "MANUAL") ?: "MANUAL"
+                Log.i(TAG, "[AUTO_TRACK] Device rebooted during active tracking session. Restoring tracking for $savedBusId")
+                TrackingServiceHelper.startTracking(
+                    context = context,
+                    busId = savedBusId,
+                    routeId = savedRouteId,
+                    driverId = savedDriverId,
+                    mode = savedMode,
+                    forceWindow = true
+                )
+            }
+
             // 1. Restore Driver Auto-Tracking (if enabled and driver is logged in)
             val isDriverAutoEnabled = AutoTrackingScheduler.isAutoTrackingEnabled(context)
             if (isDriverAutoEnabled && AutoTrackingScheduler.isDriverLoggedIn(context)) {

@@ -1,6 +1,7 @@
 package com.college.bustracker.service
 
 import android.annotation.SuppressLint
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
@@ -46,6 +47,13 @@ class LocationTrackingService : Service() {
         private const val TAG = "BusTrackerGPS"
         private const val NOTIFICATION_ID = 1001
         private const val MAX_INITIAL_ACCURACY_METERS = 100.0f
+
+        const val PREFS_PERSISTENT_TRACKING = "tracking_persistent_session_state"
+        const val KEY_IS_SESSION_ACTIVE = "is_session_active"
+        const val KEY_SAVED_BUS_ID = "persisted_bus_id"
+        const val KEY_SAVED_ROUTE_ID = "persisted_route_id"
+        const val KEY_SAVED_DRIVER_ID = "persisted_driver_id"
+        const val KEY_SAVED_MODE = "persisted_mode"
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
@@ -55,6 +63,7 @@ class LocationTrackingService : Service() {
     private var nativeLocationListener: LocationListener? = null
     private var locationHandlerThread: android.os.HandlerThread? = null
 
+    private var isExplicitStop: Boolean = false
     private var activeBusId: String = ""
     private var activeRouteId: String = ""
     private var activeDriverId: String = ""
@@ -165,18 +174,78 @@ class LocationTrackingService : Service() {
         }
     }
 
+    private fun persistTrackingSessionState(isActive: Boolean) {
+        try {
+            val prefs = getSharedPreferences(PREFS_PERSISTENT_TRACKING, Context.MODE_PRIVATE)
+            prefs.edit().apply {
+                putBoolean(KEY_IS_SESSION_ACTIVE, isActive)
+                if (isActive) {
+                    putString(KEY_SAVED_BUS_ID, activeBusId)
+                    putString(KEY_SAVED_ROUTE_ID, activeRouteId)
+                    putString(KEY_SAVED_DRIVER_ID, activeDriverId)
+                    putString(KEY_SAVED_MODE, activeMode)
+                }
+                apply()
+            }
+            Log.i(TAG, "[AUTO-TRACE] Persisted tracking session state: isActive=$isActive, bus=$activeBusId")
+        } catch (e: Exception) {
+            Log.e(TAG, "[AUTO-TRACE] Failed to persist tracking session state: ${e.message}")
+        }
+    }
+
+    private fun scheduleServiceResurrection(delayMs: Long, reason: String) {
+        if (isExplicitStop || activeBusId.isBlank() || !AutoTrackingScheduler.isDriverLoggedIn(this)) {
+            Log.i(TAG, "[AUTO-TRACE] Resurrection skipped: isExplicitStop=$isExplicitStop, bus=$activeBusId")
+            return
+        }
+        Log.w(TAG, "[AUTO-TRACE] Scheduling immediate service resurrection via AlarmManager in ${delayMs}ms. Reason: $reason, bus=$activeBusId")
+        try {
+            val restartIntent = Intent(applicationContext, LocationTrackingService::class.java).apply {
+                action = TrackingServiceHelper.ACTION_START_TRACKING
+                putExtra(TrackingServiceHelper.EXTRA_BUS_ID, activeBusId)
+                putExtra(TrackingServiceHelper.EXTRA_ROUTE_ID, activeRouteId)
+                putExtra(TrackingServiceHelper.EXTRA_DRIVER_ID, activeDriverId)
+                putExtra(TrackingServiceHelper.EXTRA_TRACKING_MODE, activeMode)
+                putExtra("EXTRA_FORCE_WINDOW", forceWindow)
+                putExtra("EXTRA_RESTARTED_FROM_RESURRECTION", true)
+            }
+            val pi = PendingIntent.getForegroundService(
+                applicationContext,
+                1005,
+                restartIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val am = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            val triggerAt = System.currentTimeMillis() + delayMs
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (am?.canScheduleExactAlarms() == true) {
+                    am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                } else {
+                    am?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                }
+            } else {
+                am?.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "[AUTO-TRACE] Failed to schedule service resurrection: ${e.message}")
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
         when (intent?.action) {
             TrackingServiceHelper.ACTION_STOP_TRACKING -> {
+                isExplicitStop = true
                 serviceStopReason = intent.getStringExtra(TrackingServiceHelper.EXTRA_STOP_REASON) ?: "ACTION_STOP_TRACKING_INTENT"
                 serviceStopCaller = intent.getStringExtra(TrackingServiceHelper.EXTRA_STOP_CALLER) ?: "ExternalIntent"
                 Log.i(TAG, "[LOCATION-SERVICE] $nowIso onStartCommand: action=ACTION_STOP_TRACKING, reason=$serviceStopReason, caller=$serviceStopCaller, bus=$activeBusId")
-                stopTrackingSession()
+                persistTrackingSessionState(false)
+                stopTrackingSession(isExplicitUserStop = true)
                 stopSelf()
                 return START_NOT_STICKY
             }
             TrackingServiceHelper.ACTION_START_TRACKING, null -> {
+                isExplicitStop = false
                 serviceStopReason = "SYSTEM_OR_EXTERNAL_TERMINATION"
                 serviceStopCaller = "ANDROID_FRAMEWORK"
                 activeBusId = intent?.getStringExtra(TrackingServiceHelper.EXTRA_BUS_ID) ?: ""
@@ -186,8 +255,24 @@ class LocationTrackingService : Service() {
                 forceWindow = intent?.getBooleanExtra("EXTRA_FORCE_WINDOW", false) ?: false
                 hasLoggedFirstLocation = false
 
+                // If activeBusId is missing (e.g. system START_STICKY recovery or alarm trigger), restore from persistent prefs
+                if (activeBusId.isBlank()) {
+                    val prefs = getSharedPreferences(PREFS_PERSISTENT_TRACKING, Context.MODE_PRIVATE)
+                    if (prefs.getBoolean(KEY_IS_SESSION_ACTIVE, false)) {
+                        activeBusId = prefs.getString(KEY_SAVED_BUS_ID, "") ?: ""
+                        activeRouteId = prefs.getString(KEY_SAVED_ROUTE_ID, "") ?: ""
+                        activeDriverId = prefs.getString(KEY_SAVED_DRIVER_ID, "") ?: ""
+                        activeMode = prefs.getString(KEY_SAVED_MODE, "MANUAL") ?: "MANUAL"
+                        Log.i(TAG, "[AUTO-TRACE] Restored active tracking session from persistent state: bus=$activeBusId")
+                    }
+                }
+
                 // Identity fallback recovery for background execution
                 resolveDriverIdentityFallbacks()
+
+                if (activeBusId.isNotBlank()) {
+                    persistTrackingSessionState(true)
+                }
 
                 Log.i(TAG, "[AUTO-TRACE] Service onStartCommand: action=${intent?.action}, bus=$activeBusId, driver=$activeDriverId, mode=$activeMode")
 
@@ -198,13 +283,14 @@ class LocationTrackingService : Service() {
                     Log.w(TAG, "[LOCATION-SERVICE] TRACKING_BLOCKED: Driver is logged out. Stopping tracking service immediately.")
                     serviceStopReason = "DRIVER_LOGGED_OUT"
                     serviceStopCaller = "AuthVerification"
+                    persistTrackingSessionState(false)
                     TrackingServiceHelper.updateServiceState(
                         isTracking = false,
                         busId = null,
                         gps = "Driver Logged Out",
                         timestamp = System.currentTimeMillis()
                     )
-                    stopTrackingSession()
+                    stopTrackingSession(isExplicitUserStop = true)
                     stopSelf()
                     return START_NOT_STICKY
                 }
@@ -214,13 +300,14 @@ class LocationTrackingService : Service() {
                     Log.w(TAG, "[LOCATION-SERVICE] TRACKING_BLOCKED: Today is a holiday ($holidayName). Tracking service will not continue.")
                     serviceStopReason = "COLLEGE_HOLIDAY"
                     serviceStopCaller = "CalendarCheck"
+                    persistTrackingSessionState(false)
                     TrackingServiceHelper.updateServiceState(
                         isTracking = false,
                         busId = null,
                         gps = "Holiday ($holidayName)",
                         timestamp = System.currentTimeMillis()
                     )
-                    stopTrackingSession()
+                    stopTrackingSession(isExplicitUserStop = true)
                     stopSelf()
                     return START_NOT_STICKY
                 }
@@ -666,7 +753,9 @@ class LocationTrackingService : Service() {
         )
     }
 
-    private fun stopTrackingSession() {
+    private fun stopTrackingSession(isExplicitUserStop: Boolean = true) {
+        val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+        Log.i(TAG, "[AUTO-TRACE] $nowIso stopTrackingSession started: bus=$activeBusId, explicitUserStop=$isExplicitUserStop")
         releaseWakeLock()
         hasLoggedFirstLocation = false
         startupPollingJob?.cancel()
@@ -694,21 +783,25 @@ class LocationTrackingService : Service() {
             nativeLocationListener?.let { locationManager?.removeUpdates(it) }
         } catch (ignored: Exception) {}
 
-        if (activeBusId.isNotBlank()) {
+        // Only mark the bus OFFLINE in Firebase if the user deliberately pressed Stop Tracking!
+        // If swiped or killed by OS memory pressure, leave the active state intact while service resurrects.
+        if (isExplicitUserStop && activeBusId.isNotBlank()) {
             CollegeBusApp.instance.trackingRepository.removeStudentLocation(activeBusId, activeDriverId)
             CollegeBusApp.instance.trackingRepository.stopTracking(activeBusId, activeDriverId)
         }
 
-        com.college.bustracker.diagnostics.GpsDiagnosticManager.onServiceStopped(this, "Tracking session stopped")
+        if (isExplicitUserStop) {
+            com.college.bustracker.diagnostics.GpsDiagnosticManager.onServiceStopped(this, "Tracking session stopped")
 
-        TrackingServiceHelper.updateServiceState(
-            isTracking = false,
-            busId = null,
-            gps = "Stopped",
-            timestamp = System.currentTimeMillis()
-        )
+            TrackingServiceHelper.updateServiceState(
+                isTracking = false,
+                busId = null,
+                gps = "Stopped",
+                timestamp = System.currentTimeMillis()
+            )
 
-        stopForeground(STOP_FOREGROUND_REMOVE)
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        }
     }
 
     private fun buildTrackingNotification(statusText: String): Notification {
@@ -734,16 +827,21 @@ class LocationTrackingService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, CollegeBusApp.TRACKING_CHANNEL_ID)
-            .setContentTitle("Live Bus Tracking Active")
+        val builder = NotificationCompat.Builder(this, CollegeBusApp.TRACKING_CHANNEL_ID)
+            .setContentTitle("FleetX Live Bus Tracking")
             .setContentText(statusText)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setOngoing(true)
             .setContentIntent(openAppPendingIntent)
             .addAction(android.R.drawable.ic_media_pause, "Stop Tracking", stopPendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        }
+
+        return builder.build()
     }
 
     private fun updateNotification(statusText: String) {
@@ -760,10 +858,12 @@ class LocationTrackingService : Service() {
             busId = activeBusId,
             isTracking = activeBusId.isNotBlank()
         )
+        // Immediately resurrect tracking so swiping the app away does NOT stop GPS broadcasting!
+        scheduleServiceResurrection(delayMs = 500L, reason = "TASK_REMOVED_SWIPED")
     }
 
     override fun onDestroy() {
-        Log.w(TAG, "[AUTO-TRACE] LocationTrackingService onDestroy received. bus=$activeBusId, reason=$serviceStopReason, caller=$serviceStopCaller")
+        Log.w(TAG, "[AUTO-TRACE] LocationTrackingService onDestroy received. bus=$activeBusId, reason=$serviceStopReason, caller=$serviceStopCaller, isExplicitStop=$isExplicitStop")
         val activeSec = if (serviceStartTimeMs > 0) (System.currentTimeMillis() - serviceStartTimeMs) / 1000 else 0L
         com.college.bustracker.diagnostics.GpsDiagnosticManager.onServiceDestroyed(
             context = this,
@@ -775,7 +875,11 @@ class LocationTrackingService : Service() {
             callbacksReceived = totalCallbacksReceived,
             locationsDispatched = totalLocationsDispatched
         )
-        stopTrackingSession()
+        // If destroyed by Android system (not user stop), schedule immediate resurrection
+        if (!isExplicitStop && activeBusId.isNotBlank()) {
+            scheduleServiceResurrection(delayMs = 1000L, reason = "SERVICE_KILLED_BY_OS")
+        }
+        stopTrackingSession(isExplicitUserStop = isExplicitStop)
         try {
             locationHandlerThread?.quitSafely()
         } catch (ignored: Exception) {}
