@@ -35,14 +35,15 @@ jobs:
         run: chmod +x gradlew
 
       - name: Setup google-services.json
+        env:
+          GOOGLE_SERVICES_JSON_CONTENT: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
-            echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > app/google-services.json
-            echo "SUCCESS: Injected google-services.json from GitHub Secrets"
-          else
+          if [ -z "$GOOGLE_SERVICES_JSON_CONTENT" ]; then
             echo "ERROR: GOOGLE_SERVICES_JSON GitHub Secret is missing!"
             exit 1
           fi
+          python -c "import os; open('app/google-services.json', 'w', encoding='utf-8').write(os.environ['GOOGLE_SERVICES_JSON_CONTENT'])"
+          echo "SUCCESS: Injected google-services.json from GitHub Secrets"
 
       - name: Verify FleetX Production Keystore Presence
         run: |
