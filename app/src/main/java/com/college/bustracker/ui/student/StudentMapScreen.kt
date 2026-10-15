@@ -6,8 +6,6 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
 import com.college.bustracker.util.AutomaticRideState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Schedule
@@ -52,6 +51,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,7 +62,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.college.bustracker.R
 import com.college.bustracker.data.model.TrackingDisplayState
@@ -71,11 +70,20 @@ import com.college.bustracker.ui.theme.CollegePrimary
 import com.college.bustracker.ui.theme.StatusActiveGreen
 import com.college.bustracker.ui.theme.StatusDangerRed
 import com.college.bustracker.ui.theme.StatusWarningOrange
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapType
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.Polyline
+import com.google.maps.android.compose.rememberCameraPositionState
+import com.google.maps.android.compose.rememberMarkerState
+import kotlinx.coroutines.launch
 
 @Composable
 fun StudentMapScreen(
@@ -83,6 +91,7 @@ fun StudentMapScreen(
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val bus by viewModel.selectedBus.collectAsState()
     val route by viewModel.currentRoute.collectAsState()
     val selectedStop by viewModel.selectedStop.collectAsState()
@@ -96,6 +105,7 @@ fun StudentMapScreen(
     val todayHolidayName by viewModel.todayHolidayName.collectAsState()
 
     var showUpcomingStops by remember { mutableStateOf(false) }
+    var mapType by remember { mutableStateOf(MapType.NORMAL) }
     val passedStopIds = remember(upcomingStops) {
         upcomingStops.filter { it.isPassed }.map { it.stop.stopId }.toSet()
     }
@@ -103,32 +113,26 @@ fun StudentMapScreen(
     var hasCenteredCameraOnBus by remember { mutableStateOf(false) }
     var hasCenteredFallback by remember { mutableStateOf(false) }
 
-    val mapView = remember {
-        MapView(context).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
-            setMultiTouchControls(true)
-            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-            
-            // Check initial bus coordinates at creation time
-            val initialLoc = viewModel.liveLocation.value
-            val initLat = initialLoc?.latitude ?: 0.0
-            val initLng = initialLoc?.longitude ?: 0.0
-            if (initLat != 0.0 && initLng != 0.0) {
-                controller.setZoom(16.0)
-                controller.setCenter(GeoPoint(initLat, initLng))
-                hasCenteredCameraOnBus = true
+    val initialPos = remember {
+        val initialLoc = viewModel.liveLocation.value
+        val initLat = initialLoc?.latitude ?: 0.0
+        val initLng = initialLoc?.longitude ?: 0.0
+        if (initLat != 0.0 && initLng != 0.0) {
+            hasCenteredCameraOnBus = true
+            LatLng(initLat, initLng)
+        } else {
+            val stops = viewModel.currentRoute.value?.stops ?: emptyList()
+            if (stops.isNotEmpty()) {
+                hasCenteredFallback = true
+                LatLng(stops.first().latitude, stops.first().longitude)
             } else {
-                val stops = viewModel.currentRoute.value?.stops ?: emptyList()
-                if (stops.isNotEmpty()) {
-                    controller.setZoom(14.0)
-                    controller.setCenter(GeoPoint(stops.first().latitude, stops.first().longitude))
-                    hasCenteredFallback = true
-                } else {
-                    controller.setZoom(14.0)
-                    controller.setCenter(GeoPoint(15.3435, 76.1554))
-                }
+                LatLng(15.3435, 76.1554)
             }
         }
+    }
+
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(initialPos, 15.5f)
     }
 
     // Reaction to live bus coordinates arrival (if not already centered on creation)
@@ -136,8 +140,7 @@ fun StudentMapScreen(
         val lat = liveLoc?.latitude ?: 0.0
         val lng = liveLoc?.longitude ?: 0.0
         if (!hasCenteredCameraOnBus && lat != 0.0 && lng != 0.0) {
-            mapView.controller.setZoom(16.0)
-            mapView.controller.animateTo(GeoPoint(lat, lng))
+            cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lng), 16.0f))
             hasCenteredCameraOnBus = true
         }
     }
@@ -150,132 +153,99 @@ fun StudentMapScreen(
             if (lat == 0.0 && lng == 0.0) {
                 val stops = route?.stops ?: emptyList()
                 if (stops.isNotEmpty()) {
-                    mapView.controller.setZoom(14.0)
-                    mapView.controller.animateTo(GeoPoint(stops.first().latitude, stops.first().longitude))
+                    cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(stops.first().latitude, stops.first().longitude), 14.5f))
                     hasCenteredFallback = true
                 }
             }
         }
     }
 
-    DisposableEffect(Unit) {
-        mapView.onResume()
-        onDispose {
-            mapView.onPause()
-            mapView.onDetach()
-        }
-    }
-
-    val busMarker = remember {
-        Marker(mapView).apply {
-            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-        }
-    }
-    val stopMarkers = remember { mutableListOf<Marker>() }
-
-    var currentRenderedRouteId by remember { mutableStateOf<String?>(null) }
-    var lastRenderedLat by remember { mutableStateOf(0.0) }
-    var lastRenderedLng by remember { mutableStateOf(0.0) }
-    var lastRenderedBearing by remember { mutableStateOf(0.0f) }
-    var lastRenderedState by remember { mutableStateOf<TrackingDisplayState?>(null) }
-
     Box(modifier = Modifier.fillMaxSize()) {
-        // Map View Interop with persistent overlay reuse (No polyline - clean road-accurate map)
-        AndroidView(
-            factory = { mapView },
+        // Google Map Engine
+        GoogleMap(
             modifier = Modifier.fillMaxSize(),
-            update = { view ->
-                val stops = route?.stops ?: emptyList()
-                val routeId = route?.routeId
-                val nextStopId = nextStopEta?.stop?.stopId
-                val targetSelectedStopId = selectedStop?.stopId
-                var needsInvalidate = false
+            cameraPositionState = cameraPositionState,
+            properties = MapProperties(mapType = mapType),
+            uiSettings = MapUiSettings(
+                zoomControlsEnabled = false,
+                compassEnabled = true,
+                mapToolbarEnabled = false
+            )
+        ) {
+            val stops = route?.stops ?: emptyList()
+            val nextStopId = nextStopEta?.stop?.stopId
+            val targetSelectedStopId = selectedStop?.stopId
 
-                // 1. Rebuild stop markers when route changes
-                if (currentRenderedRouteId != routeId || stopMarkers.size != stops.size) {
-                    stopMarkers.forEach { view.overlays.remove(it) }
-                    stopMarkers.clear()
-
-                    stops.forEach { stop ->
-                        val stopMarker = Marker(view).apply {
-                            position = GeoPoint(stop.latitude, stop.longitude)
-                            title = "${stop.order}. ${stop.name}"
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                            setOnMarkerClickListener { _, _ ->
-                                viewModel.selectStop(stop)
-                                showInfoWindow()
-                                true
-                            }
-                        }
-                        stopMarkers.add(stopMarker)
-                        view.overlays.add(stopMarker)
-                    }
-                    currentRenderedRouteId = routeId
-                    needsInvalidate = true
-                }
-
-                // 2. Update Stop Marker Icons based on live ETA progression & selection
-                stops.forEachIndexed { index, stop ->
-                    if (index < stopMarkers.size) {
-                        val marker = stopMarkers[index]
-                        val state = when {
-                            stop.stopId == nextStopId -> StopMarkerIconCache.StopState.NEXT_ETA
-                            stop.stopId == targetSelectedStopId -> StopMarkerIconCache.StopState.SELECTED
-                            passedStopIds.contains(stop.stopId) -> StopMarkerIconCache.StopState.PASSED
-                            else -> StopMarkerIconCache.StopState.NORMAL
-                        }
-                        marker.icon = StopMarkerIconCache.getIcon(context, stop.order, state)
-                    }
-                }
-
-                // 3. Reuse and update existing Live Bus Marker (avoids GC churn every second)
-                val lat = liveLoc?.latitude ?: 0.0
-                val lng = liveLoc?.longitude ?: 0.0
-                val speedMps = liveLoc?.speed ?: 0.0f
-                val bearing = liveLoc?.bearing ?: 0.0f
-                val canShowMarker = lat != 0.0 && lng != 0.0
-
-                if (canShowMarker) {
-                    val busPoint = GeoPoint(lat, lng)
-                    val statusText = when (trackingState) {
-                        TrackingDisplayState.ACTIVE -> context.getString(R.string.tracking_live)
-                        TrackingDisplayState.WAITING_FOR_GPS -> context.getString(R.string.awaiting_gps_signal)
-                        TrackingDisplayState.STALE -> context.getString(R.string.gps_signal_stale)
-                        TrackingDisplayState.INACTIVE -> context.getString(R.string.bus_inactive)
-                    }
-                    val busLabel = bus?.busNumber ?: "BUS-25"
-                    busMarker.position = busPoint
-                    busMarker.title = "$busLabel • $statusText"
-                    busMarker.snippet = if (trackingState == TrackingDisplayState.ACTIVE) {
-                        val speedKmH = (speedMps * 3.6).toInt()
-                        context.getString(R.string.speed_format, speedKmH, lastUpdateText)
-                    } else {
-                        lastUpdateText
-                    }
-                    // Rotate beacon along bearing if moving; keep upright if stationary
-                    busMarker.rotation = if (speedMps > 1.0f) bearing else 0.0f
-                    busMarker.icon = BusMarkerIconCache.getIcon(context, trackingState, speedMps > 1.0f)
-
-                    if (!view.overlays.contains(busMarker)) {
-                        view.overlays.add(busMarker)
-                        needsInvalidate = true
-                    } else if (lat != lastRenderedLat || lng != lastRenderedLng || bearing != lastRenderedBearing || trackingState != lastRenderedState) {
-                        needsInvalidate = true
-                    }
-                    lastRenderedLat = lat
-                    lastRenderedLng = lng
-                    lastRenderedBearing = bearing
-                    lastRenderedState = trackingState
-                } else if (view.overlays.contains(busMarker)) {
-                    view.overlays.remove(busMarker)
-                    needsInvalidate = true
-                }
-
-                if (needsInvalidate) {
-                    view.invalidate()
-                }
+            // Route line connecting stops
+            if (stops.isNotEmpty()) {
+                Polyline(
+                    points = stops.map { LatLng(it.latitude, it.longitude) },
+                    color = Color(0xFF1A56DB),
+                    width = 8f
+                )
             }
-        )
+
+            // Route Stop Markers
+            stops.forEach { stop ->
+                val state = when {
+                    stop.stopId == nextStopId -> StopMarkerIconCache.StopState.NEXT_ETA
+                    stop.stopId == targetSelectedStopId -> StopMarkerIconCache.StopState.SELECTED
+                    passedStopIds.contains(stop.stopId) -> StopMarkerIconCache.StopState.PASSED
+                    else -> StopMarkerIconCache.StopState.NORMAL
+                }
+                Marker(
+                    state = rememberMarkerState(
+                        key = "stop_${stop.stopId}",
+                        position = LatLng(stop.latitude, stop.longitude)
+                    ),
+                    title = "${stop.order}. ${stop.name}",
+                    icon = StopMarkerIconCache.getIcon(context, stop.order, state),
+                    anchor = androidx.compose.ui.geometry.Offset(0.5f, 0.5f),
+                    onClick = {
+                        viewModel.selectStop(stop)
+                        false
+                    }
+                )
+            }
+
+            // Live Bus Marker
+            val lat = liveLoc?.latitude ?: 0.0
+            val lng = liveLoc?.longitude ?: 0.0
+            val speedMps = liveLoc?.speed ?: 0.0f
+            val bearing = liveLoc?.bearing ?: 0.0f
+            val canShowMarker = lat != 0.0 && lng != 0.0
+
+            if (canShowMarker) {
+                val statusText = when (trackingState) {
+                    TrackingDisplayState.ACTIVE -> context.getString(R.string.tracking_live)
+                    TrackingDisplayState.WAITING_FOR_GPS -> context.getString(R.string.awaiting_gps_signal)
+                    TrackingDisplayState.STALE -> context.getString(R.string.gps_signal_stale)
+                    TrackingDisplayState.INACTIVE -> context.getString(R.string.bus_inactive)
+                }
+                val busLabel = bus?.busNumber ?: "BUS-25"
+                val snippetText = if (trackingState == TrackingDisplayState.ACTIVE) {
+                    val speedKmH = (speedMps * 3.6).toInt()
+                    context.getString(R.string.speed_format, speedKmH, lastUpdateText)
+                } else {
+                    lastUpdateText
+                }
+
+                Marker(
+                    state = rememberMarkerState(
+                        key = "live_bus",
+                        position = LatLng(lat, lng)
+                    ).apply {
+                        position = LatLng(lat, lng)
+                    },
+                    title = "$busLabel • $statusText",
+                    snippet = snippetText,
+                    rotation = if (speedMps > 1.0f) bearing else 0.0f,
+                    anchor = androidx.compose.ui.geometry.Offset(0.5f, 0.5f),
+                    flat = true,
+                    icon = BusMarkerIconCache.getIcon(context, trackingState, speedMps > 1.0f)
+                )
+            }
+        }
 
         // Compact Floating Top Bar
         Card(
@@ -350,21 +320,43 @@ fun StudentMapScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            // Recenter Floating Action Button aligned to the end above the card
+            // Floating Action Buttons above the card (Satellite Toggle & Recenter)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Satellite / Normal Toggle
+                FloatingActionButton(
+                    onClick = {
+                        mapType = if (mapType == MapType.NORMAL) MapType.HYBRID else MapType.NORMAL
+                    },
+                    modifier = Modifier.size(44.dp),
+                    containerColor = Color.White,
+                    contentColor = if (mapType == MapType.HYBRID) CollegePrimary else Color.DarkGray,
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Layers,
+                        contentDescription = "Toggle Satellite",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                // Recenter on Bus
                 FloatingActionButton(
                     onClick = {
                         val lat = liveLoc?.latitude ?: 0.0
                         val lng = liveLoc?.longitude ?: 0.0
-                        if (lat != 0.0 && lng != 0.0) {
-                            mapView.controller.animateTo(GeoPoint(lat, lng))
-                            mapView.controller.setZoom(16.0)
-                        } else {
-                            route?.stops?.firstOrNull()?.let {
-                                mapView.controller.animateTo(GeoPoint(it.latitude, it.longitude))
+                        coroutineScope.launch {
+                            if (lat != 0.0 && lng != 0.0) {
+                                cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lng), 16.0f))
+                            } else {
+                                route?.stops?.firstOrNull()?.let {
+                                    cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(it.latitude, it.longitude), 15.0f))
+                                }
                             }
                         }
                     },
@@ -373,7 +365,11 @@ fun StudentMapScreen(
                     contentColor = Color.White,
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Icon(Icons.Default.MyLocation, contentDescription = stringResource(R.string.map_center_bus), modifier = Modifier.size(22.dp))
+                    Icon(
+                        Icons.Default.MyLocation,
+                        contentDescription = stringResource(R.string.map_center_bus),
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
 
@@ -658,9 +654,9 @@ fun StudentMapScreen(
 }
 
 private object BusMarkerIconCache {
-    private val cache = mutableMapOf<String, Drawable>()
+    private val cache = mutableMapOf<String, BitmapDescriptor>()
 
-    fun getIcon(context: android.content.Context, state: TrackingDisplayState, isMoving: Boolean): Drawable {
+    fun getIcon(context: android.content.Context, state: TrackingDisplayState, isMoving: Boolean): BitmapDescriptor {
         val key = "${state}_$isMoving"
         return cache.getOrPut(key) {
             val density = context.resources.displayMetrics.density
@@ -771,13 +767,13 @@ private object BusMarkerIconCache {
                 grillePaint
             )
 
-            BitmapDrawable(context.resources, bitmap)
+            BitmapDescriptorFactory.fromBitmap(bitmap)
         }
     }
 }
 
 private object StopMarkerIconCache {
-    private val cache = mutableMapOf<String, Drawable>()
+    private val cache = mutableMapOf<String, BitmapDescriptor>()
 
     enum class StopState {
         NORMAL,
@@ -786,7 +782,7 @@ private object StopMarkerIconCache {
         SELECTED
     }
 
-    fun getIcon(context: android.content.Context, order: Int, state: StopState): Drawable {
+    fun getIcon(context: android.content.Context, order: Int, state: StopState): BitmapDescriptor {
         val key = "${order}_$state"
         return cache.getOrPut(key) {
             val density = context.resources.displayMetrics.density
@@ -863,7 +859,7 @@ private object StopMarkerIconCache {
             val yOffset = (fontMetrics.descent + fontMetrics.ascent) / 2f
             canvas.drawText(text, cx, cy - yOffset, textPaint)
 
-            BitmapDrawable(context.resources, bitmap)
+            BitmapDescriptorFactory.fromBitmap(bitmap)
         }
     }
 }

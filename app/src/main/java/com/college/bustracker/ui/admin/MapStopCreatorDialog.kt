@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -93,14 +94,20 @@ import com.college.bustracker.data.model.Route
 import com.college.bustracker.ui.theme.CollegePrimary
 import com.college.bustracker.ui.theme.StatusActiveGreen
 import com.college.bustracker.ui.theme.StatusDangerRed
-import org.osmdroid.events.MapEventsReceiver
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.MapEventsOverlay
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.DragState
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapType
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.Polyline
+import com.google.maps.android.compose.rememberCameraPositionState
+import com.google.maps.android.compose.rememberMarkerState
 
 @Composable
 fun MapStopCreatorDialog(
@@ -115,7 +122,7 @@ fun MapStopCreatorDialog(
         }
     }
 
-    var pendingNewPoint by remember { mutableStateOf<GeoPoint?>(null) }
+    var pendingNewPoint by remember { mutableStateOf<LatLng?>(null) }
     var stopToEdit by remember { mutableStateOf<BusStop?>(null) }
     var stopToDelete by remember { mutableStateOf<BusStop?>(null) }
     var showPreviewList by remember { mutableStateOf(false) }
@@ -125,7 +132,7 @@ fun MapStopCreatorDialog(
     val coroutineScope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    // OSM Nominatim Location Search States
+    // Location Search States (uses Google Geocoder with OSM fallback)
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<NominatimPlace>>(emptyList()) }
@@ -138,7 +145,7 @@ fun MapStopCreatorDialog(
             kotlinx.coroutines.delay(1200L)
             isSearching = true
             searchError = null
-            when (val res = NominatimGeocoder.search(trimmed)) {
+            when (val res = NominatimGeocoder.search(trimmed, context)) {
                 is GeocodingResultState.Success -> {
                     searchResults = res.places
                     searchError = null
@@ -167,39 +174,16 @@ fun MapStopCreatorDialog(
         }
     }
 
-    var hasCenteredCamera by remember { mutableStateOf(false) }
+    var mapType by remember { mutableStateOf(MapType.NORMAL) }
 
-    val mapView = remember {
-        MapView(context).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
-            setMultiTouchControls(true)
-            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-        }
+    val initialPos = remember {
+        val avgLat = workingStops.map { it.latitude }.average().takeIf { !it.isNaN() && it != 0.0 } ?: 15.3435
+        val avgLng = workingStops.map { it.longitude }.average().takeIf { !it.isNaN() && it != 0.0 } ?: 76.1554
+        LatLng(avgLat, avgLng)
     }
 
-    DisposableEffect(Unit) {
-        mapView.onResume()
-        onDispose {
-            mapView.onPause()
-            mapView.onDetach()
-        }
-    }
-
-    // Initial camera centering
-    LaunchedEffect(Unit) {
-        if (!hasCenteredCamera) {
-            if (workingStops.isNotEmpty()) {
-                val avgLat = workingStops.map { it.latitude }.average()
-                val avgLng = workingStops.map { it.longitude }.average()
-                mapView.controller.setZoom(14.5)
-                mapView.controller.setCenter(GeoPoint(avgLat, avgLng))
-            } else {
-                // College campus fallback
-                mapView.controller.setZoom(14.0)
-                mapView.controller.setCenter(GeoPoint(15.3435, 76.1554))
-            }
-            hasCenteredCamera = true
-        }
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(initialPos, 14.5f)
     }
 
     Dialog(
@@ -218,71 +202,63 @@ fun MapStopCreatorDialog(
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
 
-                // 1. Map Engine (OsmDroid)
-                AndroidView(
-                    factory = { mapView },
+                // 1. Google Map Engine
+                GoogleMap(
                     modifier = Modifier.fillMaxSize(),
-                    update = { view ->
-                        view.overlays.clear()
+                    cameraPositionState = cameraPositionState,
+                    properties = MapProperties(mapType = mapType),
+                    uiSettings = MapUiSettings(
+                        zoomControlsEnabled = false,
+                        compassEnabled = true,
+                        mapToolbarEnabled = false
+                    ),
+                    onMapClick = { latLng ->
+                        suggestedStopName = ""
+                        pendingNewPoint = latLng
+                    }
+                ) {
+                    // Route line connecting stops
+                    if (workingStops.isNotEmpty()) {
+                        Polyline(
+                            points = workingStops.map { LatLng(it.latitude, it.longitude) },
+                            color = Color(0xFF1A56DB),
+                            width = 10f
+                        )
+                    }
 
-                        // Map Events: Tap anywhere on map to add stop
-                        val eventsOverlay = MapEventsOverlay(object : MapEventsReceiver {
-                            override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
-                                suggestedStopName = ""
-                                pendingNewPoint = p
-                                return true
-                            }
+                    // Numbered Pins for each stop
+                    workingStops.forEachIndexed { index, stop ->
+                        val markerState = rememberMarkerState(
+                            key = "${stop.stopId}_${stop.order}",
+                            position = LatLng(stop.latitude, stop.longitude)
+                        )
 
-                            override fun longPressHelper(p: GeoPoint): Boolean = false
-                        })
-                        view.overlays.add(eventsOverlay)
-
-                        // Route line connecting stops
-                        if (workingStops.isNotEmpty()) {
-                            val polyline = Polyline(view).apply {
-                                outlinePaint.color = android.graphics.Color.parseColor("#1A56DB")
-                                outlinePaint.strokeWidth = 9.0f
-                            }
-                            polyline.setPoints(workingStops.map { GeoPoint(it.latitude, it.longitude) })
-                            view.overlays.add(polyline)
-                        }
-
-                        // Numbered Pins for each stop
-                        workingStops.forEachIndexed { index, stop ->
-                            val marker = Marker(view).apply {
-                                position = GeoPoint(stop.latitude, stop.longitude)
-                                title = "${stop.order}. ${stop.name}"
-                                snippet = "Lat: ${"%.4f".format(stop.latitude)}, Lng: ${"%.4f".format(stop.longitude)}"
-                                icon = NumberedPinCache.getPin(context, stop.order)
-                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                                isDraggable = true
-
-                                setOnMarkerDragListener(object : Marker.OnMarkerDragListener {
-                                    override fun onMarkerDrag(m: Marker?) {}
-                                    override fun onMarkerDragStart(m: Marker?) {}
-                                    override fun onMarkerDragEnd(m: Marker?) {
-                                        val pos = m?.position ?: return
-                                        val idx = workingStops.indexOfFirst { it.stopId == stop.stopId }
-                                        if (idx >= 0) {
-                                            workingStops[idx] = workingStops[idx].copy(
-                                                latitude = pos.latitude,
-                                                longitude = pos.longitude
-                                            )
-                                        }
-                                    }
-                                })
-
-                                setOnMarkerClickListener { _, _ ->
-                                    stopToEdit = stop
-                                    true
+                        LaunchedEffect(markerState.dragState) {
+                            if (markerState.dragState == DragState.END) {
+                                val pos = markerState.position
+                                val idx = workingStops.indexOfFirst { it.stopId == stop.stopId }
+                                if (idx >= 0) {
+                                    workingStops[idx] = workingStops[idx].copy(
+                                        latitude = pos.latitude,
+                                        longitude = pos.longitude
+                                    )
                                 }
                             }
-                            view.overlays.add(marker)
                         }
 
-                        view.invalidate()
+                        Marker(
+                            state = markerState,
+                            title = "${stop.order}. ${stop.name}",
+                            snippet = "Lat: ${"%.4f".format(stop.latitude)}, Lng: ${"%.4f".format(stop.longitude)}",
+                            icon = NumberedPinCache.getPin(context, stop.order),
+                            draggable = true,
+                            onClick = {
+                                stopToEdit = stop
+                                true
+                            }
+                        )
                     }
-                )
+                }
 
                 // 2. Top Controls (Navigation, Search Bar, Results Dropdown, Tips)
                 Column(
@@ -414,7 +390,7 @@ fun MapStopCreatorDialog(
                                         isSearching = true
                                         searchError = null
                                         coroutineScope.launch {
-                                            when (val res = NominatimGeocoder.search(trimmed)) {
+                                            when (val res = NominatimGeocoder.search(trimmed, context)) {
                                                 is GeocodingResultState.Success -> {
                                                     searchResults = res.places
                                                     searchError = null
@@ -515,9 +491,10 @@ fun MapStopCreatorDialog(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable {
-                                                    val pt = GeoPoint(place.latitude, place.longitude)
-                                                    mapView.controller.animateTo(pt)
-                                                    mapView.controller.setZoom(16.5)
+                                                    val pt = LatLng(place.latitude, place.longitude)
+                                                    coroutineScope.launch {
+                                                        cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(pt, 16.5f))
+                                                    }
                                                     suggestedStopName = place.displayName.split(",").firstOrNull()?.trim() ?: place.displayName
                                                     pendingNewPoint = pt
                                                     searchResults = emptyList()
@@ -610,6 +587,85 @@ fun MapStopCreatorDialog(
                             color = Color.White,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
+                    }
+                }
+
+                // 3. Floating Map Controls (Satellite Layer & Zoom Controls)
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Map Type Toggle (Normal / Hybrid Satellite)
+                    Card(
+                        shape = CircleShape,
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        IconButton(
+                            onClick = {
+                                mapType = if (mapType == MapType.NORMAL) MapType.HYBRID else MapType.NORMAL
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Layers,
+                                contentDescription = "Toggle Satellite",
+                                tint = if (mapType == MapType.HYBRID) CollegePrimary else Color.DarkGray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    // Zoom In
+                    Card(
+                        shape = CircleShape,
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        IconButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    cameraPositionState.animate(CameraUpdateFactory.zoomIn())
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Zoom In",
+                                tint = Color.DarkGray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    // Zoom Out
+                    Card(
+                        shape = CircleShape,
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        IconButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    cameraPositionState.animate(CameraUpdateFactory.zoomOut())
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Remove,
+                                contentDescription = "Zoom Out",
+                                tint = Color.DarkGray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
 
@@ -1042,9 +1098,9 @@ private fun StopPreviewRow(
  * Cache for Canvas-rendered numbered pins (e.g. 1, 2, 3...)
  */
 object NumberedPinCache {
-    private val cache = mutableMapOf<Int, Drawable>()
+    private val cache = mutableMapOf<Int, BitmapDescriptor>()
 
-    fun getPin(context: Context, number: Int): Drawable {
+    fun getPin(context: Context, number: Int): BitmapDescriptor {
         return cache.getOrPut(number) {
             val density = context.resources.displayMetrics.density
             val width = (34 * density).toInt().coerceAtLeast(1)
@@ -1090,7 +1146,7 @@ object NumberedPinCache {
             val textY = circleY + (textBounds.height() / 2f)
             canvas.drawText(text, radius, textY, paint)
 
-            BitmapDrawable(context.resources, bitmap)
+            BitmapDescriptorFactory.fromBitmap(bitmap)
         }
     }
 }

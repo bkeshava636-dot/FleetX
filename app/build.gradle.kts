@@ -16,8 +16,20 @@ android {
         applicationId = "com.college.bustracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10016
-        versionName = "1.0.16"
+        versionCode = 10017
+        versionName = "1.0.17"
+
+        val mapsApiKey = run {
+            val gsFile = file("google-services.json")
+            if (gsFile.exists()) {
+                val content = gsFile.readText()
+                val regex = """"current_key"\s*:\s*"([^"]+)"""".toRegex()
+                regex.find(content)?.groupValues?.get(1) ?: ""
+            } else {
+                ""
+            }
+        }
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -147,8 +159,10 @@ dependencies {
     implementation(libs.firebase.functions.ktx)
     implementation(libs.firebase.storage.ktx)
 
-    // Location & OpenStreetMap
+    // Location & Maps
     implementation(libs.play.services.location)
+    implementation(libs.play.services.maps)
+    implementation(libs.maps.compose)
     implementation(libs.osmdroid.android)
 
     // CameraX
