@@ -175,6 +175,16 @@ fun MapStopCreatorDialog(
     }
 
     var mapType by remember { mutableStateOf(MapType.NORMAL) }
+    var roadPolylinePoints by remember { mutableStateOf<List<LatLng>>(emptyList()) }
+
+    LaunchedEffect(workingStops.toList()) {
+        if (workingStops.size >= 2) {
+            val result = com.college.bustracker.util.RoadRoutingEngine.getRouteRoadPath(workingStops.toList())
+            roadPolylinePoints = result.points
+        } else {
+            roadPolylinePoints = emptyList()
+        }
+    }
 
     val initialPos = remember {
         val avgLat = workingStops.map { it.latitude }.average().takeIf { !it.isNaN() && it != 0.0 } ?: 15.3435
@@ -217,10 +227,10 @@ fun MapStopCreatorDialog(
                         pendingNewPoint = latLng
                     }
                 ) {
-                    // Route line connecting stops
+                    // Route line connecting stops (snapped to roads)
                     if (workingStops.isNotEmpty()) {
                         Polyline(
-                            points = workingStops.map { LatLng(it.latitude, it.longitude) },
+                            points = roadPolylinePoints.ifEmpty { workingStops.map { LatLng(it.latitude, it.longitude) } },
                             color = Color(0xFF1A56DB),
                             width = 10f
                         )

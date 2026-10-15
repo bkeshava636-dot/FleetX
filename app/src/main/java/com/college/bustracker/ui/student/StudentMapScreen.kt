@@ -103,6 +103,9 @@ fun StudentMapScreen(
     val upcomingStops by viewModel.upcomingStopsEta.collectAsState()
     val isHolidayToday by viewModel.isHolidayToday.collectAsState()
     val todayHolidayName by viewModel.todayHolidayName.collectAsState()
+    val routeRoadPolyline by viewModel.routeRoadPolyline.collectAsState()
+    val activeDetourPolyline by viewModel.activeDetourPolyline.collectAsState()
+    val isOffRoute by viewModel.isOffRoute.collectAsState()
 
     var showUpcomingStops by remember { mutableStateOf(false) }
     var mapType by remember { mutableStateOf(MapType.NORMAL) }
@@ -176,12 +179,28 @@ fun StudentMapScreen(
             val nextStopId = nextStopEta?.stop?.stopId
             val targetSelectedStopId = selectedStop?.stopId
 
-            // Route line connecting stops
-            if (stops.isNotEmpty()) {
+            // 1. Scheduled Road-Snapped Route Line
+            val roadPoints = if (routeRoadPolyline.isNotEmpty()) {
+                routeRoadPolyline
+            } else {
+                stops.map { LatLng(it.latitude, it.longitude) }
+            }
+
+            if (roadPoints.isNotEmpty()) {
                 Polyline(
-                    points = stops.map { LatLng(it.latitude, it.longitude) },
+                    points = roadPoints,
                     color = Color(0xFF1A56DB),
                     width = 8f
+                )
+            }
+
+            // 2. Active Detour Route Line (when bus deviates from planned route)
+            val detourPoints = activeDetourPolyline
+            if (isOffRoute && detourPoints != null && detourPoints.isNotEmpty()) {
+                Polyline(
+                    points = detourPoints,
+                    color = Color(0xFFD97706), // Distinct Amber for live detour
+                    width = 10f
                 )
             }
 
@@ -308,6 +327,23 @@ fun StudentMapScreen(
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))
+
+                if (isOffRoute) {
+                    Card(
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A))
+                    ) {
+                        Text(
+                            text = "DETOUR",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFB45309),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
 
                 StatusBadge(state = trackingState)
             }

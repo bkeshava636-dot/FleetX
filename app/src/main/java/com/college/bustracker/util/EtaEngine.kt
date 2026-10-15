@@ -45,7 +45,8 @@ enum class EtaStatus {
     STALE,
     ARRIVED_FINAL_STOP,
     NO_ROUTE,
-    UNAVAILABLE
+    UNAVAILABLE,
+    DETOUR_ACTIVE
 }
 
 /**
@@ -250,7 +251,9 @@ object EtaEngine {
         previousPassedIndex: Int = -1,
         previousSpeedMs: Float = -1.0f,
         previousEtaMinutes: Int? = null,
-        calibratedDwellSeconds: Double = DEFAULT_INTERMEDIATE_DWELL_SECONDS
+        calibratedDwellSeconds: Double = DEFAULT_INTERMEDIATE_DWELL_SECONDS,
+        detourRoadDistanceMeters: Double? = null,
+        isDetourActive: Boolean = false
     ): RouteEtaResult {
         if (stops.isEmpty()) {
             return RouteEtaResult(
@@ -399,8 +402,10 @@ object EtaEngine {
                     // Direct distance from live bus marker to this next stop
                     val directDist = calculateDistanceMeters(busLat, busLon, stop.latitude, stop.longitude)
 
-                    // If bus is on segment [prevStop -> stop], compute segment distance (bounded by directDist)
-                    val dist = if (nextIndex > 0 && nextIndex < stops.size) {
+                    // If detour is active with verified road distance, prioritize real road travel distance
+                    val dist = if (isDetourActive && detourRoadDistanceMeters != null && detourRoadDistanceMeters > 0.0) {
+                        detourRoadDistanceMeters
+                    } else if (nextIndex > 0 && nextIndex < stops.size) {
                         val prevStop = stops[nextIndex - 1]
                         val segLen = calculateDistanceMeters(prevStop.latitude, prevStop.longitude, stop.latitude, stop.longitude)
                         if (segLen > 10.0) {
@@ -480,15 +485,15 @@ object EtaEngine {
         }
 
         val nextStopEta = resultStops.find { it.isNext }
-        val status = if (trackingState == TrackingDisplayState.STALE) {
-            EtaStatus.STALE
-        } else {
-            EtaStatus.NORMAL
+        val status = when {
+            trackingState == TrackingDisplayState.STALE -> EtaStatus.STALE
+            isDetourActive -> EtaStatus.DETOUR_ACTIVE
+            else -> EtaStatus.NORMAL
         }
-        val statusMessage = if (trackingState == TrackingDisplayState.STALE) {
-            "Location is stale"
-        } else {
-            "Active"
+        val statusMessage = when {
+            trackingState == TrackingDisplayState.STALE -> "Location is stale"
+            isDetourActive -> "Detour active • Dynamic ETA"
+            else -> "Active"
         }
 
         return RouteEtaResult(
@@ -496,7 +501,7 @@ object EtaEngine {
             upcomingStops = resultStops,
             status = status,
             statusMessage = statusMessage,
-            isReliable = (status == EtaStatus.NORMAL)
+            isReliable = (status == EtaStatus.NORMAL || status == EtaStatus.DETOUR_ACTIVE)
         )
     }
 
