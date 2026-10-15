@@ -21,10 +21,12 @@ import com.college.bustracker.util.EtaEngine
 import com.college.bustracker.util.EtaStatus
 import com.college.bustracker.util.LocationThrottler
 import com.college.bustracker.util.RouteEtaResult
+import com.college.bustracker.util.RoadRoutingEngine
 import com.college.bustracker.util.ScheduleHelper
 import com.college.bustracker.util.StopEta
 import com.college.bustracker.util.StudentLocationAssistant
 import com.college.bustracker.data.model.TemporaryAssignment
+import com.google.android.gms.maps.model.LatLng
 import kotlin.math.max
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -105,6 +107,17 @@ class StudentViewModel : ViewModel() {
 
     private val _driverDisplayInfo = MutableStateFlow<DriverDisplayInfo?>(null)
     val driverDisplayInfo: StateFlow<DriverDisplayInfo?> = _driverDisplayInfo.asStateFlow()
+
+    private val _routeRoadPolyline = MutableStateFlow<List<LatLng>>(emptyList())
+    val routeRoadPolyline: StateFlow<List<LatLng>> = _routeRoadPolyline.asStateFlow()
+
+    private val _activeDetourPolyline = MutableStateFlow<List<LatLng>?>(null)
+    val activeDetourPolyline: StateFlow<List<LatLng>?> = _activeDetourPolyline.asStateFlow()
+
+    private val _isOffRoute = MutableStateFlow(false)
+    val isOffRoute: StateFlow<Boolean> = _isOffRoute.asStateFlow()
+
+    private var detourFetchJob: Job? = null
 
     private var lastCalcLat = 0.0
     private var lastCalcLon = 0.0
@@ -200,6 +213,9 @@ class StudentViewModel : ViewModel() {
                     } else {
                         _selectedBus.value = null
                         _currentRoute.value = null
+                        _routeRoadPolyline.value = emptyList()
+                        _activeDetourPolyline.value = null
+                        _isOffRoute.value = false
                         _selectedStop.value = null
                         _liveLocation.value = null
                         _trackingState.value = TrackingDisplayState.INACTIVE
@@ -349,6 +365,7 @@ class StudentViewModel : ViewModel() {
             stops = r.stops.filter { it.active }.sortedBy { it.order }
         )
         _currentRoute.value = sanitizedRoute
+        fetchRouteRoadPolyline(sanitizedRoute?.stops ?: emptyList())
 
         val currentSelected = _selectedStop.value
         val savedStopId = StudentPreferences.getSavedStopId(app.applicationContext)
@@ -364,6 +381,17 @@ class StudentViewModel : ViewModel() {
         syncTopicSubscription()
         updateEtaCalculation(_liveLocation.value, force = true)
         updateDriverDisplayInfo()
+    }
+
+    private fun fetchRouteRoadPolyline(stops: List<BusStop>) {
+        if (stops.isEmpty()) {
+            _routeRoadPolyline.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            val result = RoadRoutingEngine.getRouteRoadPath(stops)
+            _routeRoadPolyline.value = result.points
+        }
     }
 
     private fun updateDriverDisplayInfo() {
@@ -470,6 +498,37 @@ class StudentViewModel : ViewModel() {
             }
         }
 
+        val plannedRoadPoints = _routeRoadPolyline.value
+        var isDetour = false
+        var detourRoadDistance: Double? = null
+
+        if (trackingState == TrackingDisplayState.ACTIVE && plannedRoadPoints.isNotEmpty() && lat != 0.0 && lon != 0.0) {
+            val offRoute = RoadRoutingEngine.isBusOffRoute(lat, lon, plannedRoadPoints, thresholdMeters = 95.0)
+            if (offRoute) {
+                isDetour = true
+                _isOffRoute.value = true
+                val tentativeNext = _nextStop.value ?: stops.firstOrNull()
+                if (tentativeNext != null) {
+                    if (detourFetchJob?.isActive != true) {
+                        detourFetchJob = viewModelScope.launch {
+                            val detourResult = RoadRoutingEngine.getDetourPath(lat, lon, tentativeNext)
+                            if (detourResult != null) {
+                                _activeDetourPolyline.value = detourResult.points
+                            }
+                        }
+                    }
+                    val directToNext = EtaEngine.calculateDistanceMeters(lat, lon, tentativeNext.latitude, tentativeNext.longitude)
+                    detourRoadDistance = directToNext * 1.30 // account for road curvature on detour
+                }
+            } else {
+                _isOffRoute.value = false
+                _activeDetourPolyline.value = null
+            }
+        } else {
+            _isOffRoute.value = false
+            _activeDetourPolyline.value = null
+        }
+
         val result = EtaEngine.computeRouteEta(
             busLat = lat,
             busLon = lon,
@@ -479,7 +538,9 @@ class StudentViewModel : ViewModel() {
             stops = stops,
             previousPassedIndex = previousPassedStopIndex,
             previousSpeedMs = lastCalculatedSpeedMs,
-            previousEtaMinutes = lastNextStopEtaMinutes
+            previousEtaMinutes = lastNextStopEtaMinutes,
+            detourRoadDistanceMeters = detourRoadDistance,
+            isDetourActive = isDetour
         )
 
         _routeEtaResult.value = result
