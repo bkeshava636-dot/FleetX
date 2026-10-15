@@ -47,13 +47,55 @@ object NominatimGeocoder {
     @Volatile
     private var lastRequestTimestamp = 0L
 
-    suspend fun search(query: String): GeocodingResultState = withContext(Dispatchers.IO) {
+    suspend fun search(query: String, context: android.content.Context? = null): GeocodingResultState = withContext(Dispatchers.IO) {
         val trimmed = query.trim()
         if (trimmed.length < 2) {
             return@withContext GeocodingResultState.NoResults
         }
 
-        // Throttle to respect the 1 request/sec policy
+        // 1. Try Android Native Geocoder (backed by Google Maps Services on Android)
+        if (context != null && android.location.Geocoder.isPresent()) {
+            try {
+                val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+                val addresses = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+                        geocoder.getFromLocationName(trimmed, 6, object : android.location.Geocoder.GeocodeListener {
+                            override fun onGeocode(results: MutableList<android.location.Address>) {
+                                continuation.resumeWith(Result.success(results))
+                            }
+                            override fun onError(errorMessage: String?) {
+                                continuation.resumeWith(Result.success(emptyList()))
+                            }
+                        })
+                    }
+                } else {
+                    @Suppress("DEPRECATION")
+                    geocoder.getFromLocationName(trimmed, 6) ?: emptyList()
+                }
+
+                if (!addresses.isNullOrEmpty()) {
+                    val places = addresses.mapNotNull { addr ->
+                        val line = addr.getAddressLine(0) ?: addr.featureName
+                        if (line.isNullOrBlank() || addr.latitude == 0.0 && addr.longitude == 0.0) null
+                        else NominatimPlace(
+                            displayName = line,
+                            latitude = addr.latitude,
+                            longitude = addr.longitude,
+                            type = "google_location",
+                            importance = 1.0
+                        )
+                    }
+                    if (places.isNotEmpty()) {
+                        Log.d(TAG, "Google Geocoder resolved ${places.size} places for '$trimmed'")
+                        return@withContext GeocodingResultState.Success(places)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Native Google Geocoder failed, falling back to OSM Nominatim: ${e.message}")
+            }
+        }
+
+        // 2. Throttle to respect the 1 request/sec policy for OSM fallback
         val now = System.currentTimeMillis()
         val timeSinceLast = now - lastRequestTimestamp
         if (timeSinceLast < MIN_REQUEST_INTERVAL_MS) {
