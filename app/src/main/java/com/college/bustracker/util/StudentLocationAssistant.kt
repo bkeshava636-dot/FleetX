@@ -145,20 +145,26 @@ object StudentLocationAssistant {
             return
         }
 
-        val source = LocationSource(
-            busId = activeBusId,
-            sourceId = studentSourceId,
-            sourceType = "SECONDARY_STUDENT",
-            latitude = location.latitude,
-            longitude = location.longitude,
-            accuracy = location.accuracy,
-            speed = location.speed,
-            bearing = location.bearing,
-            timestamp = System.currentTimeMillis(),
-            active = true
-        )
+        StudentBeaconArbitrator.tryAcquireOrRenewLease(activeBusId, studentSourceId) { isLeaseHolder ->
+            if (isLeaseHolder) {
+                val source = LocationSource(
+                    busId = activeBusId,
+                    sourceId = studentSourceId,
+                    sourceType = "SECONDARY_STUDENT",
+                    latitude = location.latitude,
+                    longitude = location.longitude,
+                    accuracy = location.accuracy,
+                    speed = location.speed,
+                    bearing = location.bearing,
+                    timestamp = System.currentTimeMillis(),
+                    active = true
+                )
+                CollegeBusApp.instance.trackingRepository.contributeStudentLocation(source)
+            } else {
+                Log.d(TAG, "Student is standby beacon (another student holds lease for $activeBusId)")
+            }
+        }
 
-        CollegeBusApp.instance.trackingRepository.contributeStudentLocation(source)
         try {
             AutomaticRideManager.onContributorLocationFix(location)
         } catch (ignored: Exception) {}
@@ -181,6 +187,7 @@ object StudentLocationAssistant {
         _contributedBusId.value = null
 
         if (busToClean.isNotBlank() && sourceToClean.isNotBlank()) {
+            StudentBeaconArbitrator.releaseLease(busToClean, sourceToClean)
             CollegeBusApp.instance.trackingRepository.removeStudentLocation(busToClean, sourceToClean)
             Log.i(TAG, "Student location sharing STOPPED for bus $busToClean")
         }

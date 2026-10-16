@@ -115,30 +115,31 @@ class AppUpdateManager private constructor() {
             }
 
             val responseCode = connection.responseCode
+            var releaseInfo: AppReleaseInfo? = null
 
-            if (responseCode == 403 || responseCode == 429) {
-                val err = UpdateCheckResult.Error(
-                    message = "GitHub API rate limit exceeded. Please try again later.",
-                    isRateLimited = true
-                )
-                _updateCheckResult.value = err
-                return@withContext err
+            if (responseCode == 403 || responseCode == 429 || responseCode != HttpURLConnection.HTTP_OK) {
+                android.util.Log.w("AppUpdateManager", "GitHub API rate limit or error ($responseCode); falling back to Fastly CDN raw version.json")
+                releaseInfo = fetchFromRawCdn()
+                if (releaseInfo == null && (responseCode == 403 || responseCode == 429)) {
+                    val err = UpdateCheckResult.Error(
+                        message = "GitHub API rate limit exceeded. Please try again later.",
+                        isRateLimited = true
+                    )
+                    _updateCheckResult.value = err
+                    return@withContext err
+                } else if (releaseInfo == null && responseCode == 404) {
+                    val upToDate = UpdateCheckResult.UpToDate(installedCode, installedName)
+                    _updateCheckResult.value = upToDate
+                    return@withContext upToDate
+                } else if (releaseInfo == null) {
+                    val err = UpdateCheckResult.Error("Unable to fetch update info (HTTP $responseCode).")
+                    _updateCheckResult.value = err
+                    return@withContext err
+                }
+            } else {
+                val body = connection.inputStream.bufferedReader().use(BufferedReader::readText)
+                releaseInfo = GithubReleaseParser.parseReleaseJson(body) ?: fetchFromRawCdn()
             }
-
-            if (responseCode == 404) {
-                val upToDate = UpdateCheckResult.UpToDate(installedCode, installedName)
-                _updateCheckResult.value = upToDate
-                return@withContext upToDate
-            }
-
-            if (responseCode != HttpURLConnection.HTTP_OK) {
-                val err = UpdateCheckResult.Error("Unable to fetch update info (HTTP $responseCode).")
-                _updateCheckResult.value = err
-                return@withContext err
-            }
-
-            val body = connection.inputStream.bufferedReader().use(BufferedReader::readText)
-            val releaseInfo = GithubReleaseParser.parseReleaseJson(body)
 
             prefs.edit().putLong(KEY_LAST_CHECK_MS, now).apply()
 
@@ -164,12 +165,54 @@ class AppUpdateManager private constructor() {
                 return@withContext upToDate
             }
         } catch (e: Exception) {
+            val fallback = fetchFromRawCdn()
+            if (fallback != null) {
+                prefs.edit().putLong(KEY_LAST_CHECK_MS, now).apply()
+                if (fallback.versionCode > installedCode) {
+                    val result = UpdateCheckResult.UpdateAvailable(
+                        releaseInfo = fallback,
+                        installedVersionCode = installedCode,
+                        installedVersionName = installedName
+                    )
+                    _updateCheckResult.value = result
+                    return@withContext result
+                } else {
+                    val upToDate = UpdateCheckResult.UpToDate(installedCode, installedName)
+                    _updateCheckResult.value = upToDate
+                    return@withContext upToDate
+                }
+            }
             val err = UpdateCheckResult.Error(
                 message = "Failed to connect to update service. Check your internet connection.",
                 cause = e
             )
             _updateCheckResult.value = err
             return@withContext err
+        } finally {
+            try {
+                connection?.disconnect()
+            } catch (ignored: Exception) {}
+        }
+    }
+
+    private fun fetchFromRawCdn(): AppReleaseInfo? {
+        var connection: HttpURLConnection? = null
+        return try {
+            val url = URL(GithubReleaseParser.RAW_VERSION_URL)
+            connection = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "FleetX-Android-UpdateChecker")
+            }
+            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                val body = connection.inputStream.bufferedReader().use(BufferedReader::readText)
+                GithubReleaseParser.parseRawVersionJson(body)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
         } finally {
             try {
                 connection?.disconnect()
