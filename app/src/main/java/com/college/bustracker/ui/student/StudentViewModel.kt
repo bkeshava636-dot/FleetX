@@ -125,6 +125,7 @@ class StudentViewModel : ViewModel() {
     private var previousPassedStopIndex = -1
     private var lastCalculatedSpeedMs = -1.0f
     private var lastNextStopEtaMinutes: Int? = null
+    private var lastNextStopId: String? = null
 
     private val allRoutes = MutableStateFlow<List<Route>>(emptyList())
 
@@ -549,7 +550,13 @@ class StudentViewModel : ViewModel() {
         _upcomingStopsEta.value = result.upcomingStops
 
         lastCalculatedSpeedMs = loc?.speed ?: 0.0f
-        lastNextStopEtaMinutes = result.nextStopEta?.etaMinutes
+        val currentNextId = result.nextStopEta?.stop?.stopId
+        if (currentNextId != lastNextStopId) {
+            lastNextStopId = currentNextId
+            lastNextStopEtaMinutes = result.nextStopEta?.etaMinutes
+        } else {
+            lastNextStopEtaMinutes = result.nextStopEta?.etaMinutes
+        }
 
         lastCalcLat = lat
         lastCalcLon = lon

@@ -328,19 +328,21 @@ object EtaEngine {
         } ?: Double.MAX_VALUE
         val isAtAnyStop = distToClosestStop <= STOP_ARRIVAL_RADIUS_METERS
 
-        // Effective transit speed (km/h & m/s)
+        // 2. Context-aware transit speed:
+        // For distances > 500m, momentary crawl speed must not blow up the ETA across entire route.
+        // Blend live speed with urban transit nominal baseline (22 km/h).
         val effectiveSpeedKmh = when {
-            liveSpeedKmh >= 5.0f && liveSpeedKmh <= 90.0f -> {
-                liveSpeedKmh
+            liveSpeedKmh in 12.0f..65.0f -> {
+                0.50f * liveSpeedKmh + 0.50f * NOMINAL_URBAN_SPEED_KMH
             }
-            liveSpeedKmh > 90.0f -> {
-                45.0f
+            liveSpeedKmh > 65.0f -> {
+                40.0f
             }
             else -> {
                 NOMINAL_URBAN_SPEED_KMH
             }
         }
-        val effectiveSpeedMs = max(effectiveSpeedKmh / 3.6, 1.5) // Lower bounded at 1.5 m/s (~5.4 km/h)
+        val effectiveSpeedMs = max(effectiveSpeedKmh / 3.6, 4.5) // Lower bounded at 4.5 m/s (~16.2 km/h) to prevent runaway ETA
 
         // Terminal check: Bus arrived at the final destination
         val distToFinalStop = calculateDistanceMeters(
@@ -380,6 +382,7 @@ object EtaEngine {
         // Compute ETAs for upcoming stops along the route sequence
         val resultStops = mutableListOf<StopEta>()
         var cumulativeDistance = 0.0
+        var lastValidMinutes = 0
 
         for (i in stops.indices) {
             val stop = stops[i]
@@ -440,6 +443,7 @@ object EtaEngine {
 
                     val seconds = dist / effectiveSpeedMs
                     val (etaMins, etaFmt) = formatEta(seconds, dist, previousEtaMinutes)
+                    lastValidMinutes = etaMins ?: 0
 
                     resultStops.add(
                         StopEta(
@@ -467,7 +471,16 @@ object EtaEngine {
                     val travelSeconds = cumulativeDistance / effectiveSpeedMs
                     val totalSeconds = travelSeconds + dwellSeconds
 
-                    val (etaMins, etaFmt) = formatEta(totalSeconds, cumulativeDistance, null)
+                    var (etaMins, etaFmt) = formatEta(totalSeconds, cumulativeDistance, null)
+
+                    // Ensure strictly monotonic non-decreasing progression for subsequent stops
+                    if (etaMins != null && etaMins < lastValidMinutes) {
+                        etaMins = lastValidMinutes + 1
+                        etaFmt = "~$etaMins min"
+                    }
+                    if (etaMins != null) {
+                        lastValidMinutes = etaMins
+                    }
 
                     resultStops.add(
                         StopEta(
@@ -518,12 +531,13 @@ object EtaEngine {
         }
         val rawMinutes = max(1, (seconds / 60.0).roundToInt()).coerceAtMost(MAX_REALISTIC_ETA_MINUTES)
 
-        // Apply hysteresis if previous ETA exists
-        val stabilizedMinutes = if (previousMinutes != null && previousMinutes > 0) {
+        // Apply jitter stabilization only for minor fluctuations (<= 5 min)
+        // If delta is larger (stop changed, traffic cleared, driver accelerated), track rawMinutes directly to prevent trap
+        val stabilizedMinutes = if (previousMinutes != null && previousMinutes > 0 && Math.abs(rawMinutes - previousMinutes) <= 5) {
             val delta = rawMinutes - previousMinutes
             when {
-                delta > 2 -> previousMinutes + 1
-                delta < -3 -> previousMinutes - 1
+                delta > 1 -> previousMinutes + 1
+                delta < -2 -> previousMinutes - 1
                 else -> rawMinutes
             }
         } else {
