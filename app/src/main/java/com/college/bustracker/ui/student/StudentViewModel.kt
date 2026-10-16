@@ -25,6 +25,8 @@ import com.college.bustracker.util.RoadRoutingEngine
 import com.college.bustracker.util.ScheduleHelper
 import com.college.bustracker.util.StopEta
 import com.college.bustracker.util.StudentLocationAssistant
+import com.college.bustracker.util.MultiSourceLocationEngine
+import com.college.bustracker.util.SelectedSourceType
 import com.college.bustracker.data.model.TemporaryAssignment
 import com.google.android.gms.maps.model.LatLng
 import kotlin.math.max
@@ -417,6 +419,8 @@ class StudentViewModel : ViewModel() {
         BusTopicManager.updateSubscription(app.applicationContext, busId, stopId)
     }
 
+    private var studentSourcesJob: Job? = null
+
     fun startListeningToLiveBus(busId: String) {
         if (busId.isBlank()) return
         if (currentListeningBusId == busId && liveTrackingJob?.isActive == true) {
@@ -424,6 +428,8 @@ class StudentViewModel : ViewModel() {
         }
         currentListeningBusId = busId
         liveTrackingJob?.cancel()
+        studentSourcesJob?.cancel()
+
         liveTrackingJob = viewModelScope.launch {
             trackingRepo.getLiveLocationFlow(busId).collect { loc ->
                 val current = _liveLocation.value
@@ -443,11 +449,49 @@ class StudentViewModel : ViewModel() {
                 }
             }
         }
+
+        // Crowdsourced Student Contributor Failover:
+        // If driver GPS drops or is inactive, seamlessly listen to student fixes for this bus
+        studentSourcesJob = viewModelScope.launch {
+            trackingRepo.getLocationSourcesFlow(busId).collect { sources ->
+                val activeDriverLoc = _liveLocation.value
+                val isDriverFresh = activeDriverLoc != null &&
+                        !activeDriverLoc.isStale() &&
+                        activeDriverLoc.trackingStatus == "ACTIVE" &&
+                        activeDriverLoc.sourceType != "STUDENT_ASSISTED"
+
+                if (!isDriverFresh && sources.isNotEmpty()) {
+                    val validStudents = sources.filter { it.sourceType == "SECONDARY_STUDENT" && it.active }
+                    if (validStudents.isNotEmpty()) {
+                        val bus = _selectedBus.value
+                        val fusion = MultiSourceLocationEngine.selectBestLocation(
+                            busId = busId,
+                            routeId = bus?.routeId ?: "",
+                            driverId = "",
+                            mode = "STUDENT_ASSISTED",
+                            previousLocation = activeDriverLoc,
+                            driverSource = null,
+                            studentSources = validStudents
+                        )
+                        if (fusion.selectedSourceType == SelectedSourceType.STUDENT_ASSISTED) {
+                            val candidate = fusion.liveLocation.copy(sourceType = "STUDENT_ASSISTED")
+                            _liveLocation.value = candidate
+                            _trackingState.value = TrackingDisplayState.ACTIVE
+                            _lastUpdateText.value = ScheduleHelper.formatRelativeTime(candidate.lastUpdated) + " (Student GPS)"
+                            updateEtaCalculation(candidate, force = false)
+                            android.util.Log.i("BusTrackerGPS", "STUDENT_VIEWMODEL_FAILOVER: Using ${fusion.usedSourcesCount} student source(s) for bus $busId")
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fun stopListeningToLiveBus() {
         liveTrackingJob?.cancel()
         liveTrackingJob = null
+        studentSourcesJob?.cancel()
+        studentSourcesJob = null
         currentListeningBusId = null
     }
 

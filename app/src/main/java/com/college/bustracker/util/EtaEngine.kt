@@ -59,11 +59,28 @@ enum class EtaStatus {
 object EtaEngine {
 
     private const val EARTH_RADIUS_METERS = 6371000.0
-    private const val NOMINAL_URBAN_SPEED_KMH = 20.0f
+    private const val NOMINAL_URBAN_SPEED_KMH = 22.0f
+    private const val NOMINAL_URBAN_SPEED_MS = 22.0 / 3.6 // ~6.11 m/s
+    private const val MIN_TRANSIT_SPEED_MS = 3.5 // ~12.6 km/h minimum floor for distances > 50m
+    const val SPATIAL_DECAY_DISTANCE_METERS = 800.0 // Distance scale where live speed dominates vs nominal
+    const val BETA_DOWN = 0.70 // Fast response when bus accelerates/approaches
+    const val BETA_UP = 0.25 // Slow response when bus halts at signals to prevent wild jitter
     private const val STOP_ARRIVAL_RADIUS_METERS = 45.0
     const val DEFAULT_INTERMEDIATE_DWELL_SECONDS = 30.0
     private const val MAX_REALISTIC_ETA_MINUTES = 180
     private const val SPEED_SMOOTHING_ALPHA = 0.40f
+
+    /**
+     * Exponential Spatial Decay speed weighting:
+     * Alpha(d) = exp(-d / d0). Near bus (d < 300m), live speed dominates.
+     * Further ahead (d > 1km), nominal transit speed (22 km/h) smoothly dominates.
+     */
+    fun calculateSpatiallyDecayedSpeedMs(distanceMeters: Double, liveSpeedMs: Float): Double {
+        val clampedLiveSpeed = if (liveSpeedMs in 1.0f..35.0f) liveSpeedMs.toDouble() else NOMINAL_URBAN_SPEED_MS
+        val alpha = kotlin.math.exp(-distanceMeters / SPATIAL_DECAY_DISTANCE_METERS)
+        val blendedSpeed = alpha * clampedLiveSpeed + (1.0 - alpha) * NOMINAL_URBAN_SPEED_MS
+        return max(blendedSpeed, MIN_TRANSIT_SPEED_MS)
+    }
 
     /**
      * Calculates the great-circle distance between two geographic coordinates using the Haversine formula.
@@ -441,7 +458,8 @@ object EtaEngine {
                     }
                     cumulativeDistance = dist
 
-                    val seconds = dist / effectiveSpeedMs
+                    val segSpeedMs = calculateSpatiallyDecayedSpeedMs(dist, smoothedSpeedMs)
+                    val seconds = dist / segSpeedMs
                     val (etaMins, etaFmt) = formatEta(seconds, dist, previousEtaMinutes)
                     lastValidMinutes = etaMins ?: 0
 
@@ -468,14 +486,16 @@ object EtaEngine {
 
                     val intermediateStopsCount = i - nextIndex
                     val dwellSeconds = intermediateStopsCount * calibratedDwellSeconds
-                    val travelSeconds = cumulativeDistance / effectiveSpeedMs
+                    val segSpeedMs = calculateSpatiallyDecayedSpeedMs(cumulativeDistance, smoothedSpeedMs)
+                    val travelSeconds = cumulativeDistance / segSpeedMs
                     val totalSeconds = travelSeconds + dwellSeconds
 
                     var (etaMins, etaFmt) = formatEta(totalSeconds, cumulativeDistance, null)
 
                     // Ensure strictly monotonic non-decreasing progression for subsequent stops
-                    if (etaMins != null && etaMins < lastValidMinutes) {
-                        etaMins = lastValidMinutes + 1
+                    val minAllowedEta = lastValidMinutes + max(1, (calibratedDwellSeconds / 60.0).roundToInt())
+                    if (etaMins != null && etaMins < minAllowedEta) {
+                        etaMins = minAllowedEta
                         etaFmt = "~$etaMins min"
                     }
                     if (etaMins != null) {
@@ -531,14 +551,19 @@ object EtaEngine {
         }
         val rawMinutes = max(1, (seconds / 60.0).roundToInt()).coerceAtMost(MAX_REALISTIC_ETA_MINUTES)
 
-        // Apply jitter stabilization only for minor fluctuations (<= 5 min)
-        // If delta is larger (stop changed, traffic cleared, driver accelerated), track rawMinutes directly to prevent trap
-        val stabilizedMinutes = if (previousMinutes != null && previousMinutes > 0 && Math.abs(rawMinutes - previousMinutes) <= 5) {
+        // Asymmetric Deadband Filter:
+        // When bus accelerates / approaches: beta_down = 0.70 (fast tracking)
+        // When bus temporarily stops at signals / pick-ups: beta_up = 0.25 (gentle rise, prevents runaway spikes)
+        val stabilizedMinutes = if (previousMinutes != null && previousMinutes > 0 && Math.abs(rawMinutes - previousMinutes) <= 6) {
             val delta = rawMinutes - previousMinutes
-            when {
-                delta > 1 -> previousMinutes + 1
-                delta < -2 -> previousMinutes - 1
-                else -> rawMinutes
+            if (delta < 0) {
+                val filtered = Math.round(BETA_DOWN * rawMinutes + (1.0 - BETA_DOWN) * previousMinutes).toInt()
+                min(previousMinutes - 1, max(rawMinutes, filtered))
+            } else if (delta > 0) {
+                val filtered = Math.round(BETA_UP * rawMinutes + (1.0 - BETA_UP) * previousMinutes).toInt()
+                max(previousMinutes, min(rawMinutes, filtered))
+            } else {
+                rawMinutes
             }
         } else {
             rawMinutes

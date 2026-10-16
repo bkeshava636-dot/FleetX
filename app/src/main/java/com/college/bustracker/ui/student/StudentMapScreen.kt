@@ -510,7 +510,9 @@ fun StudentMapScreen(
                                         else -> "Stationary"
                                     }
                                     val cleanDist = if (dist.endsWith(" away")) dist else if (dist.isNotBlank()) "$dist away" else ""
-                                    if (cleanDist.isNotBlank()) "$cleanDist • $motionText" else motionText
+                                    val backupTag = if (liveLoc?.sourceType == "STUDENT_ASSISTED") " • 👥 Backup GPS" else ""
+                                    val baseText = if (cleanDist.isNotBlank()) "$cleanDist • $motionText" else motionText
+                                    baseText + backupTag
                                 }
                                 TrackingDisplayState.WAITING_FOR_GPS -> stringResource(R.string.connecting_gps_pending)
                                 TrackingDisplayState.STALE -> stringResource(R.string.signal_outdated, lastUpdateText)

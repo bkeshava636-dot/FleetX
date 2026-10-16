@@ -11,10 +11,47 @@ object GithubReleaseParser {
     const val GITHUB_OWNER = "bkeshava636-dot"
     const val GITHUB_REPO = "FleetX"
     const val LATEST_RELEASE_URL = "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
+    const val RAW_VERSION_URL = "https://raw.githubusercontent.com/$GITHUB_OWNER/$GITHUB_REPO/main/version.json"
 
     private val SHA256_PATTERN = Pattern.compile("(?i)(?:sha-?256|checksum)[\\s:=]+([a-fA-F0-9]{64})")
     private val VERSION_CODE_PATTERN = Pattern.compile("(?i)(?:versionCode|version_code|code)[\\s:=]+(\\d+)")
     private val SEMVER_PATTERN = Pattern.compile("^[vV]?(\\d+)\\.(\\d+)(?:\\.(\\d+))?")
+
+    /**
+     * Parses raw version.json from Fastly CDN (raw.githubusercontent.com) which has no 60 req/hr IP throttle.
+     */
+    fun parseRawVersionJson(jsonString: String): AppReleaseInfo? {
+        return try {
+            val json = JSONObject(jsonString)
+            val versionCode = json.optLong("versionCode", 0L)
+            val versionName = json.optString("versionName", "")
+            val downloadUrl = json.optString("downloadUrl", "")
+            if (versionCode <= 0 || versionName.isBlank() || downloadUrl.isBlank()) {
+                null
+            } else {
+                val sha256 = json.optString("sha256", "").takeIf { it.isNotBlank() }
+                val releaseNotes = json.optString("releaseNotes", "FleetX update available")
+                val apkAsset = ReleaseAsset(
+                    name = "app-release.apk",
+                    downloadUrl = downloadUrl,
+                    sizeBytes = json.optLong("sizeBytes", 0L),
+                    contentType = "application/vnd.android.package-archive"
+                )
+                AppReleaseInfo(
+                    versionName = versionName,
+                    versionCode = versionCode,
+                    releaseNotes = releaseNotes,
+                    publishedAt = json.optString("publishedAt", ""),
+                    apkAsset = apkAsset,
+                    sha256Checksum = sha256,
+                    isDraft = false,
+                    isPrerelease = false
+                )
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     /**
      * Parses a GitHub release JSON string into [AppReleaseInfo].

@@ -54,6 +54,12 @@ class LocationTrackingService : Service() {
         const val KEY_SAVED_ROUTE_ID = "persisted_route_id"
         const val KEY_SAVED_DRIVER_ID = "persisted_driver_id"
         const val KEY_SAVED_MODE = "persisted_mode"
+
+        // BITM Campus Geofence Auto-Shutdown Constants
+        const val BITM_CAMPUS_LAT = 15.1425
+        const val BITM_CAMPUS_LNG = 76.8925
+        const val BITM_CAMPUS_GEOFENCE_RADIUS_METERS = 200.0
+        const val BITM_CAMPUS_AUTO_SHUTDOWN_DURATION_MS = 3 * 60 * 1000L // 3 consecutive minutes
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
@@ -75,7 +81,11 @@ class LocationTrackingService : Service() {
 
     private var lastSentLat = 0.0
     private var lastSentLng = 0.0
+    private var lastSentBearing = 0f
     private var lastSentTimestamp = 0L
+    private var stationaryStartTime = 0L
+    private var campusGeofenceStationaryStartTime = 0L
+    private lateinit var offlineQueue: OfflineLocationQueue
 
     private var lastDriverSource: LocationSource? = null
     private var currentStudentSources = listOf<LocationSource>()
@@ -94,6 +104,7 @@ class LocationTrackingService : Service() {
     private var totalLocationsDispatched: Int = 0
 
     private var wakeLock: PowerManager.WakeLock? = null
+    private var keepAliveOverlay: KeepAliveOverlayHelper? = null
 
     private fun acquireWakeLock() {
         if (wakeLock?.isHeld == true) return
@@ -172,6 +183,10 @@ class LocationTrackingService : Service() {
                 }
             } catch (ignored: Exception) {}
         }
+
+        // Initialize dead-zone telemetry queue with .info/connected listener
+        offlineQueue = OfflineLocationQueue(serviceScope)
+        offlineQueue.startListening()
     }
 
     private fun persistTrackingSessionState(isActive: Boolean) {
@@ -198,33 +213,43 @@ class LocationTrackingService : Service() {
             Log.i(TAG, "[AUTO-TRACE] Resurrection skipped: isExplicitStop=$isExplicitStop, bus=$activeBusId")
             return
         }
-        Log.w(TAG, "[AUTO-TRACE] Scheduling immediate service resurrection via AlarmManager in ${delayMs}ms. Reason: $reason, bus=$activeBusId")
+        Log.w(TAG, "[AUTO-TRACE] Scheduling immediate service resurrection via AlarmManager setAlarmClock in ${delayMs}ms. Reason: $reason, bus=$activeBusId")
         try {
-            val restartIntent = Intent(applicationContext, LocationTrackingService::class.java).apply {
-                action = TrackingServiceHelper.ACTION_START_TRACKING
-                putExtra(TrackingServiceHelper.EXTRA_BUS_ID, activeBusId)
-                putExtra(TrackingServiceHelper.EXTRA_ROUTE_ID, activeRouteId)
-                putExtra(TrackingServiceHelper.EXTRA_DRIVER_ID, activeDriverId)
-                putExtra(TrackingServiceHelper.EXTRA_TRACKING_MODE, activeMode)
+            val restartIntent = Intent(applicationContext, DriverScheduleReceiver::class.java).apply {
+                action = AutoTrackingScheduler.ACTION_DRIVER_SCHEDULE_CHECK
                 putExtra("EXTRA_FORCE_WINDOW", forceWindow)
-                putExtra("EXTRA_RESTARTED_FROM_RESURRECTION", true)
+                putExtra("EXTRA_RESURRECTION_REASON", reason)
             }
-            val pi = PendingIntent.getForegroundService(
+            val pi = PendingIntent.getBroadcast(
                 applicationContext,
                 1005,
                 restartIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
+            val showIntent = Intent(applicationContext, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val showPendingIntent = PendingIntent.getActivity(
+                applicationContext,
+                11005,
+                showIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
             val am = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
             val triggerAt = System.currentTimeMillis() + delayMs
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (am?.canScheduleExactAlarms() == true) {
-                    am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            try {
+                val clockInfo = AlarmManager.AlarmClockInfo(triggerAt, showPendingIntent)
+                am?.setAlarmClock(clockInfo, pi)
+            } catch (e: Exception) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (am?.canScheduleExactAlarms() == true) {
+                        am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                    } else {
+                        am?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                    }
                 } else {
-                    am?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                    am?.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
                 }
-            } else {
-                am?.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
             }
         } catch (e: Exception) {
             Log.e(TAG, "[AUTO-TRACE] Failed to schedule service resurrection: ${e.message}")
@@ -359,6 +384,15 @@ class LocationTrackingService : Service() {
         }
         Log.i(TAG, "[AUTO-TRACE] startForeground succeeded")
         com.college.bustracker.diagnostics.GpsDiagnosticManager.onServiceStarted(this, activeBusId)
+
+        // Layer 2: Register privileged GMS hardware piggyback with FusedLocationProviderClient
+        GmsHardwareWatchdog.register(this)
+
+        // Layer 4: Attach 1x1 transparent keep-alive overlay window (if permitted)
+        if (keepAliveOverlay == null) {
+            keepAliveOverlay = KeepAliveOverlayHelper(this)
+        }
+        keepAliveOverlay?.attachOverlay()
 
         val fbInit = try { com.google.firebase.FirebaseApp.getApps(this).isNotEmpty() } catch (e: Exception) { false }
         val authUidAvailable = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != null
@@ -680,23 +714,59 @@ class LocationTrackingService : Service() {
             "[LOCATION-SERVICE] GPS_RECEIVED: lat=${location.latitude}, lng=${location.longitude}, acc=${location.accuracy}m, speed=${location.speed}m/s"
         )
 
-        val shouldDispatch = LocationThrottler.shouldDispatchUpdate(
+        // 3. BITM Campus Morning Geofence Auto-Shutdown Check (07:30–09:30, stationary inside 200m for 3 min)
+        val distToCampus = LocationThrottler.calculateDistanceMeters(
+            location.latitude, location.longitude,
+            BITM_CAMPUS_LAT, BITM_CAMPUS_LNG
+        )
+        val isInsideCampus = distToCampus <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS
+        val nowKolkata = com.college.bustracker.util.ScheduleHelper.nowKolkata()
+        val isMorningShift = !nowKolkata.isBefore(java.time.LocalTime.of(7, 30)) && nowKolkata.isBefore(java.time.LocalTime.of(9, 30))
+        val isStationaryAtCampus = location.speed < LocationThrottler.SPEED_THRESHOLD_MPS
+
+        if (isInsideCampus && isMorningShift && isStationaryAtCampus) {
+            if (campusGeofenceStationaryStartTime == 0L) {
+                campusGeofenceStationaryStartTime = now
+                Log.i(TAG, "[CAMPUS_GEOFENCE] Bus entered BITM Campus geofence (dist=${distToCampus.toInt()}m). Started 3-minute stationary shutdown timer.")
+            } else if (now - campusGeofenceStationaryStartTime >= BITM_CAMPUS_AUTO_SHUTDOWN_DURATION_MS) {
+                Log.w(TAG, "[CAMPUS_GEOFENCE] Bus reached BITM Campus and stayed stationary for > 3 minutes. Triggering automatic shift shutdown!")
+                performCampusAutoShutdown(location)
+                return
+            }
+        } else {
+            if (campusGeofenceStationaryStartTime != 0L) {
+                Log.d(TAG, "[CAMPUS_GEOFENCE] Reset campus stationary timer (dist=${distToCampus.toInt()}m, speed=${location.speed}m/s)")
+                campusGeofenceStationaryStartTime = 0L
+            }
+        }
+
+        // 4. Velocity-Adaptive Throttling:
+        // Moving (speed >= 1.5 m/s or heading change > 15°): 4s cadence
+        // Stationary (speed < 1.5 m/s for > 15s): 20s heartbeat with speed: 0
+        // Immediate wake-up on acceleration
+        val throttlerDecision = LocationThrottler.shouldDispatchAdaptive(
             lastSentLat = lastSentLat,
             lastSentLng = lastSentLng,
             lastSentTimestamp = lastSentTimestamp,
+            lastSentBearing = lastSentBearing,
             newLat = location.latitude,
             newLng = location.longitude,
             newTimestamp = now,
-            speedMps = location.speed
+            newBearing = location.bearing,
+            speedMps = location.speed,
+            stationaryStartTime = stationaryStartTime
         )
 
-        if (!shouldDispatch) {
-            Log.d(TAG, "[LOCATION-SERVICE] GPS_REJECTED: throttled interval")
+        stationaryStartTime = throttlerDecision.updatedStationaryStartTime
+
+        if (!throttlerDecision.shouldDispatch) {
+            Log.d(TAG, "[LOCATION-SERVICE] GPS_REJECTED: throttled interval (isStationary=${throttlerDecision.isStationaryState})")
             return
         }
 
         lastSentLat = location.latitude
         lastSentLng = location.longitude
+        lastSentBearing = location.bearing
         lastSentTimestamp = now
 
         val hasInternet = CollegeBusApp.instance.networkMonitor.isConnected.value
@@ -708,7 +778,7 @@ class LocationTrackingService : Service() {
             latitude = location.latitude,
             longitude = location.longitude,
             accuracy = location.accuracy,
-            speed = location.speed,
+            speed = if (throttlerDecision.overrideSpeedZero) 0.0f else location.speed,
             bearing = location.bearing,
             timestamp = now,
             active = true
@@ -732,13 +802,21 @@ class LocationTrackingService : Service() {
 
         if (!fusionResult.isDuplicate && activeBusId.isNotBlank()) {
             val stamped = fusionResult.liveLocation.copy(
+                speed = if (throttlerDecision.overrideSpeedZero) 0.0f else fusionResult.liveLocation.speed,
                 operatorEpoch = currentOperatorEpoch,
                 temporaryAssignmentId = currentTemporaryAssignmentId
             )
             lastFusedLocation = stamped
-            Log.i(TAG, "[LOCATION-SERVICE] Writing location to Firebase: busId=$activeBusId, lat=${stamped.latitude}, lng=${stamped.longitude}, status=${stamped.trackingStatus}")
+            Log.i(TAG, "[LOCATION-SERVICE] Writing location to Firebase: busId=$activeBusId, lat=${stamped.latitude}, lng=${stamped.longitude}, speed=${stamped.speed}, status=${stamped.trackingStatus}, hasInternet=$hasInternet")
             totalLocationsDispatched++
-            CollegeBusApp.instance.trackingRepository.updateLiveLocation(stamped, hasInternet)
+
+            if (hasInternet) {
+                CollegeBusApp.instance.trackingRepository.updateLiveLocation(stamped, true)
+            } else {
+                Log.w(TAG, "[LOCATION-SERVICE] Cellular dead-zone detected! Buffering payload in OfflineLocationQueue (size=${offlineQueue.size() + 1})")
+                offlineQueue.enqueue(stamped)
+                CollegeBusApp.instance.trackingRepository.updateLiveLocation(stamped, false)
+            }
         }
 
         val netStatus = if (hasInternet) "Online" else "Offline (Buffered)"
@@ -751,6 +829,55 @@ class LocationTrackingService : Service() {
             gps = "Locked",
             timestamp = now
         )
+    }
+
+    private fun performCampusAutoShutdown(location: Location) {
+        val now = System.currentTimeMillis()
+        val finalLocation = LiveLocation(
+            busId = activeBusId,
+            latitude = location.latitude,
+            longitude = location.longitude,
+            speed = 0f,
+            bearing = location.bearing,
+            trackingStatus = "ARRIVED_AT_CAMPUS",
+            mode = activeMode,
+            routeId = activeRouteId,
+            driverId = activeDriverId,
+            sourceType = "PRIMARY_DRIVER",
+            lastUpdated = now
+        )
+
+        // 1. Push final RTDB status update
+        try {
+            com.google.firebase.database.FirebaseDatabase.getInstance()
+                .getReference("live_locations")
+                .child(activeBusId)
+                .setValue(finalLocation)
+            Log.i(TAG, "[CAMPUS_GEOFENCE] Final ARRIVED_AT_CAMPUS status written to RTDB for $activeBusId")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to push ARRIVED_AT_CAMPUS status: ${e.message}")
+        }
+
+        // 2. Mark explicit stop to prevent immediate resurrection
+        serviceStopReason = "CAMPUS_GEOFENCE_AUTO_SHUTDOWN"
+        serviceStopCaller = "BitmCampusGeofence"
+        isExplicitStop = true
+        persistTrackingSessionState(false)
+
+        GmsHardwareWatchdog.unregister(this)
+        keepAliveOverlay?.detachOverlay()
+        keepAliveOverlay = null
+
+        // 3. Schedule next afternoon shift alarm via AutoTrackingScheduler
+        try {
+            AutoTrackingScheduler.scheduleAlarms(this)
+            Log.i(TAG, "[CAMPUS_GEOFENCE] Scheduled next afternoon shift alarm")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to schedule afternoon shift alarm: ${e.message}")
+        }
+
+        stopTrackingSession(isExplicitUserStop = true)
+        stopSelf()
     }
 
     private fun stopTrackingSession(isExplicitUserStop: Boolean = true) {
@@ -792,6 +919,11 @@ class LocationTrackingService : Service() {
 
         if (isExplicitUserStop) {
             com.college.bustracker.diagnostics.GpsDiagnosticManager.onServiceStopped(this, "Tracking session stopped")
+
+            // Unregister privileged GMS hardware piggyback and detach overlay
+            GmsHardwareWatchdog.unregister(this)
+            keepAliveOverlay?.detachOverlay()
+            keepAliveOverlay = null
 
             TrackingServiceHelper.updateServiceState(
                 isTracking = false,
@@ -880,6 +1012,9 @@ class LocationTrackingService : Service() {
             scheduleServiceResurrection(delayMs = 1000L, reason = "SERVICE_KILLED_BY_OS")
         }
         stopTrackingSession(isExplicitUserStop = isExplicitStop)
+        try {
+            offlineQueue.stopListening()
+        } catch (ignored: Exception) {}
         try {
             locationHandlerThread?.quitSafely()
         } catch (ignored: Exception) {}
