@@ -116,9 +116,13 @@ fun GpsDiagnosticsScreen(
     var showTimelineDialog by remember { mutableStateOf(false) }
     var showSummaryDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showFullTextReportDialog by remember { mutableStateOf(false) }
+    var fullReportText by remember { mutableStateOf("") }
     var timelineEvents by remember { mutableStateOf<List<DiagnosticEvent>>(emptyList()) }
     var summaryData by remember { mutableStateOf<ContinuousRootCauseSummary?>(null) }
     var isExporting by remember { mutableStateOf(false) }
+
+    val romInfo = remember { com.college.bustracker.diagnostics.DeviceRomDetector.getRomInfo() }
 
     Scaffold(
         topBar = {
@@ -151,6 +155,108 @@ fun GpsDiagnosticsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
+
+            // 0. Device OEM & Background Killer Diagnostics Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(
+                    1.2.dp,
+                    when (romInfo.killRisk) {
+                        "Extreme" -> StatusDangerRed
+                        "High" -> StatusWarningOrange
+                        else -> CollegePrimary
+                    }
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "DEVICE SYSTEM & ROM RECOGNITION",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF64748B),
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = romInfo.displayName,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A)
+                            )
+                            Text(
+                                text = "${romInfo.romVersion} • ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
+                                fontSize = 12.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+
+                        // Risk Badge
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    when (romInfo.killRisk) {
+                                        "Extreme" -> StatusDangerRed.copy(alpha = 0.12f)
+                                        "High" -> StatusWarningOrange.copy(alpha = 0.12f)
+                                        else -> StatusActiveGreen.copy(alpha = 0.12f)
+                                    },
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "${romInfo.killRisk} Kill Risk",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = when (romInfo.killRisk) {
+                                    "Extreme" -> StatusDangerRed
+                                    "High" -> StatusWarningOrange
+                                    else -> StatusActiveGreen
+                                }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = romInfo.advice,
+                        fontSize = 12.sp,
+                        color = Color(0xFF334155),
+                        lineHeight = 16.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            val opened = com.college.bustracker.diagnostics.DeviceRomDetector.openOemBatteryOptimizationSettings(context)
+                            if (!opened) {
+                                Toast.makeText(context, "Please check Battery & Autostart settings in device Settings.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                    ) {
+                        Icon(imageVector = Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Configure ${romInfo.displayName} Protection", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             // 1. Continuous Recording Control & State Card
             Card(
@@ -346,19 +452,20 @@ fun GpsDiagnosticsScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // Export & Download Tools Row 1
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                OutlinedButton(
+                Button(
                     onClick = {
                         scope.launch {
                             isExporting = true
                             try {
-                                val zip = withContext(Dispatchers.IO) { storage.createExportZip(ExportRangeType.TODAY) }
-                                shareZipFile(context, zip)
+                                val savedFile = withContext(Dispatchers.IO) { storage.saveReportToDownloads(ExportRangeType.ALL) }
+                                Toast.makeText(context, "Saved to Downloads: ${savedFile.name}", Toast.LENGTH_LONG).show()
                             } catch (e: Exception) {
-                                Toast.makeText(context, "Export error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Save error: ${e.message}", Toast.LENGTH_SHORT).show()
                             } finally {
                                 isExporting = false
                             }
@@ -368,12 +475,60 @@ fun GpsDiagnosticsScreen(
                         .weight(1f)
                         .height(46.dp),
                     shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary),
+                    enabled = !isExporting
+                ) {
+                    Icon(imageVector = Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Download", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            val text = withContext(Dispatchers.IO) { storage.getReportPlainText(ExportRangeType.ALL) }
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            cm.setPrimaryClip(ClipData.newPlainText("FleetX Diagnostics", text))
+                            Toast.makeText(context, "Diagnostic report copied to clipboard!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(46.dp),
+                    shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.2.dp, CollegePrimary),
                     enabled = !isExporting
                 ) {
-                    Icon(imageVector = Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp), tint = CollegePrimary)
+                    Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp), tint = CollegePrimary)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Export Today", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CollegePrimary)
+                    Text("Copy Report", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CollegePrimary)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Export & Download Tools Row 2
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            val text = withContext(Dispatchers.IO) { storage.getReportPlainText(ExportRangeType.ALL) }
+                            fullReportText = text
+                            showFullTextReportDialog = true
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color(0xFF64748B))
+                ) {
+                    Icon(imageVector = Icons.Default.Info, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color(0xFF475569))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("View Report", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFF475569))
                 }
 
                 OutlinedButton(
@@ -384,7 +539,7 @@ fun GpsDiagnosticsScreen(
                                 val zip = withContext(Dispatchers.IO) { storage.createExportZip(ExportRangeType.ALL) }
                                 shareZipFile(context, zip)
                             } catch (e: Exception) {
-                                Toast.makeText(context, "Export error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Share error: ${e.message}", Toast.LENGTH_SHORT).show()
                             } finally {
                                 isExporting = false
                             }
@@ -392,14 +547,14 @@ fun GpsDiagnosticsScreen(
                     },
                     modifier = Modifier
                         .weight(1f)
-                        .height(46.dp),
+                        .height(44.dp),
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.2.dp, CollegePrimary),
+                    border = BorderStroke(1.dp, Color(0xFF64748B)),
                     enabled = !isExporting
                 ) {
-                    Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp), tint = CollegePrimary)
+                    Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color(0xFF475569))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Export All", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CollegePrimary)
+                    Text("Share ZIP", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFF475569))
                 }
             }
 
@@ -575,6 +730,62 @@ fun GpsDiagnosticsScreen(
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirmDialog = false }) {
                     Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Full Text Report Viewer Dialog
+    if (showFullTextReportDialog) {
+        AlertDialog(
+            onDismissRequest = { showFullTextReportDialog = false },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Diagnostic Report", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    IconButton(onClick = { showFullTextReportDialog = false }, modifier = Modifier.size(28.dp)) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF64748B))
+                    }
+                }
+            },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(380.dp)
+                        .background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp))
+                        .padding(12.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = fullReportText,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = Color(0xFF0F172A),
+                        lineHeight = 15.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        cm.setPrimaryClip(ClipData.newPlainText("FleetX Diagnostic Report", fullReportText))
+                        Toast.makeText(context, "Full report copied to clipboard!", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                ) {
+                    Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Copy All")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFullTextReportDialog = false }) {
+                    Text("Close")
                 }
             }
         )
@@ -797,9 +1008,14 @@ private fun shareZipFile(context: Context, zipFile: java.io.File) {
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "application/zip"
             putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newRawUri("FleetX Diagnostic Export", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(shareIntent, "Export FleetX GPS Diagnostics"))
+        val chooser = Intent.createChooser(shareIntent, "Export FleetX GPS Diagnostics").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(chooser)
     } catch (e: Exception) {
         Toast.makeText(context, "Could not open share: ${e.message}", Toast.LENGTH_LONG).show()
     }

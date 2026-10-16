@@ -1073,25 +1073,27 @@ object GpsDiagnosticManager {
         val causes: String
         val nextEvidence: String
 
+        val rom = DeviceRomDetector.getRomInfo()
+
         when {
             taskRemovedEvent != null && processRestartedEvent != null -> {
                 primaryObs = "FleetX was removed from Recent Apps at ${taskRemovedEvent.timeFormatted}. The process was subsequently terminated by Android and revived at ${processRestartedEvent.timeFormatted} (gap: ${processRestartedEvent.details["gapSeconds"] ?: "unknown"}s)."
-                causes = "Samsung One UI killed the application task when swiped from Recents. Standard background services in the same process are halted upon task removal unless protected or revived via AlarmManager."
-                nextEvidence = "Verify whether AlarmManager or AutoTrackingScheduler triggers a fresh startForegroundService() during operating window."
+                causes = "${rom.displayName} (${rom.romVersion}) killed the application task when swiped from Recents. Standard background services in the same process are halted upon task removal unless protected or revived via AlarmManager. Recommended fix: ${rom.advice}"
+                nextEvidence = "Verify whether AlarmManager resurrection or persistent Foreground Service keeps tracking alive."
             }
             taskRemovedEvent != null && serviceDestroyedEvent != null -> {
                 primaryObs = "Service onDestroy() executed immediately following task removal at ${taskRemovedEvent.timeFormatted}."
-                causes = "Android tore down the foreground service during task dismissal, actively calling stopTrackingSession() and clearing notification."
+                causes = "${rom.displayName} tore down the foreground service during task dismissal, actively calling stopTrackingSession() and clearing notification. Recommended fix: ${rom.advice}"
                 nextEvidence = "Inspect onTaskRemoved handling and verify if START_STICKY or alarms recover tracking."
             }
             taskRemovedEvent != null -> {
                 primaryObs = "TASK_REMOVED_CALLBACK_RECEIVED recorded at ${taskRemovedEvent.timeFormatted}. No further events recorded until next app launch."
-                causes = "The host process was abruptly killed by Android shortly after onTaskRemoved before any further diagnostics could execute."
+                causes = "The host process was abruptly killed by ${rom.displayName} shortly after onTaskRemoved before any further diagnostics could execute. Recommended fix: ${rom.advice}"
                 nextEvidence = "Check device logcat for am_kill / lowmemorykiller entries after swiping from Recents."
             }
             fgServiceFailedEvent != null -> {
                 primaryObs = "Foreground service failed to start: ${fgServiceFailedEvent.details["errorReason"] ?: "Unknown error"}"
-                causes = "Android background start restrictions (Android 12+ ForegroundServiceStartNotAllowedException) or missing background location permission."
+                causes = "${rom.displayName} background start restrictions (Android 12+ ForegroundServiceStartNotAllowedException) or missing background location permission."
                 nextEvidence = "Verify battery optimization exemption (Unrestricted) and background location permission ('Allow all the time')."
             }
             foundFailure -> {

@@ -503,8 +503,14 @@ fun StudentMapScreen(
                             val detailSubtext = when (trackingState) {
                                 TrackingDisplayState.ACTIVE -> {
                                     val dist = nextStopEta?.distanceFormatted ?: ""
-                                    val speed = if (speedKmH > 2) "$speedKmH km/h" else stringResource(R.string.speed_at_stop)
-                                    if (dist.isNotBlank()) "$dist away • $speed" else speed
+                                    val isAtStop = (nextStopEta?.distanceMeters ?: Double.MAX_VALUE) <= 50.0
+                                    val motionText = when {
+                                        isAtStop -> stringResource(R.string.speed_at_stop)
+                                        speedKmH > 2 -> "$speedKmH km/h"
+                                        else -> "Stationary"
+                                    }
+                                    val cleanDist = if (dist.endsWith(" away")) dist else if (dist.isNotBlank()) "$dist away" else ""
+                                    if (cleanDist.isNotBlank()) "$cleanDist • $motionText" else motionText
                                 }
                                 TrackingDisplayState.WAITING_FOR_GPS -> stringResource(R.string.connecting_gps_pending)
                                 TrackingDisplayState.STALE -> stringResource(R.string.signal_outdated, lastUpdateText)

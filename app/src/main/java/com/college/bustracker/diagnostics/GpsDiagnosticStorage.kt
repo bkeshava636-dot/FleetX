@@ -511,7 +511,8 @@ class GpsDiagnosticStorage(private val context: Context? = null) {
         }
     }
 
-    private fun buildSummaryText(summary: ContinuousRootCauseSummary, rangeType: ExportRangeType, eventCount: Int): String {
+    fun buildSummaryText(summary: ContinuousRootCauseSummary, rangeType: ExportRangeType, eventCount: Int): String {
+        val rom = DeviceRomDetector.getRomInfo()
         return buildString {
             appendLine("==========================================")
             appendLine("FleetX GPS Continuous Diagnostic Export")
@@ -519,6 +520,10 @@ class GpsDiagnosticStorage(private val context: Context? = null) {
             appendLine("Export Scope:               ${rangeType.name}")
             appendLine("Events Exported:            $eventCount")
             appendLine("Generation Time:            ${Instant.now().atZone(ScheduleHelper.KOLKATA_ZONE).format(ISO_FORMATTER)}")
+            appendLine("Device:                     ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} (Android ${android.os.Build.VERSION.RELEASE}, API ${android.os.Build.VERSION.SDK_INT})")
+            appendLine("Detected System / ROM:      ${rom.displayName} (${rom.romVersion})")
+            appendLine("Background Kill Risk:       ${rom.killRisk}")
+            appendLine("Recommended OEM Fix:        ${rom.advice}")
             appendLine()
             appendLine("PRIMARY OBSERVATION:")
             appendLine(summary.primaryObservation)
@@ -542,6 +547,41 @@ class GpsDiagnosticStorage(private val context: Context? = null) {
             appendLine(summary.nextEvidenceNeeded)
             appendLine("==========================================")
         }
+    }
+
+    /**
+     * Saves both the comprehensive diagnostic ZIP and readable summary.txt directly into device's Downloads directory.
+     */
+    fun saveReportToDownloads(rangeType: ExportRangeType): File {
+        val zipFile = createExportZip(rangeType)
+        try {
+            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+            if (!downloadsDir.exists()) downloadsDir.mkdirs()
+            val destZip = File(downloadsDir, zipFile.name)
+            zipFile.copyTo(destZip, overwrite = true)
+
+            val summaryReport = GpsDiagnosticManager.generateRootCauseSummary()
+            val summaryText = buildSummaryText(summaryReport, rangeType, 0)
+            val destTxt = File(downloadsDir, "${zipFile.nameWithoutExtension}_summary.txt")
+            destTxt.writeText(summaryText)
+            return destZip
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed saving to public Downloads: ${e.message}", e)
+            return zipFile
+        }
+    }
+
+    /**
+     * Returns full plain text representation of diagnostic summary for clipboard copying and direct display.
+     */
+    fun getReportPlainText(rangeType: ExportRangeType): String {
+        val events = when (rangeType) {
+            ExportRangeType.TODAY -> getTodayEvents()
+            ExportRangeType.ALL -> getAllDailyEvents()
+            else -> getTodayEvents()
+        }
+        val summaryReport = GpsDiagnosticManager.generateRootCauseSummary()
+        return buildSummaryText(summaryReport, rangeType, events.size)
     }
 
     // ==========================================
