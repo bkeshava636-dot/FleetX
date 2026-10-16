@@ -319,8 +319,8 @@ class DriverScheduleReceiver : BroadcastReceiver() {
             )
 
             val isDriverLoggedIn = AutoTrackingScheduler.isDriverLoggedIn(context)
-            if (!isEnabled || !isDriverLoggedIn) {
-                Log.d(TAG, "[AUTO-TRACK] Driver auto-tracking disabled ($isEnabled) or driver logged out ($isDriverLoggedIn); skipping trigger")
+            if (!isDriverLoggedIn) {
+                Log.d(TAG, "[AUTO-TRACK] Driver is logged out; canceling alarms and stopping tracking")
                 AutoTrackingScheduler.cancelAlarms(context)
                 if (TrackingServiceHelper.isTracking.value) {
                     TrackingServiceHelper.stopTracking(context, "DRIVER_LOGGED_OUT", "DriverScheduleReceiver")
@@ -328,10 +328,37 @@ class DriverScheduleReceiver : BroadcastReceiver() {
                 com.college.bustracker.diagnostics.GpsDiagnosticManager.logEvent(
                     context = context,
                     stage = com.college.bustracker.diagnostics.DiagnosticStage.TRACKING_PREFERENCE,
-                    eventName = if (!isEnabled) "TRACKING_PREFERENCE_DISABLED" else "DRIVER_LOGGED_OUT",
+                    eventName = "DRIVER_LOGGED_OUT",
                     isFailure = true,
                     failureType = com.college.bustracker.diagnostics.FailureType.TRACKING_PREFERENCE_DISABLED
                 )
+                return
+            }
+
+            // Check if this is an active tracking session resurrection (e.g. from task swipe or kill)
+            val resurrectionReason = intent?.getStringExtra("EXTRA_RESURRECTION_REASON")
+            val persistentPrefs = context.getSharedPreferences(LocationTrackingService.PREFS_PERSISTENT_TRACKING, Context.MODE_PRIVATE)
+            val isPersistentSessionActive = persistentPrefs.getBoolean(LocationTrackingService.KEY_IS_SESSION_ACTIVE, false)
+            val savedBusId = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_BUS_ID, "") ?: ""
+            val savedRouteId = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_ROUTE_ID, "") ?: ""
+            val savedDriverId = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_DRIVER_ID, "") ?: ""
+            val savedMode = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_MODE, "MANUAL") ?: "MANUAL"
+
+            if (!resurrectionReason.isNullOrBlank() || isPersistentSessionActive) {
+                Log.i(TAG, "[AUTO-TRACK] Active tracking session resurrection triggered: reason=$resurrectionReason, bus=$savedBusId, mode=$savedMode")
+                if (savedBusId.isNotBlank()) {
+                    try {
+                        TrackingServiceHelper.startTracking(context, savedBusId, savedRouteId, savedDriverId, savedMode, forceWindow = true)
+                        Log.i(TAG, "[AUTO-TRACK] Resurrected LocationTrackingService successfully for bus $savedBusId")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "[AUTO-TRACK] Failed to resurrect LocationTrackingService: ${e.message}")
+                    }
+                    return
+                }
+            }
+
+            if (!isEnabled) {
+                Log.d(TAG, "[AUTO-TRACK] Driver auto-tracking switch is disabled ($isEnabled); skipping scheduled trigger without stopping manual sessions")
                 return
             }
 
@@ -481,20 +508,23 @@ class DriverScheduleReceiver : BroadcastReceiver() {
                 }
             } else {
                 // Outside operating window or on a holiday
-                Log.i(TAG, "[AUTO-TRACK] Window ended or holiday: stopping tracking while preserving auto preference")
-                com.college.bustracker.diagnostics.GpsDiagnosticManager.completeSession(
-                    context = context,
-                    reason = if (isHoliday) "College holiday ($holidayName)" else "Outside operating window"
-                )
-                if (TrackingServiceHelper.isTracking.value) {
+                val persistentMode = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_MODE, "")
+                val isAutoMode = persistentMode == "AUTO"
+
+                Log.i(TAG, "[AUTO-TRACK] Operating window inactive or holiday: isHoliday=$isHoliday, isAutoMode=$isAutoMode")
+                if (isAutoMode && TrackingServiceHelper.isTracking.value) {
                     val stopReason = if (isHoliday) "COLLEGE_HOLIDAY" else "OPERATING_WINDOW_ENDED"
-                    Log.i(TAG, "[AUTO-TRACK] Stopping LocationTrackingService: $stopReason")
+                    Log.i(TAG, "[AUTO-TRACK] Stopping automatic LocationTrackingService: $stopReason")
                     TrackingServiceHelper.stopTracking(context, stopReason, "DriverScheduleReceiver")
+                    com.college.bustracker.diagnostics.GpsDiagnosticManager.completeSession(
+                        context = context,
+                        reason = if (isHoliday) "College holiday ($holidayName)" else "Outside operating window"
+                    )
+                    com.college.bustracker.diagnostics.GpsDiagnosticManager.stopWindowRecording(
+                        context = context,
+                        reason = if (isHoliday) "College holiday ($holidayName)" else "Operating window ended ($timeStr)"
+                    )
                 }
-                com.college.bustracker.diagnostics.GpsDiagnosticManager.stopWindowRecording(
-                    context = context,
-                    reason = if (isHoliday) "College holiday ($holidayName)" else "Operating window ended ($timeStr)"
-                )
                 dismissLocationDisabledNotification(context)
                 dismissLocationPermissionMissingNotification(context)
                 dismissBackgroundLocationPermissionMissingNotification(context)
