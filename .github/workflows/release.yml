@@ -110,61 +110,18 @@ jobs:
           echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
           echo "file_size=$FILE_SIZE" >> $GITHUB_OUTPUT
           
-          # Extract release notes from version.json if available
-          if [ -f "version.json" ]; then
-            RELEASE_NOTES=$(python3 -c "import json; data=json.load(open('version.json')); print(data.get('releaseNotes', ''))" 2>/dev/null || echo "")
-          else
-            RELEASE_NOTES=""
-          fi
-
-          # Extract git commit changelog since previous tag
-          PREV_TAG=$(git describe --tags --abbrev=0 "${TAG_NAME}^" 2>/dev/null || git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -n "$PREV_TAG" ]; then
-            GIT_LOG=$(git log "${PREV_TAG}..HEAD" --oneline --no-merges)
-          else
-            GIT_LOG=$(git log -n 10 --oneline --no-merges)
-          fi
-
-          # Create dynamic release notes file
-          cat <<EOF > release-notes.md
-## FleetX Campus Transit Portal - Release $TAG_NAME
-
-### What's New in this Release
-${RELEASE_NOTES:-"FleetX continuous reliability, telemetry, and background tracking stability update."}
-
-### Recent Commits ($TAG_NAME)
-\`\`\`text
-$GIT_LOG
-\`\`\`
-
-### Release Information
-- **Version Name:** \`$VERSION_NAME\`
-- **Version Code:** \`$VERSION_CODE\`
-- **Release Date:** $(date -u +'%Y-%m-%d %H:%M UTC')
-- **APK Asset:** \`$RELEASE_APK\`
-- **SHA-256 Checksum:**
-\`\`\`
-$SHA256
-\`\`\`
-
-versionCode: $VERSION_CODE
-SHA-256: $SHA256
-EOF
-
-          # Create companion update manifest
-          cat <<EOF > update-manifest.json
-          {
-            "versionName": "$VERSION_NAME",
-            "versionCode": $VERSION_CODE,
-            "sha256": "$SHA256",
-            "sizeBytes": $FILE_SIZE,
-            "apkFileName": "$RELEASE_APK",
-            "publishedAt": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          }
-          EOF
-          
           # Create checksums.txt
           echo "$SHA256  $RELEASE_APK" > checksums.txt
+
+      - name: Generate Dynamic Release Notes and Manifest
+        env:
+          TAG_NAME: ${{ steps.apk_info.outputs.tag_name }}
+          APK_NAME: ${{ steps.apk_info.outputs.apk_path }}
+          SHA256: ${{ steps.apk_info.outputs.sha256 }}
+          VERSION_CODE: ${{ steps.apk_info.outputs.version_code }}
+          FILE_SIZE: ${{ steps.apk_info.outputs.file_size }}
+        run: |
+          python3 .github/scripts/generate_release_notes.py
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
