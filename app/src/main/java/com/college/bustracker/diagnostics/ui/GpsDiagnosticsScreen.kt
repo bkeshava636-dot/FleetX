@@ -238,7 +238,7 @@ fun GpsDiagnosticsScreen(
 
                     Button(
                         onClick = {
-                            val opened = com.college.bustracker.diagnostics.DeviceRomDetector.openOemBatteryOptimizationSettings(context)
+                            val opened = com.college.bustracker.util.SettingsOpener.openBatteryOptimization(context)
                             if (!opened) {
                                 Toast.makeText(context, "Please check Battery & Autostart settings in device Settings.", Toast.LENGTH_SHORT).show()
                             }

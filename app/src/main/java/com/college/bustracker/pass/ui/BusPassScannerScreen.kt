@@ -533,10 +533,7 @@ fun BusPassScannerScreen(
                         if (permissionPermanentlyDenied) {
                             Button(
                                 onClick = {
-                                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = Uri.fromParts("package", context.packageName, null)
-                                    }
-                                    context.startActivity(intent)
+                                    com.college.bustracker.util.SettingsOpener.openAppDetails(context)
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),

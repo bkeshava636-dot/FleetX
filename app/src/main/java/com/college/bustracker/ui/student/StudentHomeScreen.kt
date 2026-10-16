@@ -1430,10 +1430,7 @@ private fun AutomaticStudentTransitBackupCard(
 
                 Button(
                     onClick = {
-                        val intent = Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        }
-                        context.startActivity(intent)
+                        com.college.bustracker.util.SettingsOpener.openLocationSettings(context)
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
