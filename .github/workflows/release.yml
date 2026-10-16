@@ -110,6 +110,47 @@ jobs:
           echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
           echo "file_size=$FILE_SIZE" >> $GITHUB_OUTPUT
           
+          # Extract release notes from version.json if available
+          if [ -f "version.json" ]; then
+            RELEASE_NOTES=$(python3 -c "import json; data=json.load(open('version.json')); print(data.get('releaseNotes', ''))" 2>/dev/null || echo "")
+          else
+            RELEASE_NOTES=""
+          fi
+
+          # Extract git commit changelog since previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 "${TAG_NAME}^" 2>/dev/null || git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            GIT_LOG=$(git log "${PREV_TAG}..HEAD" --oneline --no-merges)
+          else
+            GIT_LOG=$(git log -n 10 --oneline --no-merges)
+          fi
+
+          # Create dynamic release notes file
+          cat <<EOF > release-notes.md
+## FleetX Campus Transit Portal - Release $TAG_NAME
+
+### What's New in this Release
+${RELEASE_NOTES:-"FleetX continuous reliability, telemetry, and background tracking stability update."}
+
+### Recent Commits ($TAG_NAME)
+\`\`\`text
+$GIT_LOG
+\`\`\`
+
+### Release Information
+- **Version Name:** \`$VERSION_NAME\`
+- **Version Code:** \`$VERSION_CODE\`
+- **Release Date:** $(date -u +'%Y-%m-%d %H:%M UTC')
+- **APK Asset:** \`$RELEASE_APK\`
+- **SHA-256 Checksum:**
+\`\`\`
+$SHA256
+\`\`\`
+
+versionCode: $VERSION_CODE
+SHA-256: $SHA256
+EOF
+
           # Create companion update manifest
           cat <<EOF > update-manifest.json
           {
@@ -133,28 +174,8 @@ jobs:
           draft: false
           prerelease: false
           make_latest: true
-          body: |
-            ## FleetX Campus Transit Portal - Release ${{ steps.apk_info.outputs.tag_name }}
-            
-            ### Release Information
-            - **Version Name:** `${{ steps.apk_info.outputs.version_name }}`
-            - **Version Code:** `${{ steps.apk_info.outputs.version_code }}`
-            - **Release Date:** $(date -u +'%Y-%m-%d %H:%M UTC')
-            - **APK Asset:** `${{ steps.apk_info.outputs.apk_path }}`
-            - **SHA-256 Checksum:**
-            ```
-            ${{ steps.apk_info.outputs.sha256 }}
-            ```
-            
-            versionCode: ${{ steps.apk_info.outputs.version_code }}
-            SHA-256: ${{ steps.apk_info.outputs.sha256 }}
-            
-            ### What's New
-            - **Kannada & English Language Support**: Complete bilingual translation across all Student, Driver, and Admin screens with instant in-app language switching.
-            - **Admin Announcements & Bus Timing Alerts**: Create, schedule, and broadcast targeted notices (All, Students, Drivers, Bus, Route, Stop) with dual-language previews.
-            - **Bus Timing Change Workflow**: Dedicated administrative workflow to announce schedule changes without disrupting operational tracking alarms.
-            - In-app automatic update delivery via GitHub Releases with cryptographic SHA-256 verification.
-            - Fleet tracking, digital bus pass scanner, and campus transit stability improvements.
+          body_path: release-notes.md
+          generate_release_notes: true
           files: |
             ${{ steps.apk_info.outputs.apk_path }}
             update-manifest.json
