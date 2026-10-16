@@ -87,6 +87,11 @@ import com.college.bustracker.ui.theme.CollegeSurface
 import com.college.bustracker.ui.theme.StatusActiveGreen
 import com.college.bustracker.ui.theme.StatusDangerRed
 import com.college.bustracker.ui.theme.StatusWarningOrange
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.college.bustracker.util.SettingsOpener
 import com.college.bustracker.util.ScheduleHelper
 import com.college.bustracker.util.SchedulePdfHelper
 import kotlinx.coroutines.launch
@@ -126,7 +131,7 @@ fun DriverHomeScreen(
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val activity = context as? Activity
+    val activity = remember(context) { SettingsOpener.findActivity(context) }
     val isOperatingWindow = remember(operatingSchedule, isHolidayToday, isTrackingLive) {
         (ScheduleHelper.isWithinOperatingWindow(operatingSchedule) && !isHolidayToday) || isTrackingLive
     }
@@ -158,12 +163,7 @@ fun DriverHomeScreen(
                 Button(
                     onClick = {
                         showBackgroundLocationDialog = false
-                        try {
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = Uri.fromParts("package", context.packageName, null)
-                            }
-                            context.startActivity(intent)
-                        } catch (ignored: Exception) {}
+                        SettingsOpener.openAppDetails(context)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
                 ) {
@@ -386,7 +386,7 @@ fun DriverHomeScreen(
                             if (activity != null) {
                                 com.college.bustracker.util.DriverConnectivityHelper.promptEnableLocation(activity)
                             } else {
-                                com.college.bustracker.util.DriverConnectivityHelper.openLocationSettings(context)
+                                SettingsOpener.openLocationSettings(context)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed),
@@ -440,7 +440,7 @@ fun DriverHomeScreen(
                     Button(
                         onClick = {
                             com.college.bustracker.util.DriverConnectivityHelper.tryEnableMobileData(context)
-                            com.college.bustracker.util.DriverConnectivityHelper.openMobileDataSettings(context)
+                            SettingsOpener.openMobileDataSettings(context)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
                         shape = RoundedCornerShape(8.dp)
@@ -498,11 +498,39 @@ fun DriverHomeScreen(
             Spacer(modifier = Modifier.height(14.dp))
         }
 
-        // Battery Optimization Warning Banner
-        val context = LocalContext.current
+        // Battery Optimization & Permission state observers (Reactive on resume from Settings)
+        val lifecycleOwner = LocalLifecycleOwner.current
         val powerManager = remember { context.getSystemService(Context.POWER_SERVICE) as? PowerManager }
-        val isBatteryOptimized = remember(powerManager) {
-            powerManager?.isIgnoringBatteryOptimizations(context.packageName) == false
+        var isBatteryOptimized by remember {
+            mutableStateOf(powerManager?.isIgnoringBatteryOptimizations(context.packageName) == false)
+        }
+        var hasBgLocationPermission by remember {
+            mutableStateOf(
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    androidx.core.content.ContextCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                } else true
+            )
+        }
+
+        DisposableEffect(lifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    isBatteryOptimized = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == false
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        hasBgLocationPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    }
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+            }
         }
 
         if (isBatteryOptimized) {
@@ -537,17 +565,7 @@ fun DriverHomeScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                     Button(
                         onClick = {
-                            try {
-                                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                    data = Uri.parse("package:${context.packageName}")
-                                }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                try {
-                                    val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                                    context.startActivity(intent)
-                                } catch (ignored: Exception) {}
-                            }
+                            SettingsOpener.openBatteryOptimization(context)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB45309)),
                         shape = RoundedCornerShape(8.dp)
@@ -766,13 +784,7 @@ fun DriverHomeScreen(
                 }
 
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                    val hasBg = remember(context) {
-                        androidx.core.content.ContextCompat.checkSelfPermission(
-                            context,
-                            android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
-                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                    }
-                    if (!hasBg) {
+                    if (!hasBgLocationPermission) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(
                             modifier = Modifier

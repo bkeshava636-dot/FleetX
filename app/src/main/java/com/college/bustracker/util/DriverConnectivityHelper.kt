@@ -180,35 +180,11 @@ object DriverConnectivityHelper {
     }
 
     fun openLocationSettings(context: Context) {
-        try {
-            val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            try {
-                val intent = Intent(Settings.ACTION_SETTINGS).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                context.startActivity(intent)
-            } catch (ignored: Exception) {}
-        }
+        SettingsOpener.openLocationSettings(context)
     }
 
     fun openMobileDataSettings(context: Context) {
-        try {
-            val intent = Intent(Settings.ACTION_DATA_ROAMING_SETTINGS).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            try {
-                val intent = Intent(Settings.ACTION_WIRELESS_SETTINGS).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                context.startActivity(intent)
-            } catch (ignored: Exception) {}
-        }
+        SettingsOpener.openMobileDataSettings(context)
     }
 
     fun showLocationDisabledNotification(context: Context, busNumber: String) {

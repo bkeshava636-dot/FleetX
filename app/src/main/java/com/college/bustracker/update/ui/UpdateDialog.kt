@@ -591,8 +591,7 @@ fun UpdateDialog(
                 Button(
                     onClick = {
                         showPermissionGuidance = false
-                        val intent = AppUpdateInstaller.createManageUnknownAppSourcesIntent(context)
-                        context.startActivity(intent)
+                        com.college.bustracker.util.SettingsOpener.openInstallUnknownApps(context)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
                 ) {

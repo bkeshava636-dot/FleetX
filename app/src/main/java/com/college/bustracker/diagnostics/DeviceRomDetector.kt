@@ -314,11 +314,16 @@ object DeviceRomDetector {
             )
         }
 
-        // Standard App details fallback
+        // Standard App details fallback (App Info -> Battery -> Unrestricted)
         intentsToTry.add(
             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.parse("package:$pkg")
+                data = Uri.fromParts("package", pkg, null)
             }
+        )
+
+        // General Battery Settings fallback
+        intentsToTry.add(
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
         )
 
         for (intent in intentsToTry) {
