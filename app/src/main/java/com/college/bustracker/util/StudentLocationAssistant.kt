@@ -42,6 +42,7 @@ object StudentLocationAssistant {
     private var activeBusId: String = ""
     private var studentSourceId: String = ""
     private var appContext: Context? = null
+    private var hasContributedFix: Boolean = false
 
     private fun getOrCreateSourceId(context: Context): String {
         val auth = FirebaseAuth.getInstance()
@@ -89,6 +90,7 @@ object StudentLocationAssistant {
 
         activeBusId = busId
         studentSourceId = getOrCreateSourceId(context)
+        hasContributedFix = false
         fusedClient = LocationServices.getFusedLocationProviderClient(context.applicationContext)
 
         val locationRequest = LocationRequest.Builder(
@@ -147,6 +149,7 @@ object StudentLocationAssistant {
 
         StudentBeaconArbitrator.tryAcquireOrRenewLease(activeBusId, studentSourceId) { isLeaseHolder ->
             if (isLeaseHolder) {
+                hasContributedFix = true
                 val source = LocationSource(
                     busId = activeBusId,
                     sourceId = studentSourceId,
@@ -173,6 +176,8 @@ object StudentLocationAssistant {
     fun stopSharing() {
         val busToClean = activeBusId
         val sourceToClean = studentSourceId
+        val shouldCleanLocation = hasContributedFix
+        hasContributedFix = false
 
         locationCallback?.let {
             try {
@@ -188,7 +193,9 @@ object StudentLocationAssistant {
 
         if (busToClean.isNotBlank() && sourceToClean.isNotBlank()) {
             StudentBeaconArbitrator.releaseLease(busToClean, sourceToClean)
-            CollegeBusApp.instance.trackingRepository.removeStudentLocation(busToClean, sourceToClean)
+            if (shouldCleanLocation) {
+                CollegeBusApp.instance.trackingRepository.removeStudentLocation(busToClean, sourceToClean)
+            }
             Log.i(TAG, "Student location sharing STOPPED for bus $busToClean")
         }
 

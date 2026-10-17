@@ -1,12 +1,15 @@
 package com.college.bustracker.util
 
 import android.util.Log
+import com.college.bustracker.CollegeBusApp
 import com.college.bustracker.data.model.BusStop
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
@@ -73,6 +76,12 @@ object RoadRoutingEngine {
             return@withContext it
         }
 
+        // Check persistent disk cache before hitting network
+        loadFromDiskCache(cacheKey)?.let { diskCached ->
+            routePathCache[cacheKey] = diskCached
+            return@withContext diskCached
+        }
+
         val directPoints = stops.map { LatLng(it.latitude, it.longitude) }
         val directDistance = computeDirectPolylineDistance(directPoints)
 
@@ -113,6 +122,7 @@ object RoadRoutingEngine {
                             Log.d(TAG, "Road path snapped successfully for ${stops.size} stops (${roadPoints.size} road points, ${roadDistance.toInt()}m)")
                             val result = RoadRouteResult(roadPoints, roadDistance, true)
                             routePathCache[cacheKey] = result
+                            saveToDiskCache(cacheKey, result)
                             return@withContext result
                         }
                     }
@@ -273,6 +283,64 @@ object RoadRoutingEngine {
             )
         }
         return total
+    }
+
+    private fun getDiskCacheFile(cacheKey: String): File? {
+        return try {
+            val app = CollegeBusApp.instance
+            val dir = File(app.filesDir, "routes_osrm_cache")
+            if (!dir.exists()) dir.mkdirs()
+            val safeHash = abs(cacheKey.hashCode())
+            File(dir, "osrm_$safeHash.json")
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun loadFromDiskCache(cacheKey: String): RoadRouteResult? {
+        val file = getDiskCacheFile(cacheKey) ?: return null
+        if (!file.exists()) return null
+        return try {
+            val jsonStr = file.readText()
+            val json = JSONObject(jsonStr)
+            val distance = json.optDouble("distance", 0.0)
+            val isSnapped = json.optBoolean("snapped", true)
+            val coordsArray = json.getJSONArray("points")
+            val points = ArrayList<LatLng>(coordsArray.length())
+            for (i in 0 until coordsArray.length()) {
+                val pt = coordsArray.getJSONArray(i)
+                points.add(LatLng(pt.getDouble(0), pt.getDouble(1)))
+            }
+            if (points.isNotEmpty()) {
+                Log.d(TAG, "Loaded road route from disk cache (${file.name}, ${points.size} pts)")
+                RoadRouteResult(points, distance, isSnapped)
+            } else null
+        } catch (e: Exception) {
+            Log.w(TAG, "Error loading route from disk cache: ${e.message}")
+            null
+        }
+    }
+
+    private fun saveToDiskCache(cacheKey: String, result: RoadRouteResult) {
+        if (!result.isSnappedToRoads || result.points.isEmpty()) return
+        val file = getDiskCacheFile(cacheKey) ?: return
+        try {
+            val json = JSONObject()
+            json.put("distance", result.totalDistanceMeters)
+            json.put("snapped", result.isSnappedToRoads)
+            val pointsArray = JSONArray()
+            for (pt in result.points) {
+                val coord = JSONArray()
+                coord.put(pt.latitude)
+                coord.put(pt.longitude)
+                pointsArray.put(coord)
+            }
+            json.put("points", pointsArray)
+            file.writeText(json.toString())
+            Log.d(TAG, "Saved road route to disk cache (${file.name})")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error saving route to disk cache: ${e.message}")
+        }
     }
 
     fun clearCache() {
