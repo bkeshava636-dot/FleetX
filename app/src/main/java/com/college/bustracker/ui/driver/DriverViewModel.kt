@@ -147,8 +147,17 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
         // Collect calendar exceptions to keep today's evaluation reactive
         viewModelScope.launch {
             app.calendarRepository.getCalendarExceptionsFlow().collect {
-                _isHolidayToday.value = com.college.bustracker.util.CollegeCalendarService.isHoliday()
-                _todayHolidayName.value = com.college.bustracker.util.CollegeCalendarService.getHolidayName()
+                val isHoliday = com.college.bustracker.util.CollegeCalendarService.isHoliday()
+                val holidayName = com.college.bustracker.util.CollegeCalendarService.getHolidayName()
+                _isHolidayToday.value = isHoliday
+                _todayHolidayName.value = holidayName
+                refreshWindowOverrideState()
+
+                if (isHoliday && isTrackingLive.value) {
+                    stopTracking("CALENDAR_HOLIDAY_OVERRIDE")
+                } else if (!isHoliday && !isTrackingLive.value && _isAutoTrackingEnabled.value) {
+                    AutoTrackingScheduler.checkAndTriggerAutoTracking(getApplication())
+                }
             }
         }
         // Collect assigned bus strictly based on the logged-in driver's profile
@@ -376,8 +385,8 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
         _holidayWarningMessage.value = null
     }
 
-    fun stopTracking() {
-        TrackingServiceHelper.stopTracking(getApplication())
+    fun stopTracking(reason: String = "USER_MANUAL_STOP") {
+        TrackingServiceHelper.stopTracking(getApplication(), reason, "DriverViewModel.stopTracking")
         _isWindowOverriddenOff.value = AutoTrackingScheduler.isWindowOverriddenOff(getApplication())
     }
 

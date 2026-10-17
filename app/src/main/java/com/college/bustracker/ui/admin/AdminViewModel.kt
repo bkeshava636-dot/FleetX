@@ -621,8 +621,10 @@ class AdminViewModel : ViewModel() {
 
     init {
         viewModelScope.launch {
-            calendarExceptions.collect {
-                todayEvaluation.value = com.college.bustracker.util.CollegeCalendarService.evaluateDay()
+            calendarExceptions.collect { list ->
+                todayEvaluation.value = com.college.bustracker.util.CollegeCalendarService.evaluateDay(
+                    exceptions = list.associateBy { it.date.trim() }
+                )
             }
         }
     }

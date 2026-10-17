@@ -66,7 +66,7 @@ object TrackingServiceHelper {
 
     fun stopTracking(
         context: Context,
-        reason: String = "USER_MANUAL_STOP",
+        reason: String = "STOP_TRACKING",
         caller: String = "TrackingServiceHelper"
     ) {
         if (reason == "USER_MANUAL_STOP" || reason == "CAMPUS_GEOFENCE_AUTO_SHUTDOWN") {

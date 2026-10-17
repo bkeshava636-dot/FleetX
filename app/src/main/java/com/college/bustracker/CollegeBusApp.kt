@@ -91,6 +91,30 @@ class CollegeBusApp : Application() {
         appScope.launch {
             calendarRepository.getCalendarExceptionsFlow().collect { exceptions ->
                 com.college.bustracker.util.CollegeCalendarService.updateCachedExceptions(exceptions, this@CollegeBusApp)
+
+                // Authoritative calendar overrides take precedence over any temporary manual window overrides
+                com.college.bustracker.service.AutoTrackingScheduler.clearWindowOverride(this@CollegeBusApp)
+
+                val prefs = getSharedPreferences(com.college.bustracker.service.AutoTrackingScheduler.PREF_FILE, Context.MODE_PRIVATE)
+                val isDriverAutoEnabled = prefs.getBoolean(com.college.bustracker.service.AutoTrackingScheduler.KEY_AUTO_ENABLED, false)
+                val currentSchedule = com.college.bustracker.util.OperatingScheduleService.getSchedule()
+
+                if (isDriverAutoEnabled) {
+                    com.college.bustracker.service.AutoTrackingScheduler.scheduleAlarms(this@CollegeBusApp, currentSchedule)
+                    // Check and trigger auto tracking: if today became a working day during window, turns ON;
+                    // if today became a holiday during window, turns OFF.
+                    com.college.bustracker.service.AutoTrackingScheduler.checkAndTriggerAutoTracking(this@CollegeBusApp)
+                } else if (com.college.bustracker.service.TrackingServiceHelper.isTracking.value && com.college.bustracker.util.CollegeCalendarService.isHoliday()) {
+                    // If tracking was started manually and an admin overrides today to a holiday, shut down tracking
+                    android.util.Log.i("CollegeBusApp", "Calendar override changed today to HOLIDAY -> turning tracking OFF")
+                    com.college.bustracker.service.TrackingServiceHelper.stopTracking(this@CollegeBusApp, "CALENDAR_HOLIDAY_OVERRIDE", "CollegeBusApp")
+                }
+
+                val ridePrefs = getSharedPreferences(com.college.bustracker.service.StudentAutoTrackingScheduler.PREFS_NAME, Context.MODE_PRIVATE)
+                val isStudentAutoEnabled = ridePrefs.getBoolean("auto_ride_sharing_enabled", false)
+                if (isStudentAutoEnabled) {
+                    com.college.bustracker.service.StudentAutoTrackingScheduler.scheduleAlarms(this@CollegeBusApp, currentSchedule)
+                }
             }
         }
         appScope.launch {

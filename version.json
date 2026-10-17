@@ -1,8 +1,8 @@
 {
-  "versionCode": 10027,
-  "versionName": "1.0.27",
-  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.27/app-release.apk",
+  "versionCode": 10028,
+  "versionName": "1.0.28",
+  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.28/app-release.apk",
   "sha256": "",
-  "releaseNotes": "FleetX v1.0.27 - Manual Shift Override (Turn tracking ON or OFF anytime during operating windows without auto-resurrection conflicts) & Student Feedback System (In-app issue reporting for tracking, delays, routes, and lost items)",
-  "publishedAt": "2026-10-17T13:42:00Z"
+  "releaseNotes": "FleetX v1.0.28 - Fix Calendar Overrides during operating windows: real-time automatic tracking on/off synchronization when working-day or holiday overrides are applied or modified, re-arm alarms on calendar exception updates, and fix premature window override flags",
+  "publishedAt": "2026-10-17T13:58:00Z"
 }

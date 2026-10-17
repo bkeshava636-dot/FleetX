@@ -36,7 +36,7 @@ class CalendarRepository(
                         return@mapNotNull null
                     }
                     try {
-                        val date = doc.getString("date") ?: doc.id
+                        val date = (doc.getString("date") ?: doc.id).trim()
                         if (!date.matches(Regex("^\\d{4}-\\d{2}-\\d{2}$"))) {
                             return@mapNotNull null
                         }
@@ -66,13 +66,15 @@ class CalendarRepository(
 
     suspend fun saveException(exception: CalendarException): Result<Unit> {
         return try {
-            val docRef = firestore.collection(COLLECTION_EXCEPTIONS).document(exception.date)
-            docRef.set(exception).await()
+            val cleanDate = exception.date.trim()
+            val cleanException = exception.copy(date = cleanDate)
+            val docRef = firestore.collection(COLLECTION_EXCEPTIONS).document(cleanDate)
+            docRef.set(cleanException).await()
 
             // Update local memory cache immediately
             val current = _exceptionsFlow.value.toMutableList()
-            current.removeAll { it.date == exception.date }
-            current.add(exception)
+            current.removeAll { it.date.trim() == cleanDate }
+            current.add(cleanException)
             _exceptionsFlow.value = current
             CollegeCalendarService.updateCachedExceptions(current)
 
@@ -85,10 +87,11 @@ class CalendarRepository(
 
     suspend fun deleteException(dateStr: String): Result<Unit> {
         return try {
-            firestore.collection(COLLECTION_EXCEPTIONS).document(dateStr).delete().await()
+            val cleanDate = dateStr.trim()
+            firestore.collection(COLLECTION_EXCEPTIONS).document(cleanDate).delete().await()
 
             val current = _exceptionsFlow.value.toMutableList()
-            current.removeAll { it.date == dateStr }
+            current.removeAll { it.date.trim() == cleanDate }
             _exceptionsFlow.value = current
             CollegeCalendarService.updateCachedExceptions(current)
 
