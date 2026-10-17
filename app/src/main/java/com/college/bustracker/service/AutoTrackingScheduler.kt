@@ -264,7 +264,7 @@ class AutoTrackingScheduler {
                 )
                 if (TrackingServiceHelper.isTracking.value) {
                     Log.i(TAG, "[AUTO-TRACK] $nowIso Stopping driver tracking: outside operating window")
-                    TrackingServiceHelper.stopTracking(context)
+                    TrackingServiceHelper.stopTracking(context, "OUTSIDE_OPERATING_WINDOW", "AutoTrackingScheduler")
                 }
                 DriverScheduleReceiver.dismissLocationDisabledNotification(context)
                 DriverScheduleReceiver.dismissLocationPermissionMissingNotification(context)

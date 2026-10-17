@@ -48,7 +48,7 @@ object CollegeCalendarService {
                         )
                     )
                 }
-                _cachedExceptions.value = list.associateBy { it.date }
+                _cachedExceptions.value = list.associateBy { it.date.trim() }
             }
         } catch (e: Exception) {
             android.util.Log.w("CollegeCalendarService", "Failed to load cached exceptions from disk: ${e.message}")
@@ -56,7 +56,7 @@ object CollegeCalendarService {
     }
 
     fun updateCachedExceptions(exceptions: List<CalendarException>, context: Context? = null) {
-        _cachedExceptions.value = exceptions.associateBy { it.date }
+        _cachedExceptions.value = exceptions.associateBy { it.date.trim() }
         try {
             val ctx = context ?: try { CollegeBusApp.instance } catch (e: Throwable) { null }
             if (ctx != null) {
@@ -99,7 +99,7 @@ object CollegeCalendarService {
                 }
             } catch (ignored: Throwable) {}
         }
-        val dateKey = date.format(dateFormatter)
+        val dateKey = date.format(dateFormatter).trim()
         val override = currentExceptions[dateKey]
 
         if (override != null) {

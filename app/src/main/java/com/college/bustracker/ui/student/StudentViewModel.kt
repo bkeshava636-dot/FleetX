@@ -165,6 +165,7 @@ class StudentViewModel : ViewModel() {
             app.calendarRepository.getCalendarExceptionsFlow().collect {
                 _isHolidayToday.value = com.college.bustracker.util.CollegeCalendarService.isHoliday()
                 _todayHolidayName.value = com.college.bustracker.util.CollegeCalendarService.getHolidayName()
+                updateEtaCalculation(_liveLocation.value, force = true)
             }
         }
 
