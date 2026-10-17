@@ -134,6 +134,15 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
 
     val operatingSchedule: StateFlow<RouteSchedule> = com.college.bustracker.util.OperatingScheduleService.operatingSchedule
 
+    private val _isWindowOverriddenOff = MutableStateFlow(
+        AutoTrackingScheduler.isWindowOverriddenOff(app)
+    )
+    val isWindowOverriddenOff: StateFlow<Boolean> = _isWindowOverriddenOff.asStateFlow()
+
+    fun refreshWindowOverrideState() {
+        _isWindowOverriddenOff.value = AutoTrackingScheduler.isWindowOverriddenOff(app)
+    }
+
     init {
         // Collect calendar exceptions to keep today's evaluation reactive
         viewModelScope.launch {
@@ -360,6 +369,7 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
                 mode = "MANUAL"
             )
         }
+        _isWindowOverriddenOff.value = false
     }
 
     fun dismissHolidayWarning() {
@@ -368,6 +378,7 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
 
     fun stopTracking() {
         TrackingServiceHelper.stopTracking(getApplication())
+        _isWindowOverriddenOff.value = AutoTrackingScheduler.isWindowOverriddenOff(getApplication())
     }
 
     fun onLogout() {

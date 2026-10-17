@@ -641,6 +641,20 @@ class StudentViewModel : ViewModel() {
         AutomaticRideManager.changeAssignedBus(app.applicationContext, busId, schedule)
     }
 
+    fun submitFeedback(
+        feedback: com.college.bustracker.data.model.StudentFeedback,
+        onComplete: (Boolean, String?) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = app.feedbackRepository.submitFeedback(feedback)
+            if (result.isSuccess) {
+                onComplete(true, null)
+            } else {
+                onComplete(false, result.exceptionOrNull()?.message ?: "Failed to submit report")
+            }
+        }
+    }
+
     override fun onCleared() {
         // If automatic sharing is enabled, keep background contributor alive during confirmed rides
         if (!AutomaticRideManager.isAutoSharingEnabled.value) {

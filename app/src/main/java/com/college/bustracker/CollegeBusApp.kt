@@ -43,6 +43,7 @@ class CollegeBusApp : Application() {
     lateinit var stopRequestRepository: com.college.bustracker.data.repository.StopRequestRepository
     lateinit var temporaryAssignmentRepository: com.college.bustracker.data.repository.TemporaryAssignmentRepository
     lateinit var announcementRepository: com.college.bustracker.data.repository.AnnouncementRepository
+    lateinit var feedbackRepository: com.college.bustracker.data.repository.FeedbackRepository
     lateinit var networkMonitor: NetworkMonitor
 
     override fun onCreate() {
@@ -80,6 +81,7 @@ class CollegeBusApp : Application() {
         stopRequestRepository = com.college.bustracker.data.repository.StopRequestRepository()
         temporaryAssignmentRepository = com.college.bustracker.data.repository.TemporaryAssignmentRepository()
         announcementRepository = com.college.bustracker.data.repository.AnnouncementRepository()
+        feedbackRepository = com.college.bustracker.data.repository.FeedbackRepository()
         networkMonitor = NetworkMonitor(this)
 
         // 4. Initialize Calendar & Operating Schedule Services and keep caches reactive

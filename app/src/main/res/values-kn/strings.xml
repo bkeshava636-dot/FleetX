@@ -652,4 +652,31 @@
     <string name="select_subset_desc">ಕೆಲವನ್ನು ಆಯ್ಕೆಮಾಡಿ</string>
     <string name="select_affected_stops_format">ಬಾಧಿತ ನಿಲ್ದಾಣಗಳನ್ನು ಆಯ್ಕೆಮಾಡಿ (%1$d/%2$d)</string>
     <string name="plate_format">ನಂಬರ್ ಪ್ಲೇಟ್: %1$s</string>
+
+    <!-- Shift Window Override Strings -->
+    <string name="shift_tracking_paused_title">ಪಾಳಿಯ ಟ್ರ್ಯಾಕಿಂಗ್ ನಿಲ್ಲಿಸಲಾಗಿದೆ (ಆಫ್)</string>
+    <string name="shift_tracking_paused_desc">ನಿಗದಿತ ಪಾಳಿಯ ಸಮಯದಲ್ಲಿ ನೀವು ಟ್ರ್ಯಾಕಿಂಗ್ ಅನ್ನು ನಿಲ್ಲಿಸಿದ್ದೀರಿ. ನೀವು ಮತ್ತೆ ಆನ್ ಮಾಡುವವರೆಗೆ ಅಥವಾ ಮುಂದಿನ ಪಾಳಿ ಆರಂಭವಾಗುವವರೆಗೆ ಟ್ರ್ಯಾಕಿಂಗ್ ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಮರುಪ್ರಾರಂಭವಾಗುವುದಿಲ್ಲ.</string>
+    <string name="shift_in_progress_title">ನಿಗದಿತ ಪಾಳಿಯ ಸಮಯ</string>
+    <string name="resume_tracking_now">ಟ್ರ್ಯಾಕಿಂಗ್ ಮುಂದುವರಿಸಿ (ಆನ್ ಮಾಡಿ)</string>
+    <string name="start_tracking_on">ಟ್ರ್ಯಾಕಿಂಗ್ ಆರಂಭಿಸಿ (ಆನ್ ಮಾಡಿ)</string>
+    <string name="stop_tracking_off">ಟ್ರ್ಯಾಕಿಂಗ್ ನಿಲ್ಲಿಸಿ (ಆಫ್ ಮಾಡಿ)</string>
+
+    <!-- Student Feedback / Issue Report Strings -->
+    <string name="report_feedback_button">ವರದಿ / ಪ್ರತಿಕ್ರಿಯೆ</string>
+    <string name="student_feedback_title">ಸಮಸ್ಯೆ ವರದಿ ಮಾಡಿ ಅಥವಾ ಪ್ರತಿಕ್ರಿಯೆ ನೀಡಿ</string>
+    <string name="student_feedback_subtitle">ಕಾಲೇಜು ಸಾರಿಗೆ ವ್ಯವಸ್ಥೆಯನ್ನು ಸುಧಾರಿಸಲು ಸಹಕರಿಸಿ. ನಿಮ್ಮ ವರದಿಗಳನ್ನು ಆಡಳಿತ ಮಂಡಳಿ ಪರಿಶೀಲಿಸುತ್ತದೆ.</string>
+    <string name="select_category_label">ಸಮಸ್ಯೆಯ ವರ್ಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ</string>
+    <string name="select_bus_label">ಸಂಬಂಧಿತ ಬಸ್</string>
+    <string name="general_no_bus">ಸಾಮಾನ್ಯ / ಯಾವುದೇ ನಿರ್ದಿಷ್ಟ ಬಸ್ ಅಲ್ಲ</string>
+    <string name="subject_label">ವಿಷಯ</string>
+    <string name="subject_hint">ಉದಾ: ಬಸ್ 3 ಇಪ್ಪತ್ತು ನಿಮಿಷ ತಡವಾಗಿದೆ / ಜಿಪಿಎಸ್ ಸ್ಥಗಿತಗೊಂಡಿದೆ</string>
+    <string name="description_label">ವಿವರಣೆ</string>
+    <string name="description_hint">ಏನು ನಡೆಯಿತು, ಎಲ್ಲಿ, ಮತ್ತು ಎಷ್ಟು ಗಂಟೆಗೆ ಎಂಬುದನ್ನು ವಿವರಿಸಿ...</string>
+    <string name="student_name_label">ನಿಮ್ಮ ಹೆಸರು (ಐಚ್ಛಿಕ)</string>
+    <string name="student_contact_label">ಯುಎಸ್ಎನ್ / ಮೊಬೈಲ್ ಸಂಖ್ಯೆ (ಐಚ್ಛಿಕ)</string>
+    <string name="submit_feedback_action">ವರದಿ ಸಲ್ಲಿಸಿ</string>
+    <string name="feedback_submitted_success_title">ವರದಿ ಸಲ್ಲಿಸಲಾಗಿದೆ</string>
+    <string name="feedback_submitted_success_desc">ಧನ್ಯವಾದಗಳು! ನಿಮ್ಮ ಪ್ರತಿಕ್ರಿಯೆಯನ್ನು ಕಾಲೇಜು ಸಾರಿಗೆ ಆಡಳಿತಕ್ಕೆ ತಲುಪಿಸಲಾಗಿದೆ.</string>
+    <string name="feedback_validation_error">ದಯವಿಟ್ಟು ವರ್ಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ ಮತ್ತು ವಿವರಣೆಯನ್ನು ನಮೂದಿಸಿ.</string>
+    <string name="report_bus_issue">ಈ ಬಸ್ಸಿನ ಬಗ್ಗೆ ಸಮಸ್ಯೆ ವರದಿ ಮಾಡಿ</string>
 </resources>
