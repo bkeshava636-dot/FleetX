@@ -663,20 +663,24 @@
 
     <!-- Student Feedback / Issue Report Strings -->
     <string name="report_feedback_button">ವರದಿ / ಪ್ರತಿಕ್ರಿಯೆ</string>
+    <string name="student_feedback_card_title">ಸಮಸ್ಯೆ ವರದಿ ಅಥವಾ ಆ್ಯಪ್ ಪ್ರತಿಕ್ರಿಯೆ</string>
+    <string name="student_feedback_card_desc">ಬಸ್ ಜಿಪಿಎಸ್, ವೇಳಾಪಟ್ಟಿ ವಿಳಂಬ ಅಥವಾ FleetX ಆ್ಯಪ್ ಕುರಿತು ದೋಷಗಳು ಮತ್ತು ಸಲಹೆಗಳನ್ನು ಕಳುಹಿಸಿ.</string>
     <string name="student_feedback_title">ಸಮಸ್ಯೆ ವರದಿ ಮಾಡಿ ಅಥವಾ ಪ್ರತಿಕ್ರಿಯೆ ನೀಡಿ</string>
-    <string name="student_feedback_subtitle">ಕಾಲೇಜು ಸಾರಿಗೆ ವ್ಯವಸ್ಥೆಯನ್ನು ಸುಧಾರಿಸಲು ಸಹಕರಿಸಿ. ನಿಮ್ಮ ವರದಿಗಳನ್ನು ಆಡಳಿತ ಮಂಡಳಿ ಪರಿಶೀಲಿಸುತ್ತದೆ.</string>
-    <string name="select_category_label">ಸಮಸ್ಯೆಯ ವರ್ಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ</string>
+    <string name="student_feedback_subtitle">ವರದಿಗಳನ್ನು ಕಾಲೇಜು ಸಾರಿಗೆ ಆಡಳಿತ ಮತ್ತು ಆ್ಯಪ್ ಅಭಿವೃದ್ಧಿ ತಂಡ ಪರಿಶೀಲಿಸುತ್ತದೆ.</string>
+    <string name="feedback_type_app">FleetX ಆ್ಯಪ್ ಪ್ರತಿಕ್ರಿಯೆ</string>
+    <string name="feedback_type_bus">ಬಸ್ / ಸಾರಿಗೆ ಸಮಸ್ಯೆ</string>
+    <string name="select_category_label">ವರ್ಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ</string>
     <string name="select_bus_label">ಸಂಬಂಧಿತ ಬಸ್</string>
-    <string name="general_no_bus">ಸಾಮಾನ್ಯ / ಯಾವುದೇ ನಿರ್ದಿಷ್ಟ ಬಸ್ ಅಲ್ಲ</string>
+    <string name="general_no_bus">FleetX ಆ್ಯಪ್ (ಯಾವುದೇ ನಿರ್ದಿಷ್ಟ ಬಸ್ ಅಲ್ಲ)</string>
     <string name="subject_label">ವಿಷಯ</string>
-    <string name="subject_hint">ಉದಾ: ಬಸ್ 3 ಇಪ್ಪತ್ತು ನಿಮಿಷ ತಡವಾಗಿದೆ / ಜಿಪಿಎಸ್ ಸ್ಥಗಿತಗೊಂಡಿದೆ</string>
+    <string name="subject_hint">ಉದಾ: ಮ್ಯಾಪ್ ಸಮಸ್ಯೆ / ಬಸ್ 3 ಇಪ್ಪತ್ತು ನಿಮಿಷ ತಡವಾಗಿದೆ</string>
     <string name="description_label">ವಿವರಣೆ</string>
-    <string name="description_hint">ಏನು ನಡೆಯಿತು, ಎಲ್ಲಿ, ಮತ್ತು ಎಷ್ಟು ಗಂಟೆಗೆ ಎಂಬುದನ್ನು ವಿವರಿಸಿ...</string>
+    <string name="description_hint">ಏನು ನಡೆಯಿತು ಅಥವಾ ನಿಮ್ಮ ಸಲಹೆಯನ್ನು ವಿವರವಾಗಿ ನಮೂದಿಸಿ...</string>
     <string name="student_name_label">ನಿಮ್ಮ ಹೆಸರು (ಐಚ್ಛಿಕ)</string>
     <string name="student_contact_label">ಯುಎಸ್ಎನ್ / ಮೊಬೈಲ್ ಸಂಖ್ಯೆ (ಐಚ್ಛಿಕ)</string>
-    <string name="submit_feedback_action">ವರದಿ ಸಲ್ಲಿಸಿ</string>
+    <string name="submit_feedback_action">ಪ್ರತಿಕ್ರಿಯೆ / ವರದಿ ಸಲ್ಲಿಸಿ</string>
     <string name="feedback_submitted_success_title">ವರದಿ ಸಲ್ಲಿಸಲಾಗಿದೆ</string>
-    <string name="feedback_submitted_success_desc">ಧನ್ಯವಾದಗಳು! ನಿಮ್ಮ ಪ್ರತಿಕ್ರಿಯೆಯನ್ನು ಕಾಲೇಜು ಸಾರಿಗೆ ಆಡಳಿತಕ್ಕೆ ತಲುಪಿಸಲಾಗಿದೆ.</string>
+    <string name="feedback_submitted_success_desc">ಧನ್ಯವಾದಗಳು! ನಿಮ್ಮ ವರದಿಯನ್ನು ಕಾಲೇಜು ಸಾರಿಗೆ ಆಡಳಿತ ಮತ್ತು ಅಭಿವೃದ್ಧಿ ತಂಡಕ್ಕೆ ಕಳುಹಿಸಲಾಗಿದೆ.</string>
     <string name="feedback_validation_error">ದಯವಿಟ್ಟು ವರ್ಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ ಮತ್ತು ವಿವರಣೆಯನ್ನು ನಮೂದಿಸಿ.</string>
     <string name="report_bus_issue">ಈ ಬಸ್ಸಿನ ಬಗ್ಗೆ ಸಮಸ್ಯೆ ವರದಿ ಮಾಡಿ</string>
 </resources>

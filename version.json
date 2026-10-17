@@ -1,8 +1,8 @@
 {
-  "versionCode": 10028,
-  "versionName": "1.0.28",
-  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.28/app-release.apk",
+  "versionCode": 10029,
+  "versionName": "1.0.29",
+  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.29/app-release.apk",
   "sha256": "",
-  "releaseNotes": "FleetX v1.0.28 - Fix Calendar Overrides during operating windows: real-time automatic tracking on/off synchronization when working-day or holiday overrides are applied or modified, re-arm alarms on calendar exception updates, and fix premature window override flags",
-  "publishedAt": "2026-10-17T13:58:00Z"
+  "releaseNotes": "FleetX v1.0.29 - Moved Student Feedback below FleetX Updates card and expanded reporting to support both FleetX App Feedback (bug reports, feature requests, UI glitches) and Bus Transit Issues (delays, GPS, skipped stops, driving)",
+  "publishedAt": "2026-10-17T14:20:00Z"
 }

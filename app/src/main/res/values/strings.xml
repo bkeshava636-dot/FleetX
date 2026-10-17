@@ -663,20 +663,24 @@
 
     <!-- Student Feedback / Issue Report Strings -->
     <string name="report_feedback_button">Report / Feedback</string>
+    <string name="student_feedback_card_title">Report Issue or App Feedback</string>
+    <string name="student_feedback_card_desc">Report bus tracking delays, route issues, or send bug reports and suggestions for the FleetX app.</string>
     <string name="student_feedback_title">Report an Issue or Send Feedback</string>
-    <string name="student_feedback_subtitle">Help improve college transit. Reports are reviewed by transport administration.</string>
-    <string name="select_category_label">Select Issue Category</string>
+    <string name="student_feedback_subtitle">Reports are reviewed directly by college transport administration &amp; app developers.</string>
+    <string name="feedback_type_app">FleetX App Feedback</string>
+    <string name="feedback_type_bus">Bus / Transit Issue</string>
+    <string name="select_category_label">Select Category</string>
     <string name="select_bus_label">Affected Bus</string>
-    <string name="general_no_bus">General / Not Bus Specific</string>
+    <string name="general_no_bus">FleetX App (Not Bus Specific)</string>
     <string name="subject_label">Subject</string>
-    <string name="subject_hint">e.g. Bus 3 is 20 minutes late / GPS frozen</string>
+    <string name="subject_hint">e.g. App crashes on map / Bus 3 is 20 min late</string>
     <string name="description_label">Description</string>
-    <string name="description_hint">Describe what happened, where, and what time...</string>
+    <string name="description_hint">Describe what happened or your suggestion in detail...</string>
     <string name="student_name_label">Your Name (Optional)</string>
     <string name="student_contact_label">USN / Phone Number (Optional)</string>
-    <string name="submit_feedback_action">Submit Report</string>
-    <string name="feedback_submitted_success_title">Report Submitted</string>
-    <string name="feedback_submitted_success_desc">Thank you! Your feedback has been forwarded to college transit administration.</string>
+    <string name="submit_feedback_action">Submit Feedback / Report</string>
+    <string name="feedback_submitted_success_title">Feedback Submitted</string>
+    <string name="feedback_submitted_success_desc">Thank you! Your report has been forwarded to the college transport administration &amp; development team.</string>
     <string name="feedback_validation_error">Please select a category and provide a brief description.</string>
     <string name="report_bus_issue">Report Issue with this Bus</string>
 </resources>
