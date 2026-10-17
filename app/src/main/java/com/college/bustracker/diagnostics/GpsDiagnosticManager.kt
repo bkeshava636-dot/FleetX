@@ -507,13 +507,17 @@ object GpsDiagnosticManager {
         )
     }
 
-    fun onServiceStarted(context: Context, busId: String) {
+    fun onServiceStarted(context: Context, busId: String, startTrigger: String = "USER_OPENED_APP_START") {
         isServiceAlive = true
         logEvent(
             context = context,
             stage = DiagnosticStage.SERVICE_START,
             eventName = "FOREGROUND_SERVICE_STARTED",
-            details = mapOf("busId" to busId, "state" to "FOREGROUND_ACTIVE")
+            details = mapOf(
+                "busId" to busId,
+                "state" to "FOREGROUND_ACTIVE",
+                "startTrigger" to startTrigger
+            )
         )
     }
 
@@ -1075,16 +1079,57 @@ object GpsDiagnosticManager {
 
         val rom = DeviceRomDetector.getRomInfo()
 
+        val isServiceDestroyedDirectlyAfterTaskRemoved = if (taskRemovedEvent != null && serviceDestroyedEvent != null) {
+            val diffMs = serviceDestroyedEvent.timestampMs - taskRemovedEvent.timestampMs
+            diffMs in 0..15_000L
+        } else false
+
+        val healthyEventsAfterTaskRemoved = if (taskRemovedEvent != null) {
+            events.count { ev ->
+                ev.timestampMs > taskRemovedEvent.timestampMs &&
+                (ev.eventName == "LOCATION_CALLBACK_RECEIVED" || ev.eventName == "RTDB_WRITE_SUCCEEDED")
+            }
+        } else 0
+
+        val serviceStartAfterTaskRemoved = if (taskRemovedEvent != null) {
+            events.firstOrNull { ev ->
+                ev.timestampMs > taskRemovedEvent.timestampMs &&
+                ev.eventName == "FOREGROUND_SERVICE_STARTED"
+            }
+        } else null
+
         when {
+            taskRemovedEvent != null && isServiceDestroyedDirectlyAfterTaskRemoved -> {
+                primaryObs = "Service onDestroy() executed immediately following task removal at ${taskRemovedEvent.timeFormatted} (within 15s)."
+                causes = "${rom.displayName} tore down the foreground service during task dismissal, actively calling stopTrackingSession() and clearing notification. Recommended fix: ${rom.advice}"
+                nextEvidence = "Inspect onTaskRemoved handling and verify if ShiftKeepAliveNotificationService, AlarmManager resurrection, or overlay window keep tracking alive."
+            }
+            taskRemovedEvent != null && healthyEventsAfterTaskRemoved > 0 -> {
+                val triggerDesc = when (serviceStartAfterTaskRemoved?.details?.get("startTrigger")) {
+                    "BACKGROUND_ALARM_RESURRECTION" -> "revived via background alarm resurrection"
+                    "SYSTEM_NOTIFICATION_LISTENER_REBIND" -> "revived via system-bound NotificationListenerService"
+                    "USER_OPENED_APP_START" -> "reopened manually by user"
+                    else -> "continued running in background"
+                }
+                primaryObs = "Task swiped from Recent Apps at ${taskRemovedEvent.timeFormatted}. Tracking remained active ($healthyEventsAfterTaskRemoved fixes/writes, $triggerDesc)."
+                causes = "Task swipe handled gracefully. Background tracking continued without premature termination."
+                nextEvidence = "Monitor background battery drain and tracking persistence over extended driving shifts."
+            }
             taskRemovedEvent != null && processRestartedEvent != null -> {
                 primaryObs = "FleetX was removed from Recent Apps at ${taskRemovedEvent.timeFormatted}. The process was subsequently terminated by Android and revived at ${processRestartedEvent.timeFormatted} (gap: ${processRestartedEvent.details["gapSeconds"] ?: "unknown"}s)."
                 causes = "${rom.displayName} (${rom.romVersion}) killed the application task when swiped from Recents. Standard background services in the same process are halted upon task removal unless protected or revived via AlarmManager. Recommended fix: ${rom.advice}"
-                nextEvidence = "Verify whether AlarmManager resurrection or persistent Foreground Service keeps tracking alive."
+                nextEvidence = "Verify whether AlarmManager resurrection, ShiftKeepAliveNotificationService, or persistent Foreground Service keeps tracking alive."
             }
-            taskRemovedEvent != null && serviceDestroyedEvent != null -> {
-                primaryObs = "Service onDestroy() executed immediately following task removal at ${taskRemovedEvent.timeFormatted}."
-                causes = "${rom.displayName} tore down the foreground service during task dismissal, actively calling stopTrackingSession() and clearing notification. Recommended fix: ${rom.advice}"
-                nextEvidence = "Inspect onTaskRemoved handling and verify if START_STICKY or alarms recover tracking."
+            taskRemovedEvent != null && serviceStartAfterTaskRemoved != null -> {
+                val trigger = serviceStartAfterTaskRemoved.details["startTrigger"] ?: "UNKNOWN"
+                val triggerLabel = if (trigger == "USER_OPENED_APP_START") "USER_OPENED_APP_START (manual app launch)" else trigger
+                primaryObs = "App swiped at ${taskRemovedEvent.timeFormatted}, then service started at ${serviceStartAfterTaskRemoved.timeFormatted} via $triggerLabel."
+                causes = if (trigger == "USER_OPENED_APP_START") {
+                    "${rom.displayName} halted the background task on swipe; app was manually reopened by the user."
+                } else {
+                    "Automatic background resurrection triggered via $trigger."
+                }
+                nextEvidence = "Confirm if background autostart, overlay permissions, and Notification Listener are enabled."
             }
             taskRemovedEvent != null -> {
                 primaryObs = "TASK_REMOVED_CALLBACK_RECEIVED recorded at ${taskRemovedEvent.timeFormatted}. No further events recorded until next app launch."
@@ -1110,8 +1155,8 @@ object GpsDiagnosticManager {
 
         val servState = when {
             isServiceAlive -> "FOREGROUND_SERVICE_RUNNING (Active)"
-            serviceDestroyedEvent != null -> "SERVICE_DESTROYED at ${serviceDestroyedEvent.timeFormatted}"
-            taskRemovedEvent != null -> "TASK_REMOVED at ${taskRemovedEvent.timeFormatted} (Process Terminated)"
+            serviceDestroyedEvent != null && (taskRemovedEvent == null || serviceDestroyedEvent.timestampMs > taskRemovedEvent.timestampMs) -> "SERVICE_DESTROYED at ${serviceDestroyedEvent.timeFormatted} (${serviceDestroyedEvent.details["stopReason"] ?: "Explicit Stop"})"
+            taskRemovedEvent != null && healthyEventsAfterTaskRemoved == 0 -> "TASK_REMOVED at ${taskRemovedEvent.timeFormatted} (Process Terminated)"
             else -> "INACTIVE / STOPPED"
         }
 

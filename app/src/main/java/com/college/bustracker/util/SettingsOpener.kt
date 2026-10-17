@@ -1,6 +1,7 @@
 package com.college.bustracker.util
 
 import android.app.Activity
+import android.content.ComponentName
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -180,6 +181,44 @@ object SettingsOpener {
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
                 data = Uri.parse("package:${context.packageName}")
             }
+            if (safeStartActivity(context, intent)) {
+                return true
+            }
+        }
+        return openAppDetails(context)
+    }
+
+    /**
+     * Checks if FleetX has Notification Listener Access granted.
+     */
+    fun isNotificationListenerEnabled(context: Context): Boolean {
+        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        return flat != null && flat.contains(context.packageName)
+    }
+
+    /**
+     * Opens system Notification Access screen (Device & app notifications).
+     */
+    fun openNotificationListenerSettings(context: Context): Boolean {
+        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+        if (safeStartActivity(context, intent)) {
+            return true
+        }
+        return openAppDetails(context)
+    }
+
+    /**
+     * Opens Vivo-specific Autostart and Associated Startup management screen.
+     */
+    fun openVivoAutostart(context: Context): Boolean {
+        val vivoIntents = listOf(
+            Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity")),
+            Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")),
+            Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.MainGuideActivity")),
+            Intent().setComponent(ComponentName("com.vivo.abe", "com.vivo.abe.feature.moneymode.fragment.HighPowerDetailActivity")),
+            Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.PurviewTabActivity"))
+        )
+        for (intent in vivoIntents) {
             if (safeStartActivity(context, intent)) {
                 return true
             }

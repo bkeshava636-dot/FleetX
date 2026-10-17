@@ -178,7 +178,7 @@ class TrackingRepository(
         }
 
         // 2. Preserve previous coordinates if new status is WAITING_FOR_GPS/INACTIVE with 0.0 coordinates
-        val locationToUse = if (location.latitude == 0.0 && location.longitude == 0.0) {
+        val baseLoc = if (location.latitude == 0.0 && location.longitude == 0.0) {
             val cached = _localLocations.value[busId]
             if (cached != null && (cached.latitude != 0.0 || cached.longitude != 0.0)) {
                 location.copy(latitude = cached.latitude, longitude = cached.longitude)
@@ -187,6 +187,17 @@ class TrackingRepository(
             }
         } else {
             location
+        }
+
+        // 2b. Sanitize trackingStatus for RTDB validation: only ACTIVE, INACTIVE, and WAITING_FOR_GPS are universally permitted
+        val sanitizedStatus = when (baseLoc.trackingStatus) {
+            "ACTIVE", "INACTIVE", "WAITING_FOR_GPS" -> baseLoc.trackingStatus
+            else -> "WAITING_FOR_GPS" // Map "STALE" or unknown status to "WAITING_FOR_GPS" to prevent RTDB -3 Permission Denied
+        }
+        val locationToUse = if (baseLoc.trackingStatus != sanitizedStatus) {
+            baseLoc.copy(trackingStatus = sanitizedStatus)
+        } else {
+            baseLoc
         }
 
         // 3. Duplicate prevention: avoid writing identical coordinate if dispatched within 3 seconds

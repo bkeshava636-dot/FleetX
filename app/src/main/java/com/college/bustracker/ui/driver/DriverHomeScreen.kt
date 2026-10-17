@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
@@ -33,9 +34,12 @@ import androidx.compose.material.icons.filled.Cached
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.GpsFixed
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Warning
@@ -147,10 +151,53 @@ fun DriverHomeScreen(
     var selectedAnnouncementForDetail by remember { mutableStateOf<com.college.bustracker.data.model.Announcement?>(null) }
     var showStopConfirmationDialog by remember { mutableStateOf(false) }
     var showBackgroundLocationDialog by remember { mutableStateOf(false) }
+    var showOverlayRequiredDialog by remember { mutableStateOf(false) }
+    var showVivoRecentsLockDialog by remember { mutableStateOf(false) }
+    val isVivoDevice = remember { Build.MANUFACTURER.lowercase().contains("vivo") }
     var isCapturingLocation by remember { mutableStateOf(false) }
     var locationCaptureError by remember { mutableStateOf<String?>(null) }
     var proposedStopName by remember { mutableStateOf("") }
     var stopNameError by remember { mutableStateOf<String?>(null) }
+
+    if (showOverlayRequiredDialog) {
+        AlertDialog(
+            onDismissRequest = { showOverlayRequiredDialog = false },
+            title = { Text(stringResource(R.string.overlay_dialog_title), fontWeight = FontWeight.Bold) },
+            text = { Text(stringResource(R.string.overlay_dialog_desc)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showOverlayRequiredDialog = false
+                        SettingsOpener.openOverlaySettings(context)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                ) {
+                    Text(stringResource(R.string.enable_overlay_permission))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOverlayRequiredDialog = false }) {
+                    Text(stringResource(R.string.later_action))
+                }
+            }
+        )
+    }
+
+    if (showVivoRecentsLockDialog) {
+        AlertDialog(
+            onDismissRequest = { showVivoRecentsLockDialog = false },
+            title = { Text(stringResource(R.string.lock_recents_title), fontWeight = FontWeight.Bold) },
+            text = { Text(stringResource(R.string.lock_recents_desc), fontSize = 13.sp) },
+            confirmButton = {
+                Button(
+                    onClick = { showVivoRecentsLockDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                ) {
+                    Text(stringResource(R.string.got_it_action))
+                }
+            }
+        )
+    }
 
     if (showBackgroundLocationDialog) {
         AlertDialog(
@@ -504,6 +551,9 @@ fun DriverHomeScreen(
         var isBatteryOptimized by remember {
             mutableStateOf(powerManager?.isIgnoringBatteryOptimizations(context.packageName) == false)
         }
+        var canDrawOverlays by remember {
+            mutableStateOf(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(context) else true)
+        }
         var hasBgLocationPermission by remember {
             mutableStateOf(
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
@@ -519,6 +569,9 @@ fun DriverHomeScreen(
             val observer = LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_RESUME) {
                     isBatteryOptimized = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == false
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        canDrawOverlays = Settings.canDrawOverlays(context)
+                    }
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                         hasBgLocationPermission = androidx.core.content.ContextCompat.checkSelfPermission(
                             context,
@@ -571,6 +624,104 @@ fun DriverHomeScreen(
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text(stringResource(R.string.enable_unrestricted_gps), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        if (!canDrawOverlays) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Layers,
+                            contentDescription = null,
+                            tint = StatusDangerRed,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.overlay_permission_title),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = Color(0xFF991B1B)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.overlay_permission_desc),
+                        fontSize = 12.sp,
+                        color = Color(0xFF7F1D1D)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = { SettingsOpener.openOverlaySettings(context) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(stringResource(R.string.enable_overlay_permission), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        if (isVivoDevice) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = null,
+                            tint = Color(0xFF1D4ED8),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.vivo_stability_title),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = Color(0xFF1E40AF)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.vivo_autostart_desc),
+                        fontSize = 12.sp,
+                        color = Color(0xFF1E3A8A)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { SettingsOpener.openVivoAutostart(context) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(stringResource(R.string.open_vivo_autostart), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        OutlinedButton(
+                            onClick = { showVivoRecentsLockDialog = true },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1D4ED8))
+                        ) {
+                            Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(stringResource(R.string.lock_recents_title), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -764,14 +915,20 @@ fun DriverHomeScreen(
                     Switch(
                         checked = isAutoTracking,
                         onCheckedChange = { enable ->
-                            if (enable && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                                val hasBg = androidx.core.content.ContextCompat.checkSelfPermission(
-                                    context,
-                                    android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
-                                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                                if (!hasBg) {
-                                    showBackgroundLocationDialog = true
+                            if (enable) {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
+                                    showOverlayRequiredDialog = true
                                     return@Switch
+                                }
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                    val hasBg = androidx.core.content.ContextCompat.checkSelfPermission(
+                                        context,
+                                        android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                    if (!hasBg) {
+                                        showBackgroundLocationDialog = true
+                                        return@Switch
+                                    }
                                 }
                             }
                             viewModel.toggleAutoTracking(enable)
@@ -887,7 +1044,13 @@ fun DriverHomeScreen(
                     }
 
                     Button(
-                        onClick = { viewModel.startManualTracking() },
+                        onClick = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
+                                showOverlayRequiredDialog = true
+                            } else {
+                                viewModel.startManualTracking()
+                            }
+                        },
                         enabled = !isReplacedNow,
                         modifier = Modifier
                             .fillMaxWidth()
