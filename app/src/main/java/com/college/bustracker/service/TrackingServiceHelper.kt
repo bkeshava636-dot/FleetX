@@ -40,13 +40,16 @@ object TrackingServiceHelper {
         }
     }
 
+    const val EXTRA_START_TRIGGER = "EXTRA_START_TRIGGER"
+
     fun startTracking(
         context: Context,
         busId: String,
         routeId: String,
         driverId: String,
         mode: String = "MANUAL",
-        forceWindow: Boolean = false
+        forceWindow: Boolean = false,
+        startTrigger: String = "USER_OPENED_APP_START"
     ) {
         val intent = Intent(context, LocationTrackingService::class.java).apply {
             action = ACTION_START_TRACKING
@@ -55,6 +58,7 @@ object TrackingServiceHelper {
             putExtra(EXTRA_DRIVER_ID, driverId)
             putExtra(EXTRA_TRACKING_MODE, mode)
             putExtra("EXTRA_FORCE_WINDOW", forceWindow)
+            putExtra(EXTRA_START_TRIGGER, startTrigger)
         }
         ContextCompat.startForegroundService(context, intent)
     }

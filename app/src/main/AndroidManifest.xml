@@ -66,6 +66,17 @@
             android:foregroundServiceType="location"
             android:exported="false" />
 
+        <!-- System-bound NotificationListenerService: Bypasses OEM Autostart blockers on Vivo/Xiaomi -->
+        <service
+            android:name=".service.ShiftKeepAliveNotificationService"
+            android:label="FleetX Shift Guardian"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- Firebase Cloud Messaging for targeted swap alerts -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"

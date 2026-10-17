@@ -45,7 +45,7 @@ class LocationTrackingService : Service() {
 
     companion object {
         private const val TAG = "BusTrackerGPS"
-        private const val NOTIFICATION_ID = 1001
+        const val NOTIFICATION_ID = 1001
         private const val MAX_INITIAL_ACCURACY_METERS = 100.0f
 
         const val PREFS_PERSISTENT_TRACKING = "tracking_persistent_session_state"
@@ -60,6 +60,11 @@ class LocationTrackingService : Service() {
         const val BITM_CAMPUS_LNG = 76.8925
         const val BITM_CAMPUS_GEOFENCE_RADIUS_METERS = 200.0
         const val BITM_CAMPUS_AUTO_SHUTDOWN_DURATION_MS = 3 * 60 * 1000L // 3 consecutive minutes
+
+        fun isPersistentSessionActive(context: Context): Boolean {
+            val prefs = context.getSharedPreferences(PREFS_PERSISTENT_TRACKING, Context.MODE_PRIVATE)
+            return prefs.getBoolean(KEY_IS_SESSION_ACTIVE, false)
+        }
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
@@ -74,6 +79,7 @@ class LocationTrackingService : Service() {
     private var activeRouteId: String = ""
     private var activeDriverId: String = ""
     private var activeMode: String = "MANUAL"
+    private var activeStartTrigger: String = "USER_OPENED_APP_START"
     private var forceWindow: Boolean = false
     private var hasLoggedFirstLocation: Boolean = false
     private var startupPollingJob: Job? = null
@@ -219,6 +225,7 @@ class LocationTrackingService : Service() {
                 action = AutoTrackingScheduler.ACTION_DRIVER_SCHEDULE_CHECK
                 putExtra("EXTRA_FORCE_WINDOW", forceWindow)
                 putExtra("EXTRA_RESURRECTION_REASON", reason)
+                putExtra(TrackingServiceHelper.EXTRA_START_TRIGGER, "BACKGROUND_ALARM_RESURRECTION")
             }
             val pi = PendingIntent.getBroadcast(
                 applicationContext,
@@ -277,6 +284,7 @@ class LocationTrackingService : Service() {
                 activeRouteId = intent?.getStringExtra(TrackingServiceHelper.EXTRA_ROUTE_ID) ?: ""
                 activeDriverId = intent?.getStringExtra(TrackingServiceHelper.EXTRA_DRIVER_ID) ?: ""
                 activeMode = intent?.getStringExtra(TrackingServiceHelper.EXTRA_TRACKING_MODE) ?: "MANUAL"
+                activeStartTrigger = intent?.getStringExtra(TrackingServiceHelper.EXTRA_START_TRIGGER) ?: "USER_OPENED_APP_START"
                 forceWindow = intent?.getBooleanExtra("EXTRA_FORCE_WINDOW", false) ?: false
                 hasLoggedFirstLocation = false
 
@@ -383,7 +391,7 @@ class LocationTrackingService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
         Log.i(TAG, "[AUTO-TRACE] startForeground succeeded")
-        com.college.bustracker.diagnostics.GpsDiagnosticManager.onServiceStarted(this, activeBusId)
+        com.college.bustracker.diagnostics.GpsDiagnosticManager.onServiceStarted(this, activeBusId, activeStartTrigger)
 
         // Layer 2: Register privileged GMS hardware piggyback with FusedLocationProviderClient
         GmsHardwareWatchdog.register(this)
@@ -990,8 +998,19 @@ class LocationTrackingService : Service() {
             busId = activeBusId,
             isTracking = activeBusId.isNotBlank()
         )
-        // Immediately resurrect tracking so swiping the app away does NOT stop GPS broadcasting!
-        scheduleServiceResurrection(delayMs = 500L, reason = "TASK_REMOVED_SWIPED")
+        // Request system_server rebind via NotificationListenerService (elevates priority and bypasses Vivo Autostart blocker)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                android.service.notification.NotificationListenerService.requestRebind(
+                    android.content.ComponentName(this, ShiftKeepAliveNotificationService::class.java)
+                )
+                Log.i(TAG, "[TASK_REMOVED] Requested NotificationListenerService rebind from system_server")
+            } catch (e: Exception) {
+                Log.w(TAG, "[TASK_REMOVED] Failed to request rebind: ${e.message}")
+            }
+        }
+        // Immediately resurrect tracking via 5-second AlarmManager setAlarmClock
+        scheduleServiceResurrection(delayMs = 5000L, reason = "TASK_REMOVED_SWIPED")
     }
 
     override fun onDestroy() {
@@ -1009,7 +1028,7 @@ class LocationTrackingService : Service() {
         )
         // If destroyed by Android system (not user stop), schedule immediate resurrection
         if (!isExplicitStop && activeBusId.isNotBlank()) {
-            scheduleServiceResurrection(delayMs = 1000L, reason = "SERVICE_KILLED_BY_OS")
+            scheduleServiceResurrection(delayMs = 5000L, reason = "SERVICE_KILLED_BY_OS")
         }
         stopTrackingSession(isExplicitUserStop = isExplicitStop)
         try {

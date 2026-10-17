@@ -1,8 +1,8 @@
 {
-  "versionCode": 10025,
-  "versionName": "1.0.25",
-  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.25/app-release.apk",
+  "versionCode": 10026,
+  "versionName": "1.0.26",
+  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.26/app-release.apk",
   "sha256": "",
-  "releaseNotes": "FleetX v1.0.25 - Fix task-swipe resurrection: eliminate false DRIVER_LOGGED_OUT self-kill in DriverScheduleReceiver and protect manual tracking sessions",
-  "publishedAt": "2026-10-16T17:28:00Z"
+  "releaseNotes": "FleetX v1.0.26 - Fix Vivo Funtouch OS swipe death: enforce Keep-Alive Overlay & Autostart gate, add ShiftKeepAliveListenerService, fix RTDB STALE enum write rejection, and eliminate diagnostic false alarms",
+  "publishedAt": "2026-10-17T13:20:00Z"
 }

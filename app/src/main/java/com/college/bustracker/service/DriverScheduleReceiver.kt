@@ -348,8 +348,9 @@ class DriverScheduleReceiver : BroadcastReceiver() {
                 Log.i(TAG, "[AUTO-TRACK] Active tracking session resurrection triggered: reason=$resurrectionReason, bus=$savedBusId, mode=$savedMode")
                 if (savedBusId.isNotBlank()) {
                     try {
-                        TrackingServiceHelper.startTracking(context, savedBusId, savedRouteId, savedDriverId, savedMode, forceWindow = true)
-                        Log.i(TAG, "[AUTO-TRACK] Resurrected LocationTrackingService successfully for bus $savedBusId")
+                        val triggerType = if (!resurrectionReason.isNullOrBlank()) "BACKGROUND_ALARM_RESURRECTION" else "BACKGROUND_PERSISTENT_RECOVERY"
+                        TrackingServiceHelper.startTracking(context, savedBusId, savedRouteId, savedDriverId, savedMode, forceWindow = true, startTrigger = triggerType)
+                        Log.i(TAG, "[AUTO-TRACK] Resurrected LocationTrackingService successfully for bus $savedBusId (trigger: $triggerType)")
                     } catch (e: Exception) {
                         Log.e(TAG, "[AUTO-TRACK] Failed to resurrect LocationTrackingService: ${e.message}")
                     }
@@ -495,7 +496,7 @@ class DriverScheduleReceiver : BroadcastReceiver() {
                         mode = "AUTO"
                     )
                     try {
-                        TrackingServiceHelper.startTracking(context, busId, routeId, driverId, "AUTO", forceWindow)
+                        TrackingServiceHelper.startTracking(context, busId, routeId, driverId, "AUTO", forceWindow, startTrigger = "BACKGROUND_SCHEDULED_WINDOW")
                     } catch (fse: Exception) {
                         Log.w(TAG, "[AUTO-TRACK] Direct startForegroundService restricted; displaying launch notification: ${fse.message}")
                         com.college.bustracker.diagnostics.GpsDiagnosticManager.onServiceStartFailed(
