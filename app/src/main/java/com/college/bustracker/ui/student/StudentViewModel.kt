@@ -488,6 +488,30 @@ class StudentViewModel : ViewModel() {
         }
     }
 
+    private var pausedListeningBusId: String? = null
+    private val _isLiveTrackingPaused = MutableStateFlow(false)
+    val isLiveTrackingPaused: StateFlow<Boolean> = _isLiveTrackingPaused.asStateFlow()
+
+    fun pauseLiveTracking() {
+        val activeBusId = currentListeningBusId ?: _selectedBus.value?.busId
+        if (!activeBusId.isNullOrBlank()) {
+            pausedListeningBusId = activeBusId
+            _isLiveTrackingPaused.value = true
+            stopListeningToLiveBus()
+            android.util.Log.d("BusTrackerGPS", "LIVE_TRACKING_PAUSED: Suspended RTDB listener for $activeBusId")
+        }
+    }
+
+    fun resumeLiveTracking() {
+        val targetBusId = pausedListeningBusId ?: _selectedBus.value?.busId
+        _isLiveTrackingPaused.value = false
+        pausedListeningBusId = null
+        if (!targetBusId.isNullOrBlank()) {
+            startListeningToLiveBus(targetBusId)
+            android.util.Log.d("BusTrackerGPS", "LIVE_TRACKING_RESUMED: Resumed RTDB listener for $targetBusId")
+        }
+    }
+
     fun stopListeningToLiveBus() {
         liveTrackingJob?.cancel()
         liveTrackingJob = null

@@ -1,10 +1,13 @@
 package com.college.bustracker.data.repository
 
+import android.content.Context
+import android.util.Log
 import com.college.bustracker.data.model.BusStop
 import com.college.bustracker.data.model.Route
 import com.college.bustracker.data.model.RouteSchedule
 import com.college.bustracker.data.model.ScheduleWindow
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,21 +20,59 @@ class RouteRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
 
+    companion object {
+        private const val TAG = "RouteRepository"
+        private const val PREFS_CACHE = "firestore_cache_metadata"
+        private const val KEY_LAST_ROUTE_SYNC_MS = "last_route_sync_ms"
+        private const val CACHE_TTL_MS = 12 * 60 * 60 * 1000L // 12 hours
+    }
+
     private val _localRoutes = MutableStateFlow<List<Route>>(emptyList())
 
     fun getCachedRoutes(): List<Route> = _localRoutes.value
     fun getCachedRoute(routeId: String): Route? = _localRoutes.value.find { it.routeId == routeId }
 
-    fun getRoutesFlow(): Flow<List<Route>> = callbackFlow {
-        trySend(_localRoutes.value)
+    fun getRoutesFlow(forceRefresh: Boolean = false): Flow<List<Route>> = callbackFlow {
+        // 1. Immediately emit in-memory cached routes if available
+        if (_localRoutes.value.isNotEmpty()) {
+            trySend(_localRoutes.value)
+        }
 
-        val registration = firestore.collection("routes")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) {
-                    trySend(_localRoutes.value)
-                    return@addSnapshotListener
+        val context = try { com.college.bustracker.CollegeBusApp.instance } catch (_: Exception) { null }
+        val prefs = context?.getSharedPreferences(PREFS_CACHE, Context.MODE_PRIVATE)
+        val lastSyncMs = prefs?.getLong(KEY_LAST_ROUTE_SYNC_MS, 0L) ?: 0L
+        val now = System.currentTimeMillis()
+        val isCacheValid = !forceRefresh && (now - lastSyncMs < CACHE_TTL_MS)
+
+        var cacheLoaded = false
+        if (isCacheValid) {
+            try {
+                val cacheSnap = firestore.collection("routes").get(Source.CACHE).await()
+                if (cacheSnap != null && !cacheSnap.isEmpty) {
+                    val list = cacheSnap.documents.mapNotNull { doc ->
+                        val r = doc.toObject(Route::class.java)
+                        if (r != null) {
+                            val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
+                            val finalName = if (r.name.isNotBlank()) r.name else doc.id
+                            r.copy(routeId = finalId, name = finalName)
+                        } else null
+                    }
+                    if (list.isNotEmpty()) {
+                        _localRoutes.value = list
+                        trySend(list)
+                        cacheLoaded = true
+                        Log.d(TAG, "FIRESTORE_CACHE_HIT: Loaded ${list.size} routes from Source.CACHE (0 server reads)")
+                    }
                 }
-                val list = snapshot.documents.mapNotNull { doc ->
+            } catch (e: Exception) {
+                Log.w(TAG, "FIRESTORE_CACHE_MISS: Source.CACHE read failed (${e.message}), falling back to SERVER")
+            }
+        }
+
+        if (!cacheLoaded) {
+            try {
+                val serverSnap = firestore.collection("routes").get(Source.SERVER).await()
+                val list = serverSnap.documents.mapNotNull { doc ->
                     val r = doc.toObject(Route::class.java)
                     if (r != null) {
                         val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
@@ -40,10 +81,36 @@ class RouteRepository(
                     } else null
                 }
                 _localRoutes.value = list
+                prefs?.edit()?.putLong(KEY_LAST_ROUTE_SYNC_MS, now)?.apply()
                 trySend(list)
+                Log.d(TAG, "FIRESTORE_SERVER_SYNC: Synced ${list.size} routes from Source.SERVER")
+            } catch (e: Exception) {
+                Log.e(TAG, "FIRESTORE_SERVER_ERROR: Failed to fetch routes from SERVER: ${e.message}")
+                if (_localRoutes.value.isNotEmpty()) {
+                    trySend(_localRoutes.value)
+                }
             }
+        }
 
-        awaitClose { registration.remove() }
+        // Attach snapshot listener only on explicit forceRefresh (e.g. Admin editing routes)
+        val registration = if (forceRefresh) {
+            firestore.collection("routes").addSnapshotListener { snapshot, error ->
+                if (error == null && snapshot != null) {
+                    val list = snapshot.documents.mapNotNull { doc ->
+                        val r = doc.toObject(Route::class.java)
+                        if (r != null) {
+                            val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
+                            val finalName = if (r.name.isNotBlank()) r.name else doc.id
+                            r.copy(routeId = finalId, name = finalName)
+                        } else null
+                    }
+                    _localRoutes.value = list
+                    trySend(list)
+                }
+            }
+        } else null
+
+        awaitClose { registration?.remove() }
     }
 
     suspend fun saveRoute(route: Route) {

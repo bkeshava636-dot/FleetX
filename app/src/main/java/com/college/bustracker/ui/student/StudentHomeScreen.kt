@@ -79,6 +79,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -169,6 +170,25 @@ fun StudentHomeScreen(
             displayBusNumber.isBlank() || displayBusNumber == "—" -> "BUS —"
             displayBusNumber.startsWith("bus", ignoreCase = true) -> displayBusNumber.uppercase()
             else -> "BUS $displayBusNumber"
+        }
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
+                    viewModel.pauseLiveTracking()
+                }
+                androidx.lifecycle.Lifecycle.Event.ON_START -> {
+                    viewModel.resumeLiveTracking()
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 

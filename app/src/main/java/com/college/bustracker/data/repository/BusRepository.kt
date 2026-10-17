@@ -12,6 +12,7 @@ import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -117,6 +118,9 @@ class BusRepository(
 
     companion object {
         private const val TAG = "BusRepository"
+        private const val PREFS_CACHE = "firestore_cache_metadata"
+        private const val KEY_LAST_BUS_SYNC_MS = "last_bus_sync_ms"
+        private const val CACHE_TTL_MS = 12 * 60 * 60 * 1000L // 12 hours
     }
 
     /**
@@ -147,25 +151,76 @@ class BusRepository(
 
     fun getCachedBus(busId: String): Bus? = _localBuses.value.find { it.busId == busId }
 
-    fun getBusesFlow(): Flow<List<Bus>> = callbackFlow {
-        trySend(_localBuses.value)
+    fun getBusesFlow(forceRefresh: Boolean = false): Flow<List<Bus>> = callbackFlow {
+        // 1. Immediately emit in-memory cached buses if available
+        if (_localBuses.value.isNotEmpty()) {
+            trySend(_localBuses.value)
+        }
 
-        val registration = firestore.collection("buses")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) {
-                    trySend(_localBuses.value)
-                    return@addSnapshotListener
+        val context = try { com.college.bustracker.CollegeBusApp.instance } catch (_: Exception) { null }
+        val prefs = context?.getSharedPreferences(PREFS_CACHE, Context.MODE_PRIVATE)
+        val lastSyncMs = prefs?.getLong(KEY_LAST_BUS_SYNC_MS, 0L) ?: 0L
+        val now = System.currentTimeMillis()
+        val isCacheValid = !forceRefresh && (now - lastSyncMs < CACHE_TTL_MS)
+
+        var cacheLoaded = false
+        if (isCacheValid) {
+            try {
+                val cacheSnap = firestore.collection("buses").get(Source.CACHE).await()
+                if (cacheSnap != null && !cacheSnap.isEmpty) {
+                    val list = cacheSnap.documents.mapNotNull { doc ->
+                        doc.toObject(Bus::class.java)?.let { bus ->
+                            bus.copy(busId = bus.busId.ifBlank { doc.id })
+                        }
+                    }.sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
+                    if (list.isNotEmpty()) {
+                        _localBuses.value = list
+                        trySend(list)
+                        cacheLoaded = true
+                        Log.d(TAG, "FIRESTORE_CACHE_HIT: Loaded ${list.size} buses from Source.CACHE (0 server reads)")
+                    }
                 }
-                val list = snapshot.documents.mapNotNull { doc ->
+            } catch (e: Exception) {
+                Log.w(TAG, "FIRESTORE_CACHE_MISS: Source.CACHE read failed (${e.message}), falling back to SERVER")
+            }
+        }
+
+        if (!cacheLoaded) {
+            try {
+                val serverSnap = firestore.collection("buses").get(Source.SERVER).await()
+                val list = serverSnap.documents.mapNotNull { doc ->
                     doc.toObject(Bus::class.java)?.let { bus ->
                         bus.copy(busId = bus.busId.ifBlank { doc.id })
                     }
                 }.sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
                 _localBuses.value = list
+                prefs?.edit()?.putLong(KEY_LAST_BUS_SYNC_MS, now)?.apply()
                 trySend(list)
+                Log.d(TAG, "FIRESTORE_SERVER_SYNC: Synced ${list.size} buses from Source.SERVER")
+            } catch (e: Exception) {
+                Log.e(TAG, "FIRESTORE_SERVER_ERROR: Failed to fetch buses from SERVER: ${e.message}")
+                if (_localBuses.value.isNotEmpty()) {
+                    trySend(_localBuses.value)
+                }
             }
+        }
 
-        awaitClose { registration.remove() }
+        // Attach snapshot listener only on explicit forceRefresh (e.g. Admin editing fleet)
+        val registration = if (forceRefresh) {
+            firestore.collection("buses").addSnapshotListener { snapshot, error ->
+                if (error == null && snapshot != null) {
+                    val list = snapshot.documents.mapNotNull { doc ->
+                        doc.toObject(Bus::class.java)?.let { bus ->
+                            bus.copy(busId = bus.busId.ifBlank { doc.id })
+                        }
+                    }.sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
+                    _localBuses.value = list
+                    trySend(list)
+                }
+            }
+        } else null
+
+        awaitClose { registration?.remove() }
     }
 
     /**

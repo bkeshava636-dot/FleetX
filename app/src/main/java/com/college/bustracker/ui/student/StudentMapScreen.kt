@@ -138,6 +138,51 @@ fun StudentMapScreen(
         position = CameraPosition.fromLatLngZoom(initialPos, 15.5f)
     }
 
+    var isIdlePaused by remember { mutableStateOf(false) }
+    var lastInteractionTime by remember { mutableStateOf(System.currentTimeMillis()) }
+
+    // Auto-pause live tracking if inactive for 15 minutes (preserves RTDB 10 GB free bandwidth)
+    LaunchedEffect(lastInteractionTime, isIdlePaused) {
+        if (!isIdlePaused) {
+            kotlinx.coroutines.delay(15 * 60 * 1000L) // 15 minutes
+            isIdlePaused = true
+            viewModel.pauseLiveTracking()
+        }
+    }
+
+    // Reset inactivity timer when user pans or zooms the map
+    LaunchedEffect(cameraPositionState.isMoving) {
+        if (cameraPositionState.isMoving) {
+            lastInteractionTime = System.currentTimeMillis()
+            if (isIdlePaused) {
+                isIdlePaused = false
+                viewModel.resumeLiveTracking()
+            }
+        }
+    }
+
+    // Lifecycle observer to immediately detach RTDB listener on ON_STOP
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
+                    viewModel.pauseLiveTracking()
+                }
+                androidx.lifecycle.Lifecycle.Event.ON_START -> {
+                    if (!isIdlePaused) {
+                        viewModel.resumeLiveTracking()
+                    }
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     // Reaction to live bus coordinates arrival (if not already centered on creation)
     LaunchedEffect(liveLoc) {
         val lat = liveLoc?.latitude ?: 0.0
@@ -690,6 +735,48 @@ fun StudentMapScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    if (isIdlePaused) {
+        Card(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 80.dp, start = 16.dp, end = 16.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A).copy(alpha = 0.95f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Schedule,
+                    contentDescription = null,
+                    tint = Color(0xFFFBBF24),
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Live tracking paused (15 min idle)",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Button(
+                    onClick = {
+                        lastInteractionTime = System.currentTimeMillis()
+                        isIdlePaused = false
+                        viewModel.resumeLiveTracking()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text("Resume", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }

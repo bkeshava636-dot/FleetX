@@ -115,13 +115,14 @@ object SchedulePdfHelper {
                 return@withContext Result.success(Unit)
             }
 
-            val safeName = (fileName?.takeIf { it.isNotBlank() } ?: "schedule_${pdfUrl.hashCode()}.pdf")
+            val safeName = (fileName?.takeIf { it.isNotBlank() } ?: "schedule.pdf")
                 .replace("[^a-zA-Z0-9._-]".toRegex(), "_")
+            val cacheKey = "${Math.abs(pdfUrl.hashCode())}_$safeName"
 
-            val cacheDir = File(context.cacheDir, "schedules").apply { mkdirs() }
-            val localFile = File(cacheDir, safeName)
+            val schedulesDir = File(context.filesDir, "schedules").apply { mkdirs() }
+            val localFile = File(schedulesDir, cacheKey)
 
-            // Download only if not cached or empty
+            // Permanent Disk Cache: Open immediately if already downloaded
             if (!localFile.exists() || localFile.length() == 0L) {
                 val connection = (URL(pdfUrl).openConnection() as HttpURLConnection).apply {
                     connectTimeout = 15_000
