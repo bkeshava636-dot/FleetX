@@ -127,5 +127,12 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
+
+    // Student Feedback & Issue Reports: Anyone (students have no login) can submit feedback or reports;
+    // Admins can read, review, and delete feedback.
+    match /student_feedback/{feedbackId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
   }
 }

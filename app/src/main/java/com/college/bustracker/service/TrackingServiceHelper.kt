@@ -60,6 +60,7 @@ object TrackingServiceHelper {
             putExtra("EXTRA_FORCE_WINDOW", forceWindow)
             putExtra(EXTRA_START_TRIGGER, startTrigger)
         }
+        AutoTrackingScheduler.clearWindowOverride(context)
         ContextCompat.startForegroundService(context, intent)
     }
 
@@ -68,6 +69,12 @@ object TrackingServiceHelper {
         reason: String = "USER_MANUAL_STOP",
         caller: String = "TrackingServiceHelper"
     ) {
+        if (reason == "USER_MANUAL_STOP" || reason == "CAMPUS_GEOFENCE_AUTO_SHUTDOWN") {
+            val currentWinId = com.college.bustracker.util.ScheduleHelper.getCurrentWindowId()
+            if (currentWinId != null) {
+                AutoTrackingScheduler.setWindowOverriddenOff(context, currentWinId)
+            }
+        }
         val intent = Intent(context, LocationTrackingService::class.java).apply {
             action = ACTION_STOP_TRACKING
             putExtra(EXTRA_STOP_REASON, reason)

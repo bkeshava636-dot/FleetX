@@ -652,4 +652,31 @@
     <string name="select_subset_desc">Select subset</string>
     <string name="select_affected_stops_format">Select Affected Stops (%1$d/%2$d)</string>
     <string name="plate_format">Plate: %1$s</string>
+
+    <!-- Shift Window Override Strings -->
+    <string name="shift_tracking_paused_title">Shift Tracking Overridden (Off)</string>
+    <string name="shift_tracking_paused_desc">You turned off tracking during your scheduled shift. Tracking is paused and will not automatically restart until you turn it back ON or the next shift begins.</string>
+    <string name="shift_in_progress_title">Scheduled Shift Window</string>
+    <string name="resume_tracking_now">RESUME TRACKING (TURN ON)</string>
+    <string name="start_tracking_on">START TRACKING (TURN ON)</string>
+    <string name="stop_tracking_off">STOP TRACKING (TURN OFF)</string>
+
+    <!-- Student Feedback / Issue Report Strings -->
+    <string name="report_feedback_button">Report / Feedback</string>
+    <string name="student_feedback_title">Report an Issue or Send Feedback</string>
+    <string name="student_feedback_subtitle">Help improve college transit. Reports are reviewed by transport administration.</string>
+    <string name="select_category_label">Select Issue Category</string>
+    <string name="select_bus_label">Affected Bus</string>
+    <string name="general_no_bus">General / Not Bus Specific</string>
+    <string name="subject_label">Subject</string>
+    <string name="subject_hint">e.g. Bus 3 is 20 minutes late / GPS frozen</string>
+    <string name="description_label">Description</string>
+    <string name="description_hint">Describe what happened, where, and what time...</string>
+    <string name="student_name_label">Your Name (Optional)</string>
+    <string name="student_contact_label">USN / Phone Number (Optional)</string>
+    <string name="submit_feedback_action">Submit Report</string>
+    <string name="feedback_submitted_success_title">Report Submitted</string>
+    <string name="feedback_submitted_success_desc">Thank you! Your feedback has been forwarded to college transit administration.</string>
+    <string name="feedback_validation_error">Please select a category and provide a brief description.</string>
+    <string name="report_bus_issue">Report Issue with this Bus</string>
 </resources>

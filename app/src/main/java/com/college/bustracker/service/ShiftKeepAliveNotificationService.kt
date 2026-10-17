@@ -104,6 +104,10 @@ class ShiftKeepAliveNotificationService : NotificationListenerService() {
         val assignedRoute = autoPrefs.getString(AutoTrackingScheduler.KEY_ASSIGNED_ROUTE, "ROUTE-01") ?: "ROUTE-01"
 
         if (isAutoEnabled && assignedBus.isNotBlank() && ScheduleHelper.isWithinOperatingWindow() && CollegeCalendarService.isWorkingDay()) {
+            if (AutoTrackingScheduler.isWindowOverriddenOff(context)) {
+                Log.i(TAG, "[KEEP_ALIVE_RESURRECT] Operating window is active but OVERRIDDEN_OFF by driver; skipping resurrection.")
+                return
+            }
             Log.i(TAG, "[KEEP_ALIVE_RESURRECT] Operating window is active and auto-tracking enabled for $assignedBus. Starting service...")
             GpsDiagnosticManager.logEvent(
                 context = context,

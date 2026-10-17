@@ -441,6 +441,10 @@ class DriverScheduleReceiver : BroadcastReceiver() {
             Log.i(TAG, "[AUTO-TRACK] Driver authorization = valid (driverId=$driverId, busId=$busId)")
 
             if (isOperatingNow) {
+                if (!forceWindow && AutoTrackingScheduler.isWindowOverriddenOff(context)) {
+                    Log.i(TAG, "[AUTO-TRACK] Operating window is active, but explicitly OVERRIDDEN_OFF by driver. Skipping auto-start.")
+                    return
+                }
                 // Ensure diagnostic window recording is active during operating window
                 com.college.bustracker.diagnostics.GpsDiagnosticManager.startWindowRecording(
                     context = context,

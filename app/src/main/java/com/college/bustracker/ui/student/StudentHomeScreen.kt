@@ -22,21 +22,26 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DirectionsBus
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.VolunteerActivism
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -147,6 +152,8 @@ fun StudentHomeScreen(
     val announcements by viewModel.announcements.collectAsState()
 
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showFeedbackDialog by remember { mutableStateOf(false) }
+    var feedbackPreselectedBusId by remember { mutableStateOf<String?>(null) }
     var selectedAnnouncementForDetail by remember { mutableStateOf<com.college.bustracker.data.model.Announcement?>(null) }
     var busDropdownOpen by remember { mutableStateOf(false) }
     var stopDropdownOpen by remember { mutableStateOf(false) }
@@ -266,7 +273,11 @@ fun StudentHomeScreen(
                     ) {
                         StudentTopHeader(
                             onNavigateToStaffLogin = onNavigateToStaffLogin,
-                            onLanguageClick = { showLanguageDialog = true }
+                            onLanguageClick = { showLanguageDialog = true },
+                            onFeedbackClick = {
+                                feedbackPreselectedBusId = selectedBus?.busId
+                                showFeedbackDialog = true
+                            }
                         )
 
                         Spacer(modifier = Modifier.height(18.dp))
@@ -316,7 +327,11 @@ fun StudentHomeScreen(
                                     liveLoc = liveLoc,
                                     selectedStop = selectedStop,
                                     upcomingStopsEta = upcomingStopsEta,
-                                    onNavigateToMap = onNavigateToMap
+                                    onNavigateToMap = onNavigateToMap,
+                                    onReportIssue = {
+                                        feedbackPreselectedBusId = selectedBus?.busId
+                                        showFeedbackDialog = true
+                                    }
                                 )
                                 Spacer(modifier = Modifier.height(14.dp))
                             }
@@ -400,7 +415,11 @@ fun StudentHomeScreen(
                     ) {
                         StudentTopHeader(
                             onNavigateToStaffLogin = onNavigateToStaffLogin,
-                            onLanguageClick = { showLanguageDialog = true }
+                            onLanguageClick = { showLanguageDialog = true },
+                            onFeedbackClick = {
+                                feedbackPreselectedBusId = selectedBus?.busId
+                                showFeedbackDialog = true
+                            }
                         )
 
                         Spacer(modifier = Modifier.height(18.dp))
@@ -489,12 +508,24 @@ fun StudentHomeScreen(
             }
         )
     }
+
+    if (showFeedbackDialog) {
+        StudentFeedbackDialog(
+            buses = buses,
+            preselectedBusId = feedbackPreselectedBusId,
+            onDismiss = { showFeedbackDialog = false },
+            onSubmit = { report, onResult ->
+                viewModel.submitFeedback(report, onResult)
+            }
+        )
+    }
 }
 
 @Composable
 private fun StudentTopHeader(
     onNavigateToStaffLogin: () -> Unit,
-    onLanguageClick: () -> Unit
+    onLanguageClick: () -> Unit,
+    onFeedbackClick: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -545,6 +576,28 @@ private fun StudentTopHeader(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            OutlinedButton(
+                onClick = onFeedbackClick,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD97706)),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Feedback,
+                    contentDescription = "Feedback",
+                    modifier = Modifier.size(13.dp),
+                    tint = Color(0xFFD97706)
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = stringResource(R.string.report_feedback_button),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+
             OutlinedButton(
                 onClick = onLanguageClick,
                 shape = RoundedCornerShape(10.dp),
@@ -1716,6 +1769,7 @@ private fun ProminentEtaCard(
     selectedStop: BusStop?,
     upcomingStopsEta: List<StopEta>,
     onNavigateToMap: () -> Unit,
+    onReportIssue: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -2119,6 +2173,37 @@ private fun ProminentEtaCard(
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.5.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Report Issue with this Bus Button
+        OutlinedButton(
+            onClick = onReportIssue,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(42.dp),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = Color(0xFFFFFBEB),
+                contentColor = Color(0xFFB45309)
+            ),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.ReportProblem,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = Color(0xFFD97706)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = stringResource(R.string.report_bus_issue),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFB45309)
             )
         }
     }

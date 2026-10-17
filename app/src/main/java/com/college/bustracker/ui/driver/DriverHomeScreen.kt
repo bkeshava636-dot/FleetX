@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
@@ -111,6 +112,7 @@ fun DriverHomeScreen(
     val route by viewModel.assignedRoute.collectAsState()
     val isAutoTracking by viewModel.isAutoTrackingEnabled.collectAsState()
     val isTrackingLive by viewModel.isTrackingLive.collectAsState()
+    val isWindowOverriddenOff by viewModel.isWindowOverriddenOff.collectAsState()
     val gpsStatus by viewModel.gpsStatus.collectAsState()
     val isInternet by viewModel.isInternetConnected.collectAsState()
     val lastUpdateText by viewModel.lastUpdateText.collectAsState()
@@ -578,6 +580,7 @@ fun DriverHomeScreen(
                             android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
                         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
                     }
+                    viewModel.refreshWindowOverrideState()
                 }
             }
             lifecycleOwner.lifecycle.addObserver(observer)
@@ -864,7 +867,7 @@ fun DriverHomeScreen(
                         Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = stringResource(R.string.stop_tracking_session),
+                            text = stringResource(R.string.stop_tracking_off),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp
@@ -1016,23 +1019,34 @@ fun DriverHomeScreen(
             Spacer(modifier = Modifier.height(14.dp))
         }
 
-        // MANUAL TRACKING Card (when not currently live)
+        // MANUAL TRACKING / OVERRIDE Card (when not currently live)
         if (!isTrackingLive) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isWindowOverriddenOff) Color(0xFFFFFBEB) else Color.White
+                ),
+                border = if (isWindowOverriddenOff) BorderStroke(1.dp, Color(0xFFFDE68A)) else null,
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     SectionHeader(
-                        title = stringResource(R.string.manual_dispatch),
-                        icon = Icons.Default.PlayArrow
+                        title = if (isWindowOverriddenOff) {
+                            stringResource(R.string.shift_tracking_paused_title)
+                        } else {
+                            stringResource(R.string.manual_dispatch)
+                        },
+                        icon = if (isWindowOverriddenOff) Icons.Default.PauseCircle else Icons.Default.PlayArrow
                     )
                     Text(
-                        text = stringResource(R.string.manual_dispatch_desc),
+                        text = if (isWindowOverriddenOff) {
+                            stringResource(R.string.shift_tracking_paused_desc)
+                        } else {
+                            stringResource(R.string.manual_dispatch_desc)
+                        },
                         fontSize = 12.sp,
-                        color = Color(0xFF64748B),
+                        color = if (isWindowOverriddenOff) Color(0xFF92400E) else Color(0xFF64748B),
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
 
@@ -1057,7 +1071,7 @@ fun DriverHomeScreen(
                             .height(52.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isReplacedNow) Color(0xFF94A3B8) else CollegePrimary,
+                            containerColor = if (isReplacedNow) Color(0xFF94A3B8) else if (isWindowOverriddenOff) Color(0xFFD97706) else CollegePrimary,
                             disabledContainerColor = Color(0xFFE2E8F0)
                         )
                     ) {
@@ -1067,7 +1081,8 @@ fun DriverHomeScreen(
                             text = when {
                                 isReplacedNow -> stringResource(R.string.tracking_disabled_replacement)
                                 isActingAsTemp -> stringResource(R.string.start_tracking_temp, operatingAsTempBus?.busId ?: "")
-                                else -> stringResource(R.string.start_tracking_now)
+                                isWindowOverriddenOff -> stringResource(R.string.resume_tracking_now)
+                                else -> stringResource(R.string.start_tracking_on)
                             },
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,

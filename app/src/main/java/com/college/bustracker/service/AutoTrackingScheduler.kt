@@ -44,6 +44,29 @@ class AutoTrackingScheduler {
         const val REQUEST_CODE_MORNING_PRE_START = 2005
         const val REQUEST_CODE_EVENING_PRE_START = 2006
 
+        const val KEY_OVERRIDDEN_OFF_WINDOW_ID = "key_overridden_off_window_id"
+
+        fun setWindowOverriddenOff(context: Context, windowId: String) {
+            val prefs = context.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
+            prefs.edit().putString(KEY_OVERRIDDEN_OFF_WINDOW_ID, windowId).apply()
+            Log.i(TAG, "[OVERRIDE] Operating window $windowId marked as OVERRIDDEN_OFF by user/system")
+        }
+
+        fun clearWindowOverride(context: Context) {
+            val prefs = context.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
+            if (prefs.contains(KEY_OVERRIDDEN_OFF_WINDOW_ID)) {
+                prefs.edit().remove(KEY_OVERRIDDEN_OFF_WINDOW_ID).apply()
+                Log.i(TAG, "[OVERRIDE] Cleared window override; tracking free to resume")
+            }
+        }
+
+        fun isWindowOverriddenOff(context: Context): Boolean {
+            val currentWindowId = com.college.bustracker.util.ScheduleHelper.getCurrentWindowId() ?: return false
+            val prefs = context.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
+            val overriddenId = prefs.getString(KEY_OVERRIDDEN_OFF_WINDOW_ID, null)
+            return overriddenId == currentWindowId
+        }
+
         fun calculatePreStartTime(startTimeStr: String, leadMinutes: Long = 2L): String {
             return try {
                 val time = LocalTime.parse(startTimeStr, DateTimeFormatter.ofPattern("HH:mm"))
@@ -226,8 +249,12 @@ class AutoTrackingScheduler {
                 } else {
                     DriverScheduleReceiver.dismissLocationDisabledNotification(context)
                     if (!TrackingServiceHelper.isTracking.value) {
-                        Log.i(TAG, "[AUTO-TRACK] $nowIso Starting driver tracking for bus $busId (mode: AUTO)")
-                        TrackingServiceHelper.startTracking(context, busId, routeId, driverId, "AUTO")
+                        if (isWindowOverriddenOff(context)) {
+                            Log.i(TAG, "[AUTO-TRACK] $nowIso Operating window active, but OVERRIDDEN_OFF by driver; skipping auto-start")
+                        } else {
+                            Log.i(TAG, "[AUTO-TRACK] $nowIso Starting driver tracking for bus $busId (mode: AUTO)")
+                            TrackingServiceHelper.startTracking(context, busId, routeId, driverId, "AUTO")
+                        }
                     }
                 }
             } else {

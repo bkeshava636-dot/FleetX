@@ -64,6 +64,23 @@ object ScheduleHelper {
     }
 
     /**
+     * Returns a unique ID for the current active operating window (e.g., "2026-10-17_MORNING"
+     * or "2026-10-17_EVENING"), or null if outside scheduled operating windows.
+     */
+    fun getCurrentWindowId(
+        schedule: RouteSchedule = OperatingScheduleService.getSchedule(),
+        now: LocalTime = nowKolkata(),
+        today: java.time.LocalDate = CollegeCalendarService.nowLocalDate()
+    ): String? {
+        val dateStr = today.toString()
+        return when {
+            isTimeInWindow(now, schedule.morning) -> "${dateStr}_MORNING"
+            isTimeInWindow(now, schedule.evening) -> "${dateStr}_EVENING"
+            else -> null
+        }
+    }
+
+    /**
      * Returns a human readable string describing the next scheduled session.
      */
     fun getNextSessionDescription(
