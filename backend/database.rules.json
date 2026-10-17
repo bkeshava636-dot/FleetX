@@ -68,6 +68,12 @@
           }
         }
       }
+    },
+    "bus_beacons": {
+      ".read": true,
+      "$busId": {
+        ".write": true
+      }
     }
   }
 }
