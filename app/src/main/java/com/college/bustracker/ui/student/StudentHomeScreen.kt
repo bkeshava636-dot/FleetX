@@ -153,6 +153,7 @@ fun StudentHomeScreen(
 
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
+    var feedbackInitialType by remember { mutableStateOf(com.college.bustracker.data.model.StudentFeedback.TYPE_APP) }
     var feedbackPreselectedBusId by remember { mutableStateOf<String?>(null) }
     var selectedAnnouncementForDetail by remember { mutableStateOf<com.college.bustracker.data.model.Announcement?>(null) }
     var busDropdownOpen by remember { mutableStateOf(false) }
@@ -273,11 +274,7 @@ fun StudentHomeScreen(
                     ) {
                         StudentTopHeader(
                             onNavigateToStaffLogin = onNavigateToStaffLogin,
-                            onLanguageClick = { showLanguageDialog = true },
-                            onFeedbackClick = {
-                                feedbackPreselectedBusId = selectedBus?.busId
-                                showFeedbackDialog = true
-                            }
+                            onLanguageClick = { showLanguageDialog = true }
                         )
 
                         Spacer(modifier = Modifier.height(18.dp))
@@ -329,6 +326,7 @@ fun StudentHomeScreen(
                                     upcomingStopsEta = upcomingStopsEta,
                                     onNavigateToMap = onNavigateToMap,
                                     onReportIssue = {
+                                        feedbackInitialType = com.college.bustracker.data.model.StudentFeedback.TYPE_BUS
                                         feedbackPreselectedBusId = selectedBus?.busId
                                         showFeedbackDialog = true
                                     }
@@ -366,6 +364,17 @@ fun StudentHomeScreen(
 
                         // FleetX Updates & About Section
                         com.college.bustracker.update.ui.UpdateCard()
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Student Feedback & Transit Reports Card
+                        StudentFeedbackCard(
+                            onOpenFeedback = { isApp ->
+                                feedbackInitialType = if (isApp) com.college.bustracker.data.model.StudentFeedback.TYPE_APP else com.college.bustracker.data.model.StudentFeedback.TYPE_BUS
+                                feedbackPreselectedBusId = if (isApp) null else selectedBus?.busId
+                                showFeedbackDialog = true
+                            }
+                        )
                     }
                 }
 
@@ -415,11 +424,7 @@ fun StudentHomeScreen(
                     ) {
                         StudentTopHeader(
                             onNavigateToStaffLogin = onNavigateToStaffLogin,
-                            onLanguageClick = { showLanguageDialog = true },
-                            onFeedbackClick = {
-                                feedbackPreselectedBusId = selectedBus?.busId
-                                showFeedbackDialog = true
-                            }
+                            onLanguageClick = { showLanguageDialog = true }
                         )
 
                         Spacer(modifier = Modifier.height(18.dp))
@@ -487,6 +492,17 @@ fun StudentHomeScreen(
 
                         // FleetX Updates & About Section
                         com.college.bustracker.update.ui.UpdateCard()
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Student Feedback & Transit Reports Card
+                        StudentFeedbackCard(
+                            onOpenFeedback = { isApp ->
+                                feedbackInitialType = if (isApp) com.college.bustracker.data.model.StudentFeedback.TYPE_APP else com.college.bustracker.data.model.StudentFeedback.TYPE_BUS
+                                feedbackPreselectedBusId = if (isApp) null else selectedBus?.busId
+                                showFeedbackDialog = true
+                            }
+                        )
                     }
                 }
             }
@@ -512,6 +528,7 @@ fun StudentHomeScreen(
     if (showFeedbackDialog) {
         StudentFeedbackDialog(
             buses = buses,
+            initialFeedbackType = feedbackInitialType,
             preselectedBusId = feedbackPreselectedBusId,
             onDismiss = { showFeedbackDialog = false },
             onSubmit = { report, onResult ->
@@ -524,8 +541,7 @@ fun StudentHomeScreen(
 @Composable
 private fun StudentTopHeader(
     onNavigateToStaffLogin: () -> Unit,
-    onLanguageClick: () -> Unit,
-    onFeedbackClick: () -> Unit
+    onLanguageClick: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -576,28 +592,6 @@ private fun StudentTopHeader(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedButton(
-                onClick = onFeedbackClick,
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD97706)),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Feedback,
-                    contentDescription = "Feedback",
-                    modifier = Modifier.size(13.dp),
-                    tint = Color(0xFFD97706)
-                )
-                Spacer(modifier = Modifier.width(3.dp))
-                Text(
-                    text = stringResource(R.string.report_feedback_button),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
-
             OutlinedButton(
                 onClick = onLanguageClick,
                 shape = RoundedCornerShape(10.dp),

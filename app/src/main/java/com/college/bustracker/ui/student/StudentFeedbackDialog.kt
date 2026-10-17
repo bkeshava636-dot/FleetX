@@ -1,6 +1,7 @@
 package com.college.bustracker.ui.student
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,11 +24,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.Feedback
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -67,11 +68,22 @@ import com.college.bustracker.ui.theme.StatusDangerRed
 @Composable
 fun StudentFeedbackDialog(
     buses: List<Bus>,
+    initialFeedbackType: String = StudentFeedback.TYPE_APP,
     preselectedBusId: String? = null,
     onDismiss: () -> Unit,
     onSubmit: (StudentFeedback, onResult: (Boolean, String?) -> Unit) -> Unit
 ) {
-    var selectedCategory by remember { mutableStateOf(StudentFeedback.CATEGORY_GPS_ISSUE) }
+    var feedbackType by remember {
+        mutableStateOf(
+            if (!preselectedBusId.isNullOrBlank()) StudentFeedback.TYPE_BUS else initialFeedbackType
+        )
+    }
+    var selectedCategory by remember(feedbackType) {
+        mutableStateOf(
+            if (feedbackType == StudentFeedback.TYPE_APP) StudentFeedback.CATEGORY_APP_BUG
+            else StudentFeedback.CATEGORY_GPS_ISSUE
+        )
+    }
     var selectedBusId by remember { mutableStateOf(preselectedBusId ?: "") }
     var busDropdownOpen by remember { mutableStateOf(false) }
     var subject by remember { mutableStateOf("") }
@@ -85,6 +97,11 @@ fun StudentFeedbackDialog(
 
     val selectedBus = remember(buses, selectedBusId) {
         buses.find { it.busId == selectedBusId }
+    }
+
+    val currentCategories = remember(feedbackType) {
+        if (feedbackType == StudentFeedback.TYPE_APP) StudentFeedback.APP_CATEGORIES
+        else StudentFeedback.BUS_CATEGORIES
     }
 
     Dialog(
@@ -182,13 +199,16 @@ fun StudentFeedbackDialog(
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .background(Color(0xFFFEF3C7), RoundedCornerShape(10.dp)),
+                                    .background(
+                                        if (feedbackType == StudentFeedback.TYPE_APP) Color(0xFFEEF2FF) else Color(0xFFFEF3C7),
+                                        RoundedCornerShape(10.dp)
+                                    ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Feedback,
+                                    imageVector = if (feedbackType == StudentFeedback.TYPE_APP) Icons.Default.BugReport else Icons.Default.DirectionsBus,
                                     contentDescription = null,
-                                    tint = Color(0xFFD97706),
+                                    tint = if (feedbackType == StudentFeedback.TYPE_APP) Color(0xFF4F46E5) else Color(0xFFD97706),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -221,7 +241,74 @@ fun StudentFeedbackDialog(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Type Selector Tabs (App Feedback vs Bus Issue)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF1F5F9), RoundedCornerShape(12.dp))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(
+                                    color = if (feedbackType == StudentFeedback.TYPE_APP) Color.White else Color.Transparent,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable { feedbackType = StudentFeedback.TYPE_APP }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.BugReport,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp),
+                                    tint = if (feedbackType == StudentFeedback.TYPE_APP) Color(0xFF4F46E5) else Color(0xFF64748B)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = stringResource(R.string.feedback_type_app),
+                                    fontSize = 12.sp,
+                                    fontWeight = if (feedbackType == StudentFeedback.TYPE_APP) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (feedbackType == StudentFeedback.TYPE_APP) Color(0xFF1E1B4B) else Color(0xFF64748B)
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(
+                                    color = if (feedbackType == StudentFeedback.TYPE_BUS) Color.White else Color.Transparent,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable { feedbackType = StudentFeedback.TYPE_BUS }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.DirectionsBus,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp),
+                                    tint = if (feedbackType == StudentFeedback.TYPE_BUS) Color(0xFFD97706) else Color(0xFF64748B)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = stringResource(R.string.feedback_type_bus),
+                                    fontSize = 12.sp,
+                                    fontWeight = if (feedbackType == StudentFeedback.TYPE_BUS) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (feedbackType == StudentFeedback.TYPE_BUS) Color(0xFF78350F) else Color(0xFF64748B)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     // Category Selection Chips
                     Text(
@@ -238,12 +325,14 @@ fun StudentFeedbackDialog(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        StudentFeedback.ALL_CATEGORIES.forEach { category ->
+                        currentCategories.forEach { category ->
                             val isSelected = category == selectedCategory
                             Box(
                                 modifier = Modifier
                                     .background(
-                                        color = if (isSelected) CollegePrimary else Color(0xFFF1F5F9),
+                                        color = if (isSelected) {
+                                            if (feedbackType == StudentFeedback.TYPE_APP) Color(0xFF4F46E5) else CollegePrimary
+                                        } else Color(0xFFF1F5F9),
                                         shape = RoundedCornerShape(16.dp)
                                     )
                                     .clickable { selectedCategory = category }
@@ -261,86 +350,88 @@ fun StudentFeedbackDialog(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Affected Bus Selector
-                    Text(
-                        text = stringResource(R.string.select_bus_label),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF334155)
-                    )
+                    // Affected Bus Selector (Shown for Bus Transit type, or optional for App)
+                    if (feedbackType == StudentFeedback.TYPE_BUS) {
+                        Text(
+                            text = stringResource(R.string.select_bus_label),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF334155)
+                        )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
 
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedButton(
-                            onClick = { busDropdownOpen = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
-                        ) {
-                            Row(
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { busDropdownOpen = true },
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
                             ) {
                                 Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.DirectionsBus,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = CollegePrimary
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = if (selectedBus != null) {
-                                            "Bus ${selectedBus.busNumber}" + (if (!selectedBus.routeId.isNullOrBlank()) " (${selectedBus.routeId})" else "")
-                                        } else {
-                                            stringResource(R.string.general_no_bus)
-                                        },
-                                        fontSize = 13.sp,
-                                        color = Color(0xFF0F172A)
-                                    )
-                                }
-                                Icon(
-                                    imageVector = Icons.Default.ArrowDropDown,
-                                    contentDescription = null,
-                                    tint = Color(0xFF64748B)
-                                )
-                            }
-                        }
-
-                        DropdownMenu(
-                            expanded = busDropdownOpen,
-                            onDismissRequest = { busDropdownOpen = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.general_no_bus), fontSize = 13.sp) },
-                                onClick = {
-                                    selectedBusId = ""
-                                    busDropdownOpen = false
-                                }
-                            )
-                            buses.forEach { bus ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            "Bus ${bus.busNumber}" + (if (!bus.routeId.isNullOrBlank()) " (${bus.routeId})" else ""),
-                                            fontSize = 13.sp
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DirectionsBus,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = CollegePrimary
                                         )
-                                    },
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = if (selectedBus != null) {
+                                                "Bus ${selectedBus.busNumber}" + (if (!selectedBus.routeId.isNullOrBlank()) " (${selectedBus.routeId})" else "")
+                                            } else {
+                                                stringResource(R.string.general_no_bus)
+                                            },
+                                            fontSize = 13.sp,
+                                            color = Color(0xFF0F172A)
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        tint = Color(0xFF64748B)
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = busDropdownOpen,
+                                onDismissRequest = { busDropdownOpen = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.general_no_bus), fontSize = 13.sp) },
                                     onClick = {
-                                        selectedBusId = bus.busId
+                                        selectedBusId = ""
                                         busDropdownOpen = false
                                     }
                                 )
+                                buses.forEach { bus ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                "Bus ${bus.busNumber}" + (if (!bus.routeId.isNullOrBlank()) " (${bus.routeId})" else ""),
+                                                fontSize = 13.sp
+                                            )
+                                        },
+                                        onClick = {
+                                            selectedBusId = bus.busId
+                                            busDropdownOpen = false
+                                        }
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
 
                     // Subject Field
                     Text(
@@ -353,12 +444,18 @@ fun StudentFeedbackDialog(
                     OutlinedTextField(
                         value = subject,
                         onValueChange = { subject = it },
-                        placeholder = { Text(stringResource(R.string.subject_hint), fontSize = 12.sp, color = Color(0xFF94A3B8)) },
+                        placeholder = {
+                            Text(
+                                text = if (feedbackType == StudentFeedback.TYPE_APP) "e.g. Map is freezing / Suggestion for dark mode" else stringResource(R.string.subject_hint),
+                                fontSize = 12.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CollegePrimary,
+                            focusedBorderColor = if (feedbackType == StudentFeedback.TYPE_APP) Color(0xFF4F46E5) else CollegePrimary,
                             unfocusedBorderColor = Color(0xFFCBD5E1)
                         )
                     )
@@ -384,7 +481,7 @@ fun StudentFeedbackDialog(
                         minLines = 3,
                         maxLines = 5,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CollegePrimary,
+                            focusedBorderColor = if (feedbackType == StudentFeedback.TYPE_APP) Color(0xFF4F46E5) else CollegePrimary,
                             unfocusedBorderColor = Color(0xFFCBD5E1)
                         )
                     )
@@ -477,8 +574,9 @@ fun StudentFeedbackDialog(
                                 isSubmitting = true
                                 val report = StudentFeedback(
                                     feedbackId = "",
-                                    busId = selectedBusId,
-                                    routeId = selectedBus?.routeId ?: "",
+                                    feedbackType = feedbackType,
+                                    busId = if (feedbackType == StudentFeedback.TYPE_APP) "" else selectedBusId,
+                                    routeId = if (feedbackType == StudentFeedback.TYPE_APP) "" else (selectedBus?.routeId ?: ""),
                                     category = selectedCategory,
                                     subject = subject.trim(),
                                     description = description.trim(),
@@ -499,7 +597,9 @@ fun StudentFeedbackDialog(
                                 .weight(2f)
                                 .height(46.dp),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (feedbackType == StudentFeedback.TYPE_APP) Color(0xFF4F46E5) else CollegePrimary
+                            ),
                             enabled = !isSubmitting
                         ) {
                             if (isSubmitting) {
@@ -510,7 +610,7 @@ fun StudentFeedbackDialog(
                                 )
                             } else {
                                 Icon(
-                                    imageVector = Icons.Default.Feedback,
+                                    imageVector = if (feedbackType == StudentFeedback.TYPE_APP) Icons.Default.BugReport else Icons.Default.Feedback,
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                     tint = Color.White
