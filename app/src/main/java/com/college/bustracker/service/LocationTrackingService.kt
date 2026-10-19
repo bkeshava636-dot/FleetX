@@ -24,6 +24,7 @@ import com.college.bustracker.R
 import com.college.bustracker.data.model.LiveLocation
 import com.college.bustracker.data.model.LocationSource
 import com.college.bustracker.ui.MainActivity
+import com.college.bustracker.util.CollegeCalendarService
 import com.college.bustracker.util.LocationThrottler
 import com.college.bustracker.util.MultiSourceLocationEngine
 import com.college.bustracker.util.RouteDirection
@@ -58,8 +59,8 @@ class LocationTrackingService : Service() {
         const val KEY_SAVED_MODE = "persisted_mode"
 
         // BITM Campus Geofence Auto-Shutdown Constants (Ballari Institute of Technology & Management)
-        const val BITM_CAMPUS_LAT = 15.1680
-        const val BITM_CAMPUS_LNG = 76.8505
+        const val BITM_CAMPUS_LAT = 15.1683067
+        const val BITM_CAMPUS_LNG = 76.8317217
         const val BITM_CAMPUS_GEOFENCE_RADIUS_METERS = 500.0 // 500m radius covers campus entrance, bus grounds & parking
         const val BITM_CAMPUS_AUTO_SHUTDOWN_DURATION_MS = 60 * 1000L // 60s total dwell or 25s stationary within campus
 
@@ -724,6 +725,19 @@ class LocationTrackingService : Service() {
             "[LOCATION-SERVICE] GPS_RECEIVED: lat=${location.latitude}, lng=${location.longitude}, acc=${location.accuracy}m, speed=${location.speed}m/s"
         )
 
+        // 2b. Operating Window End Check
+        // Shuts down tracking automatically when the scheduled operating window ends (unless explicitly force-windowed)
+        if (!forceWindow) {
+            val isWithinWindow = ScheduleHelper.isWithinOperatingWindow()
+            val isHoliday = CollegeCalendarService.evaluateDay().isHoliday
+            if (!isWithinWindow || isHoliday) {
+                val stopReason = if (isHoliday) "COLLEGE_HOLIDAY" else "OPERATING_WINDOW_ENDED"
+                Log.w(TAG, "[AUTO-TRACK] Operating window has ended while service is running ($stopReason). Automatically shutting down tracking.")
+                performScheduledWindowEndShutdown(location, stopReason)
+                return
+            }
+        }
+
         // 3. College Campus Geofence Auto-Shutdown Check
         // Shuts down tracking automatically when the driver reaches campus during morning shift
         val nowKolkata = ScheduleHelper.nowKolkata()
@@ -759,7 +773,17 @@ class LocationTrackingService : Service() {
             }
         }
 
-        // 3c. Legacy coordinates fallback
+        // 3c. Campus grounds and legacy coordinates fallback
+        if (!isInsideCampus) {
+            val distToGrounds = LocationThrottler.calculateDistanceMeters(
+                location.latitude, location.longitude,
+                15.1680, 76.8505
+            )
+            if (distToGrounds <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS) {
+                isInsideCampus = true
+                minCampusDist = distToGrounds
+            }
+        }
         if (!isInsideCampus) {
             val distToLegacy = LocationThrottler.calculateDistanceMeters(
                 location.latitude, location.longitude,
@@ -942,6 +966,59 @@ class LocationTrackingService : Service() {
             Log.i(TAG, "[CAMPUS_GEOFENCE] Scheduled next afternoon shift alarm")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to schedule afternoon shift alarm: ${e.message}")
+        }
+
+        stopTrackingSession(isExplicitUserStop = true)
+        stopSelf()
+    }
+
+    private fun performScheduledWindowEndShutdown(location: Location, stopReason: String) {
+        val now = System.currentTimeMillis()
+        val finalLocation = LiveLocation(
+            busId = activeBusId,
+            latitude = location.latitude,
+            longitude = location.longitude,
+            speed = 0f,
+            bearing = location.bearing,
+            trackingStatus = "WAITING_FOR_GPS",
+            mode = activeMode,
+            routeId = activeRouteId,
+            driverId = activeDriverId,
+            sourceType = "PRIMARY_DRIVER",
+            lastUpdated = now
+        )
+
+        try {
+            com.google.firebase.database.FirebaseDatabase.getInstance()
+                .getReference("live_locations")
+                .child(activeBusId)
+                .setValue(finalLocation)
+            Log.i(TAG, "[AUTO-TRACK] Final status on window end ($stopReason) written to RTDB for $activeBusId")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to push final status on window end: ${e.message}")
+        }
+
+        serviceStopReason = stopReason
+        serviceStopCaller = "ScheduledWindowEndWatchdog"
+        isExplicitStop = true
+        persistTrackingSessionState(false)
+
+        TrackingServiceHelper.updateServiceState(
+            isTracking = false,
+            busId = activeBusId,
+            gps = "Off",
+            timestamp = now
+        )
+
+        GmsHardwareWatchdog.unregister(this)
+        keepAliveOverlay?.detachOverlay()
+        keepAliveOverlay = null
+
+        try {
+            AutoTrackingScheduler.scheduleAlarms(this)
+            Log.i(TAG, "[AUTO-TRACK] Re-scheduled shift alarms after window end shutdown")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to re-schedule shift alarms: ${e.message}")
         }
 
         stopTrackingSession(isExplicitUserStop = true)
