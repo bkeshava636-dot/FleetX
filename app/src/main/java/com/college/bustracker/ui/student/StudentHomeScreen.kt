@@ -2293,10 +2293,16 @@ private fun DriverInfoCard(
                 if (!phone.isNullOrBlank()) {
                     Button(
                         onClick = {
-                            val dialIntent = Intent(Intent.ACTION_DIAL).apply {
-                                data = Uri.parse("tel:${phone.trim()}")
+                            try {
+                                val dialIntent = Intent(Intent.ACTION_DIAL).apply {
+                                    data = Uri.parse("tel:${phone.trim()}")
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(dialIntent)
+                            } catch (e: Exception) {
+                                android.util.Log.e("StudentHomeScreen", "Failed to start phone dialer: ${e.message}", e)
+                                android.widget.Toast.makeText(context, "Could not open dialer: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
                             }
-                            context.startActivity(dialIntent)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
                         shape = RoundedCornerShape(10.dp),

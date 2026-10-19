@@ -1010,6 +1010,7 @@ private fun shareZipFile(context: Context, zipFile: java.io.File) {
             putExtra(Intent.EXTRA_STREAM, uri)
             clipData = ClipData.newRawUri("FleetX Diagnostic Export", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         val chooser = Intent.createChooser(shareIntent, "Export FleetX GPS Diagnostics").apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
