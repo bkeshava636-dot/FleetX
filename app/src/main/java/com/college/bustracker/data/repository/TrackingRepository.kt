@@ -189,10 +189,10 @@ class TrackingRepository(
             location
         }
 
-        // 2b. Sanitize trackingStatus for RTDB validation: only ACTIVE, INACTIVE, and WAITING_FOR_GPS are universally permitted
+        // 2b. Sanitize trackingStatus for RTDB validation: only validated statuses are permitted
         val sanitizedStatus = when (baseLoc.trackingStatus) {
-            "ACTIVE", "INACTIVE", "WAITING_FOR_GPS" -> baseLoc.trackingStatus
-            else -> "WAITING_FOR_GPS" // Map "STALE" or unknown status to "WAITING_FOR_GPS" to prevent RTDB -3 Permission Denied
+            "ACTIVE", "INACTIVE", "WAITING_FOR_GPS", "STALE", "ARRIVED_AT_CAMPUS" -> baseLoc.trackingStatus
+            else -> "WAITING_FOR_GPS"
         }
         val locationToUse = if (baseLoc.trackingStatus != sanitizedStatus) {
             baseLoc.copy(trackingStatus = sanitizedStatus)

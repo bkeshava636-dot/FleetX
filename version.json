@@ -1,8 +1,8 @@
 {
-  "versionCode": 10030,
-  "versionName": "1.0.30",
-  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.30/FleetX-v1.0.30.apk",
+  "versionCode": 10031,
+  "versionName": "1.0.31",
+  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.31/FleetX-v1.0.31.apk",
   "sha256": "",
-  "releaseNotes": "FleetX v1.0.30 - Zero-Cost Firebase Blaze & Performance Architecture: Enforce Firestore Source.CACHE 12h TTL (saving 110k+ daily reads), local persistent disk caching for OSRM routes & Timetable PDFs, 15-min idle RTDB auto-pause, and student beacon arbitration write suppression.",
-  "publishedAt": "2026-10-17T16:55:00Z"
+  "releaseNotes": "FleetX v1.0.31: Fix Call Driver crash (FLAG_ACTIVITY_NEW_TASK), fix College Campus Geofence auto-shutdown with accurate BITM campus coordinates, route destination stop matching, and background resurrection override.",
+  "publishedAt": "2026-10-19T16:25:00Z"
 }

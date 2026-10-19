@@ -26,6 +26,8 @@ import com.college.bustracker.data.model.LocationSource
 import com.college.bustracker.ui.MainActivity
 import com.college.bustracker.util.LocationThrottler
 import com.college.bustracker.util.MultiSourceLocationEngine
+import com.college.bustracker.util.RouteDirection
+import com.college.bustracker.util.ScheduleHelper
 import com.college.bustracker.util.SelectedSourceType
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -55,11 +57,11 @@ class LocationTrackingService : Service() {
         const val KEY_SAVED_DRIVER_ID = "persisted_driver_id"
         const val KEY_SAVED_MODE = "persisted_mode"
 
-        // BITM Campus Geofence Auto-Shutdown Constants
-        const val BITM_CAMPUS_LAT = 15.1425
-        const val BITM_CAMPUS_LNG = 76.8925
-        const val BITM_CAMPUS_GEOFENCE_RADIUS_METERS = 200.0
-        const val BITM_CAMPUS_AUTO_SHUTDOWN_DURATION_MS = 3 * 60 * 1000L // 3 consecutive minutes
+        // BITM Campus Geofence Auto-Shutdown Constants (Ballari Institute of Technology & Management)
+        const val BITM_CAMPUS_LAT = 15.1680
+        const val BITM_CAMPUS_LNG = 76.8505
+        const val BITM_CAMPUS_GEOFENCE_RADIUS_METERS = 500.0 // 500m radius covers campus entrance, bus grounds & parking
+        const val BITM_CAMPUS_AUTO_SHUTDOWN_DURATION_MS = 60 * 1000L // 60s total dwell or 25s stationary within campus
 
         fun isPersistentSessionActive(context: Context): Boolean {
             val prefs = context.getSharedPreferences(PREFS_PERSISTENT_TRACKING, Context.MODE_PRIVATE)
@@ -722,28 +724,73 @@ class LocationTrackingService : Service() {
             "[LOCATION-SERVICE] GPS_RECEIVED: lat=${location.latitude}, lng=${location.longitude}, acc=${location.accuracy}m, speed=${location.speed}m/s"
         )
 
-        // 3. BITM Campus Morning Geofence Auto-Shutdown Check (07:30–09:30, stationary inside 200m for 3 min)
-        val distToCampus = LocationThrottler.calculateDistanceMeters(
+        // 3. College Campus Geofence Auto-Shutdown Check
+        // Shuts down tracking automatically when the driver reaches campus during morning shift
+        val nowKolkata = ScheduleHelper.nowKolkata()
+        val direction = ScheduleHelper.determineRouteDirection()
+        val isHeadingToCampus = direction == RouteDirection.STOPS_TO_COLLEGE || nowKolkata.isBefore(java.time.LocalTime.of(12, 30))
+
+        var isInsideCampus = false
+        var minCampusDist = Double.MAX_VALUE
+
+        // 3a. Primary BITM Campus Geofence (Ballari)
+        val distToBitm = LocationThrottler.calculateDistanceMeters(
             location.latitude, location.longitude,
             BITM_CAMPUS_LAT, BITM_CAMPUS_LNG
         )
-        val isInsideCampus = distToCampus <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS
-        val nowKolkata = com.college.bustracker.util.ScheduleHelper.nowKolkata()
-        val isMorningShift = !nowKolkata.isBefore(java.time.LocalTime.of(7, 30)) && nowKolkata.isBefore(java.time.LocalTime.of(9, 30))
-        val isStationaryAtCampus = location.speed < LocationThrottler.SPEED_THRESHOLD_MPS
+        if (distToBitm <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS) {
+            isInsideCampus = true
+            minCampusDist = distToBitm
+        }
 
-        if (isInsideCampus && isMorningShift && isStationaryAtCampus) {
+        // 3b. Active Route Destination Stop (e.g. final stop or campus stop on the assigned route)
+        if (!isInsideCampus && activeRouteId.isNotBlank()) {
+            val route = CollegeBusApp.instance.routeRepository.getCachedRoute(activeRouteId)
+            val destinationStop = route?.stops?.lastOrNull()
+            if (destinationStop != null && destinationStop.latitude != 0.0 && destinationStop.longitude != 0.0) {
+                val distToDest = LocationThrottler.calculateDistanceMeters(
+                    location.latitude, location.longitude,
+                    destinationStop.latitude, destinationStop.longitude
+                )
+                if (distToDest <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS) {
+                    isInsideCampus = true
+                    minCampusDist = distToDest
+                }
+            }
+        }
+
+        // 3c. Legacy coordinates fallback
+        if (!isInsideCampus) {
+            val distToLegacy = LocationThrottler.calculateDistanceMeters(
+                location.latitude, location.longitude,
+                15.1425, 76.8925
+            )
+            if (distToLegacy <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS) {
+                isInsideCampus = true
+                minCampusDist = distToLegacy
+            }
+        }
+
+        if (isInsideCampus && isHeadingToCampus) {
             if (campusGeofenceStationaryStartTime == 0L) {
                 campusGeofenceStationaryStartTime = now
-                Log.i(TAG, "[CAMPUS_GEOFENCE] Bus entered BITM Campus geofence (dist=${distToCampus.toInt()}m). Started 3-minute stationary shutdown timer.")
-            } else if (now - campusGeofenceStationaryStartTime >= BITM_CAMPUS_AUTO_SHUTDOWN_DURATION_MS) {
-                Log.w(TAG, "[CAMPUS_GEOFENCE] Bus reached BITM Campus and stayed stationary for > 3 minutes. Triggering automatic shift shutdown!")
-                performCampusAutoShutdown(location)
-                return
+                Log.i(TAG, "[CAMPUS_GEOFENCE] Bus entered Campus geofence (dist=${minCampusDist.toInt()}m). Started arrival confirmation timer.")
+            } else {
+                val dwellTimeMs = now - campusGeofenceStationaryStartTime
+                // Trigger auto-shutdown if bus has been inside campus for >= 60 seconds, or stationary (< 1.5 m/s) for >= 25 seconds
+                val isConfirmedStationary = location.speed < LocationThrottler.SPEED_THRESHOLD_MPS && dwellTimeMs >= 25_000L
+                val isDwellExceeded = dwellTimeMs >= BITM_CAMPUS_AUTO_SHUTDOWN_DURATION_MS
+
+                if (isConfirmedStationary || isDwellExceeded) {
+                    Log.w(TAG, "[CAMPUS_GEOFENCE] Bus reached Campus (dist=${minCampusDist.toInt()}m, speed=${location.speed}m/s, dwell=${dwellTimeMs / 1000}s). Triggering automatic shift shutdown!")
+                    performCampusAutoShutdown(location)
+                    return
+                }
             }
         } else {
-            if (campusGeofenceStationaryStartTime != 0L) {
-                Log.d(TAG, "[CAMPUS_GEOFENCE] Reset campus stationary timer (dist=${distToCampus.toInt()}m, speed=${location.speed}m/s)")
+            // Only reset if bus physically moved outside of the campus geofence
+            if (!isInsideCampus && campusGeofenceStationaryStartTime != 0L) {
+                Log.d(TAG, "[CAMPUS_GEOFENCE] Bus exited campus geofence (dist=${minCampusDist.toInt()}m). Resetting arrival timer.")
                 campusGeofenceStationaryStartTime = 0L
             }
         }
@@ -871,6 +918,19 @@ class LocationTrackingService : Service() {
         serviceStopCaller = "BitmCampusGeofence"
         isExplicitStop = true
         persistTrackingSessionState(false)
+
+        val currentWinId = ScheduleHelper.getCurrentWindowId()
+        if (currentWinId != null) {
+            AutoTrackingScheduler.setWindowOverriddenOff(this, currentWinId)
+            Log.i(TAG, "[CAMPUS_GEOFENCE] Window $currentWinId marked as OVERRIDDEN_OFF to prevent resurrection")
+        }
+
+        TrackingServiceHelper.updateServiceState(
+            isTracking = false,
+            busId = activeBusId,
+            gps = "Off",
+            timestamp = now
+        )
 
         GmsHardwareWatchdog.unregister(this)
         keepAliveOverlay?.detachOverlay()
