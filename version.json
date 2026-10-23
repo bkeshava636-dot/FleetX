@@ -1,8 +1,8 @@
 {
-  "versionCode": 10033,
-  "versionName": "1.0.33",
-  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.33/FleetX-v1.0.33.apk",
+  "versionCode": 10034,
+  "versionName": "1.0.34",
+  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.34/FleetX-v1.0.34.apk",
   "sha256": "",
-  "releaseNotes": "FleetX v1.0.33: Fix passed-stop ETA progression (preventing stuck ETAs on passed stops like Vasavi School), add 1D road polyline progression, and support notification-only stops hidden from maps.",
-  "publishedAt": "2026-10-23T13:30:00Z"
+  "releaseNotes": "FleetX v1.0.34: Auto-sync routes & stops from server with stale-while-revalidate (clearing empty-stops cache), live Admin route updates, and notification-only stop visibility improvements.",
+  "publishedAt": "2026-10-23T14:45:00Z"
 }

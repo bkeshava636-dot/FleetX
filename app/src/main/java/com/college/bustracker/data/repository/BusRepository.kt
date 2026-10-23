@@ -120,7 +120,7 @@ class BusRepository(
         private const val TAG = "BusRepository"
         private const val PREFS_CACHE = "firestore_cache_metadata"
         private const val KEY_LAST_BUS_SYNC_MS = "last_bus_sync_ms"
-        private const val CACHE_TTL_MS = 12 * 60 * 60 * 1000L // 12 hours
+        private const val CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes stale-while-revalidate
     }
 
     /**
@@ -185,7 +185,8 @@ class BusRepository(
             }
         }
 
-        if (!cacheLoaded) {
+        val shouldFetchServer = forceRefresh || !cacheLoaded || (now - lastSyncMs >= CACHE_TTL_MS)
+        if (shouldFetchServer) {
             try {
                 val serverSnap = firestore.collection("buses").get(Source.SERVER).await()
                 val list = serverSnap.documents.mapNotNull { doc ->

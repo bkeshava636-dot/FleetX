@@ -27,9 +27,9 @@ class AdminViewModel : ViewModel() {
     private val swapRepo = app.busSwapRepository
     private val tempAssignRepo = app.temporaryAssignmentRepository
 
-    val buses: StateFlow<List<Bus>> = busRepo.getBusesFlow()
+    val buses: StateFlow<List<Bus>> = busRepo.getBusesFlow(forceRefresh = true)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val routes: StateFlow<List<Route>> = routeRepo.getRoutesFlow()
+    val routes: StateFlow<List<Route>> = routeRepo.getRoutesFlow(forceRefresh = true)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val swaps: StateFlow<List<BusSwap>> = swapRepo.getSwapsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -278,10 +278,10 @@ class AdminViewModel : ViewModel() {
         }
     }
 
-    val allBusesList: StateFlow<List<Bus>> = busRepo.getBusesFlow()
+    val allBusesList: StateFlow<List<Bus>> = busRepo.getBusesFlow(forceRefresh = true)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val allRoutesList: StateFlow<List<Route>> = routeRepo.getRoutesFlow()
+    val allRoutesList: StateFlow<List<Route>> = routeRepo.getRoutesFlow(forceRefresh = true)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun createRoute(
