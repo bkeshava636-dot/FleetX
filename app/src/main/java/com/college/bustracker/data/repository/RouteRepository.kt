@@ -24,7 +24,7 @@ class RouteRepository(
         private const val TAG = "RouteRepository"
         private const val PREFS_CACHE = "firestore_cache_metadata"
         private const val KEY_LAST_ROUTE_SYNC_MS = "last_route_sync_ms"
-        private const val CACHE_TTL_MS = 12 * 60 * 60 * 1000L // 12 hours
+        private const val CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes stale-while-revalidate
     }
 
     private val _localRoutes = MutableStateFlow<List<Route>>(emptyList())
@@ -42,34 +42,36 @@ class RouteRepository(
         val prefs = context?.getSharedPreferences(PREFS_CACHE, Context.MODE_PRIVATE)
         val lastSyncMs = prefs?.getLong(KEY_LAST_ROUTE_SYNC_MS, 0L) ?: 0L
         val now = System.currentTimeMillis()
-        val isCacheValid = !forceRefresh && (now - lastSyncMs < CACHE_TTL_MS)
 
-        var cacheLoaded = false
-        if (isCacheValid) {
-            try {
-                val cacheSnap = firestore.collection("routes").get(Source.CACHE).await()
-                if (cacheSnap != null && !cacheSnap.isEmpty) {
-                    val list = cacheSnap.documents.mapNotNull { doc ->
-                        val r = doc.toObject(Route::class.java)
-                        if (r != null) {
-                            val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
-                            val finalName = if (r.name.isNotBlank()) r.name else doc.id
-                            r.copy(routeId = finalId, name = finalName)
-                        } else null
-                    }
-                    if (list.isNotEmpty()) {
-                        _localRoutes.value = list
-                        trySend(list)
-                        cacheLoaded = true
-                        Log.d(TAG, "FIRESTORE_CACHE_HIT: Loaded ${list.size} routes from Source.CACHE (0 server reads)")
-                    }
+        // 2. Load disk cache first for instant responsiveness
+        var loadedFromCache = false
+        var cachedHasEmptyStops = false
+        try {
+            val cacheSnap = firestore.collection("routes").get(Source.CACHE).await()
+            if (cacheSnap != null && !cacheSnap.isEmpty) {
+                val list = cacheSnap.documents.mapNotNull { doc ->
+                    val r = doc.toObject(Route::class.java)
+                    if (r != null) {
+                        val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
+                        val finalName = if (r.name.isNotBlank()) r.name else doc.id
+                        r.copy(routeId = finalId, name = finalName)
+                    } else null
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "FIRESTORE_CACHE_MISS: Source.CACHE read failed (${e.message}), falling back to SERVER")
+                if (list.isNotEmpty()) {
+                    _localRoutes.value = list
+                    trySend(list)
+                    loadedFromCache = true
+                    cachedHasEmptyStops = list.any { it.active && it.stops.isEmpty() }
+                    Log.d(TAG, "FIRESTORE_CACHE_HIT: Loaded ${list.size} routes from Source.CACHE (hasEmptyStops=$cachedHasEmptyStops)")
+                }
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "FIRESTORE_CACHE_MISS: Source.CACHE read failed (${e.message})")
         }
 
-        if (!cacheLoaded) {
+        // 3. Stale-while-revalidate: Fetch fresh data from SERVER if forced, TTL expired, cache was missing, or cached routes had empty stops
+        val shouldFetchServer = forceRefresh || !loadedFromCache || cachedHasEmptyStops || (now - lastSyncMs >= CACHE_TTL_MS)
+        if (shouldFetchServer) {
             try {
                 val serverSnap = firestore.collection("routes").get(Source.SERVER).await()
                 val list = serverSnap.documents.mapNotNull { doc ->
