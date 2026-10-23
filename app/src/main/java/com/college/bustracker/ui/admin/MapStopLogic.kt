@@ -16,22 +16,26 @@ object MapStopLogic {
         name: String,
         latitude: Double,
         longitude: Double,
-        customId: String? = null
+        customId: String? = null,
+        visibleOnMap: Boolean = true
     ): List<BusStop> {
         val cleanName = name.trim()
         require(cleanName.isNotBlank()) { "Stop name cannot be blank." }
-        require(latitude in -90.0..90.0) { "Latitude must be between -90 and 90." }
-        require(longitude in -180.0..180.0) { "Longitude must be between -180 and 180." }
+        if (visibleOnMap && (latitude != 0.0 || longitude != 0.0)) {
+            require(latitude in -90.0..90.0) { "Latitude must be between -90 and 90." }
+            require(longitude in -180.0..180.0) { "Longitude must be between -180 and 180." }
+        }
 
         val nextOrder = existingStops.size + 1
         val newStopId = customId ?: "STOP-${System.currentTimeMillis() % 100000}-$nextOrder"
         val newStop = BusStop(
             stopId = newStopId,
             name = cleanName,
-            latitude = latitude,
-            longitude = longitude,
+            latitude = if (visibleOnMap) latitude else 0.0,
+            longitude = if (visibleOnMap) longitude else 0.0,
             order = nextOrder,
-            active = true
+            active = true,
+            visibleOnMap = visibleOnMap
         )
         return existingStops + newStop
     }
@@ -44,14 +48,15 @@ object MapStopLogic {
         stopId: String,
         newName: String,
         newLatitude: Double? = null,
-        newLongitude: Double? = null
+        newLongitude: Double? = null,
+        newVisibleOnMap: Boolean? = null
     ): List<BusStop> {
         val cleanName = newName.trim()
         require(cleanName.isNotBlank()) { "Stop name cannot be blank." }
-        if (newLatitude != null) {
+        if (newLatitude != null && (newVisibleOnMap != false)) {
             require(newLatitude in -90.0..90.0) { "Latitude must be between -90 and 90." }
         }
-        if (newLongitude != null) {
+        if (newLongitude != null && (newVisibleOnMap != false)) {
             require(newLongitude in -180.0..180.0) { "Longitude must be between -180 and 180." }
         }
 
@@ -60,7 +65,8 @@ object MapStopLogic {
                 stop.copy(
                     name = cleanName,
                     latitude = newLatitude ?: stop.latitude,
-                    longitude = newLongitude ?: stop.longitude
+                    longitude = newLongitude ?: stop.longitude,
+                    visibleOnMap = newVisibleOnMap ?: stop.visibleOnMap
                 )
             } else {
                 stop
@@ -140,8 +146,10 @@ object MapStopLogic {
             if (stop.name.trim().isBlank()) {
                 return Result.failure(IllegalArgumentException("Stop #${index + 1} has an empty name."))
             }
-            if (stop.latitude !in -90.0..90.0 || stop.longitude !in -180.0..180.0) {
-                return Result.failure(IllegalArgumentException("Stop #${index + 1} has invalid coordinates."))
+            if (stop.visibleOnMap) {
+                if (stop.latitude !in -90.0..90.0 || stop.longitude !in -180.0..180.0) {
+                    return Result.failure(IllegalArgumentException("Stop #${index + 1} has invalid coordinates."))
+                }
             }
             if (stop.stopId.isBlank()) {
                 return Result.failure(IllegalArgumentException("Stop #${index + 1} is missing a stopId."))

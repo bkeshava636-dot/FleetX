@@ -371,6 +371,7 @@ class AdminViewModel : ViewModel() {
         lat: Double,
         lng: Double,
         active: Boolean,
+        visibleOnMap: Boolean = true,
         onResult: (Result<Unit>) -> Unit
     ) {
         val cleanName = stopName.trim()
@@ -378,13 +379,16 @@ class AdminViewModel : ViewModel() {
             onResult(Result.failure(IllegalArgumentException("Stop name cannot be blank.")))
             return
         }
-        if (lat !in -90.0..90.0) {
-            onResult(Result.failure(IllegalArgumentException("Latitude must be between -90 and 90.")))
-            return
-        }
-        if (lng !in -180.0..180.0) {
-            onResult(Result.failure(IllegalArgumentException("Longitude must be between -180 and 180.")))
-            return
+        val isMapVisible = visibleOnMap && (lat != 0.0 || lng != 0.0)
+        if (isMapVisible) {
+            if (lat !in -90.0..90.0) {
+                onResult(Result.failure(IllegalArgumentException("Latitude must be between -90 and 90.")))
+                return
+            }
+            if (lng !in -180.0..180.0) {
+                onResult(Result.failure(IllegalArgumentException("Longitude must be between -180 and 180.")))
+                return
+            }
         }
 
         viewModelScope.launch {
@@ -392,10 +396,11 @@ class AdminViewModel : ViewModel() {
             val newStop = BusStop(
                 stopId = "STOP-${System.currentTimeMillis() % 100000}",
                 name = cleanName,
-                latitude = lat,
-                longitude = lng,
+                latitude = if (isMapVisible) lat else 0.0,
+                longitude = if (isMapVisible) lng else 0.0,
                 order = currentStops.size + 1,
-                active = active
+                active = active,
+                visibleOnMap = isMapVisible
             )
             currentStops.add(newStop)
             routeRepo.updateStops(routeId, currentStops)
@@ -426,6 +431,7 @@ class AdminViewModel : ViewModel() {
         lat: Double,
         lng: Double,
         active: Boolean,
+        visibleOnMap: Boolean = true,
         onResult: (Result<Unit>) -> Unit
     ) {
         val cleanName = name.trim()
@@ -433,19 +439,28 @@ class AdminViewModel : ViewModel() {
             onResult(Result.failure(IllegalArgumentException("Stop name cannot be blank.")))
             return
         }
-        if (lat !in -90.0..90.0) {
-            onResult(Result.failure(IllegalArgumentException("Latitude must be between -90 and 90.")))
-            return
-        }
-        if (lng !in -180.0..180.0) {
-            onResult(Result.failure(IllegalArgumentException("Longitude must be between -180 and 180.")))
-            return
+        val isMapVisible = visibleOnMap && (lat != 0.0 || lng != 0.0)
+        if (isMapVisible) {
+            if (lat !in -90.0..90.0) {
+                onResult(Result.failure(IllegalArgumentException("Latitude must be between -90 and 90.")))
+                return
+            }
+            if (lng !in -180.0..180.0) {
+                onResult(Result.failure(IllegalArgumentException("Longitude must be between -180 and 180.")))
+                return
+            }
         }
 
         viewModelScope.launch {
             val updatedStops = currentRoute.stops.map {
                 if (it.stopId == stopId) {
-                    it.copy(name = cleanName, latitude = lat, longitude = lng, active = active)
+                    it.copy(
+                        name = cleanName,
+                        latitude = if (isMapVisible) lat else 0.0,
+                        longitude = if (isMapVisible) lng else 0.0,
+                        active = active,
+                        visibleOnMap = isMapVisible
+                    )
                 } else it
             }
             routeRepo.updateStops(routeId, updatedStops)

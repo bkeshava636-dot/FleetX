@@ -2,6 +2,7 @@ package com.college.bustracker.util
 
 import com.college.bustracker.data.model.BusStop
 import com.college.bustracker.data.model.TrackingDisplayState
+import com.google.android.gms.maps.model.LatLng
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -65,7 +66,7 @@ object EtaEngine {
     const val SPATIAL_DECAY_DISTANCE_METERS = 800.0 // Distance scale where live speed dominates vs nominal
     const val BETA_DOWN = 0.70 // Fast response when bus accelerates/approaches
     const val BETA_UP = 0.25 // Slow response when bus halts at signals to prevent wild jitter
-    private const val STOP_ARRIVAL_RADIUS_METERS = 45.0
+    private const val STOP_ARRIVAL_RADIUS_METERS = 80.0
     const val DEFAULT_INTERMEDIATE_DWELL_SECONDS = 30.0
     private const val MAX_REALISTIC_ETA_MINUTES = 180
     private const val SPEED_SMOOTHING_ALPHA = 0.40f
@@ -133,11 +134,63 @@ object EtaEngine {
     }
 
     /**
+     * Projects a point (lat, lon) onto a road polyline represented by coordinate pairs (latitude, longitude).
+     * Returns Pair(cumulativeDistanceAlongPolylineMeters, crossTrackDistanceMeters).
+     */
+    fun projectPointOntoCoordinates(lat: Double, lon: Double, coordinates: List<Pair<Double, Double>>): Pair<Double, Double> {
+        if (coordinates.isEmpty()) return Pair(0.0, Double.MAX_VALUE)
+        if (coordinates.size == 1) {
+            val dist = calculateDistanceMeters(lat, lon, coordinates[0].first, coordinates[0].second)
+            return Pair(0.0, dist)
+        }
+
+        var cumulativeDist = 0.0
+        var bestCrossTrack = Double.MAX_VALUE
+        var bestPolylineDist = 0.0
+
+        for (i in 0 until coordinates.size - 1) {
+            val p1 = coordinates[i]
+            val p2 = coordinates[i + 1]
+            val segLen = calculateDistanceMeters(p1.first, p1.second, p2.first, p2.second)
+            if (segLen < 0.5) continue
+
+            val midLat = Math.toRadians((p1.first + p2.first) / 2.0)
+            val dx = (p2.second - p1.second) * cos(midLat) * 111320.0
+            val dy = (p2.first - p1.first) * 111320.0
+            val segLenSq = dx * dx + dy * dy
+
+            val px = (lon - p1.second) * cos(midLat) * 111320.0
+            val py = (lat - p1.first) * 111320.0
+            val t = if (segLenSq > 0.0) ((px * dx + py * dy) / segLenSq).coerceIn(0.0, 1.0) else 0.0
+
+            val projLat = p1.first + t * (p2.first - p1.first)
+            val projLon = p1.second + t * (p2.second - p1.second)
+            val crossTrack = calculateDistanceMeters(lat, lon, projLat, projLon)
+
+            if (crossTrack < bestCrossTrack) {
+                bestCrossTrack = crossTrack
+                bestPolylineDist = cumulativeDist + t * segLen
+            }
+            cumulativeDist += segLen
+        }
+
+        return Pair(bestPolylineDist, bestCrossTrack)
+    }
+
+    /**
+     * Projects a point (lat, lon) onto a road polyline of Google Maps LatLng points.
+     */
+    fun projectPointOntoPolyline(lat: Double, lon: Double, polyline: List<LatLng>): Pair<Double, Double> {
+        return projectPointOntoCoordinates(lat, lon, polyline.map { Pair(it.latitude, it.longitude) })
+    }
+
+    /**
      * Determines which stop is next along the route based on:
      * - Current bus coordinates
-     * - Ordered stop sequence
+     * - Ordered stop sequence (filtering out stops without coordinates)
+     * - Optional road-snapped polyline projection (OSRM road path)
      * - Orthogonal projection onto route segments
-     * - Bus speed and heading (if moving)
+     * - Bus speed and heading (rejecting stops behind the bus)
      * - Monotonic forward progression
      */
     fun findNextStopIndex(
@@ -146,10 +199,16 @@ object EtaEngine {
         busSpeedMs: Float,
         busBearing: Float,
         stops: List<BusStop>,
-        previousPassedIndex: Int = -1
+        previousPassedIndex: Int = -1,
+        routeRoadPolyline: List<LatLng>? = null,
+        routeRoadCoordinates: List<Pair<Double, Double>>? = null
     ): Int {
         if (stops.isEmpty()) return -1
         if (stops.size == 1) return 0
+
+        val physicalIndices = stops.indices.filter { stops[it].hasCoordinates }
+        if (physicalIndices.isEmpty()) return -1
+        if (physicalIndices.size == 1) return physicalIndices[0]
 
         val minAllowedIndex = if (previousPassedIndex in 0 until stops.size - 1) {
             previousPassedIndex
@@ -157,45 +216,69 @@ object EtaEngine {
             0
         }
 
-        // 1. Direct proximity check: Is the bus currently at a stop?
-        for (i in minAllowedIndex until stops.size) {
-            val d = calculateDistanceMeters(busLat, busLon, stops[i].latitude, stops[i].longitude)
-            if (d <= STOP_ARRIVAL_RADIUS_METERS) {
-                if (i == stops.lastIndex) {
-                    return i
+        val candidateIndices = physicalIndices.filter { it >= minAllowedIndex }.ifEmpty {
+            listOf(physicalIndices.last())
+        }
+
+        // Method 1: Road-snapped 1D Polyline Projection
+        val roadCoords: List<Pair<Double, Double>>? = routeRoadCoordinates ?: routeRoadPolyline?.map { Pair(it.latitude, it.longitude) }
+        if (roadCoords != null && roadCoords.size >= 2) {
+            val (busDistOnRoad, busCrossTrack) = projectPointOntoCoordinates(busLat, busLon, roadCoords)
+            if (busCrossTrack <= 160.0) {
+                for (origIdx in candidateIndices) {
+                    val stop = stops[origIdx]
+                    val (stopDistOnRoad, _) = projectPointOntoCoordinates(stop.latitude, stop.longitude, roadCoords)
+                    // If stop is at or ahead of bus (with 40m arrival margin), this is the next stop!
+                    if (stopDistOnRoad >= busDistOnRoad - 40.0) {
+                        return origIdx
+                    }
                 }
-                val nextStop = stops[i + 1]
+                return candidateIndices.last()
+            }
+        }
+
+        // Method 2: Direct Proximity Check (Is bus arriving at or departing a stop?)
+        for (i in candidateIndices.indices) {
+            val origIdx = candidateIndices[i]
+            val stop = stops[origIdx]
+            val d = calculateDistanceMeters(busLat, busLon, stop.latitude, stop.longitude)
+            if (d <= STOP_ARRIVAL_RADIUS_METERS) {
+                if (i == candidateIndices.lastIndex) {
+                    return origIdx
+                }
+                val nextOrigIdx = candidateIndices[i + 1]
+                val nextStop = stops[nextOrigIdx]
                 val dNext = calculateDistanceMeters(busLat, busLon, nextStop.latitude, nextStop.longitude)
                 val stopToNextStopDist = calculateDistanceMeters(
-                    stops[i].latitude, stops[i].longitude,
+                    stop.latitude, stop.longitude,
                     nextStop.latitude, nextStop.longitude
                 )
 
-                val isMovingTowardsNext = if (busBearing > 0.0f && busSpeedMs > 1.2f) {
+                val isMovingTowardsNext = if (busBearing > 0.0f && busSpeedMs > 1.0f) {
                     val bearingToNext = calculateBearing(busLat, busLon, nextStop.latitude, nextStop.longitude)
-                    Math.abs(normalizeAngleDiff(busBearing, bearingToNext)) <= 90.0f
+                    Math.abs(normalizeAngleDiff(busBearing, bearingToNext)) <= 100.0f
                 } else {
-                    dNext < stopToNextStopDist
+                    dNext < stopToNextStopDist * 0.95
                 }
 
-                return if (isMovingTowardsNext && busSpeedMs > 1.2f) {
-                    i + 1
+                return if (isMovingTowardsNext && busSpeedMs > 1.0f) {
+                    nextOrigIdx
                 } else {
-                    i
+                    origIdx
                 }
             }
         }
 
-        // 2. Segment-based orthogonal projection along upcoming consecutive stops
-        var bestSegmentIndex = -1
+        // Method 3: Segment-based orthogonal projection along consecutive physical stops
+        var bestCandidateSegmentIdx = -1
         var bestSegmentDistance = Double.MAX_VALUE
 
-        for (i in minAllowedIndex until stops.size - 1) {
-            val stopA = stops[i]
-            val stopB = stops[i + 1]
+        for (i in 0 until candidateIndices.size - 1) {
+            val stopA = stops[candidateIndices[i]]
+            val stopB = stops[candidateIndices[i + 1]]
 
             val segLen = calculateDistanceMeters(stopA.latitude, stopA.longitude, stopB.latitude, stopB.longitude)
-            if (segLen < 1.0) continue // Skip overlapping coordinates
+            if (segLen < 1.0) continue
 
             val midLat = Math.toRadians((stopA.latitude + stopB.latitude) / 2.0)
             val dx = (stopB.longitude - stopA.longitude) * cos(midLat) * 111320.0
@@ -206,6 +289,7 @@ object EtaEngine {
             val py = (busLat - stopA.latitude) * 111320.0
             val t = (px * dx + py * dy) / segLenSq
 
+            val maxCorridor = max(450.0, segLen * 0.45)
             if (t in -0.05..1.05) {
                 val clampedT = t.coerceIn(0.0, 1.0)
                 val projLat = stopA.latitude + clampedT * (stopB.latitude - stopA.latitude)
@@ -215,44 +299,82 @@ object EtaEngine {
                 val distToStopA = calculateDistanceMeters(busLat, busLon, stopA.latitude, stopA.longitude)
                 val distToStopB = calculateDistanceMeters(busLat, busLon, stopB.latitude, stopB.longitude)
 
-                // Must be within realistic road corridor (<= 250m) and near the actual segment
-                if (crossTrackDist <= 250.0 && distToStopA <= segLen + 300.0 && distToStopB <= segLen + 300.0) {
-                    val headingPenalty = if (busBearing > 0.0f && busSpeedMs > 1.5f) {
+                if (crossTrackDist <= maxCorridor && distToStopA <= segLen + 400.0 && distToStopB <= segLen + 400.0) {
+                    val headingPenalty = if (busBearing > 0.0f && busSpeedMs > 1.2f) {
                         val segBearing = calculateBearing(stopA.latitude, stopA.longitude, stopB.latitude, stopB.longitude)
                         val angleDiff = Math.abs(normalizeAngleDiff(busBearing, segBearing))
-                        if (angleDiff > 100.0f) 500.0 else 0.0
+                        if (angleDiff > 105.0f) 500.0 else 0.0
                     } else 0.0
 
-                    // Small preference to earlier segments to prevent leaping ahead across route loops
-                    val sequencePenalty = (i - minAllowedIndex) * 20.0
+                    val sequencePenalty = i * 20.0
                     val effectiveDist = crossTrackDist + headingPenalty + sequencePenalty
 
                     if (effectiveDist < bestSegmentDistance) {
                         bestSegmentDistance = effectiveDist
-                        bestSegmentIndex = i
+                        bestCandidateSegmentIdx = i
                     }
                 }
             }
         }
 
-        if (bestSegmentIndex != -1) {
-            val targetStopIndex = bestSegmentIndex + 1
-            return max(targetStopIndex, minAllowedIndex)
-        }
+        if (bestCandidateSegmentIdx != -1) {
+            val stopA = stops[candidateIndices[bestCandidateSegmentIdx]]
+            val stopB = stops[candidateIndices[bestCandidateSegmentIdx + 1]]
+            val midLat = Math.toRadians((stopA.latitude + stopB.latitude) / 2.0)
+            val dx = (stopB.longitude - stopA.longitude) * cos(midLat) * 111320.0
+            val dy = (stopB.latitude - stopA.latitude) * 111320.0
+            val segLenSq = max(1.0, dx * dx + dy * dy)
+            val px = (busLon - stopA.longitude) * cos(midLat) * 111320.0
+            val py = (busLat - stopA.latitude) * 111320.0
+            val t = (px * dx + py * dy) / segLenSq
 
-        // 3. Fallback: Distance-based search honoring progression
-        var closestForwardIndex = max(0, minAllowedIndex)
-        var minDistance = Double.MAX_VALUE
-
-        for (i in minAllowedIndex until stops.size) {
-            val d = calculateDistanceMeters(busLat, busLon, stops[i].latitude, stops[i].longitude)
-            if (d < minDistance) {
-                minDistance = d
-                closestForwardIndex = i
+            val distToStopA = calculateDistanceMeters(busLat, busLon, stopA.latitude, stopA.longitude)
+            return if (t > 0.05 || distToStopA > 60.0) {
+                candidateIndices[bestCandidateSegmentIdx + 1]
+            } else {
+                candidateIndices[bestCandidateSegmentIdx]
             }
         }
 
-        return closestForwardIndex
+        // Method 4: Distance-based search rejecting stops behind the bus
+        var bestIdx = candidateIndices.last()
+        var minDistance = Double.MAX_VALUE
+
+        for (i in candidateIndices.indices) {
+            val origIdx = candidateIndices[i]
+            val stop = stops[origIdx]
+            val d = calculateDistanceMeters(busLat, busLon, stop.latitude, stop.longitude)
+
+            var isBehind = false
+            if (i < candidateIndices.lastIndex) {
+                val nextStop = stops[candidateIndices[i + 1]]
+                val midLat = Math.toRadians((stop.latitude + nextStop.latitude) / 2.0)
+                val dx = (nextStop.longitude - stop.longitude) * cos(midLat) * 111320.0
+                val dy = (nextStop.latitude - stop.latitude) * 111320.0
+                val segLenSq = max(1.0, dx * dx + dy * dy)
+                val px = (busLon - stop.longitude) * cos(midLat) * 111320.0
+                val py = (busLat - stop.latitude) * 111320.0
+                val t = (px * dx + py * dy) / segLenSq
+                if (t > 0.08 && d > 60.0) {
+                    isBehind = true
+                }
+            }
+
+            if (!isBehind && busBearing > 0.0f && busSpeedMs > 1.0f) {
+                val bearingToStop = calculateBearing(busLat, busLon, stop.latitude, stop.longitude)
+                val angleDiff = Math.abs(normalizeAngleDiff(busBearing, bearingToStop))
+                if (angleDiff > 95.0f && d > 60.0) {
+                    isBehind = true
+                }
+            }
+
+            if (!isBehind && d < minDistance) {
+                minDistance = d
+                bestIdx = origIdx
+            }
+        }
+
+        return bestIdx
     }
 
     /**
@@ -270,7 +392,8 @@ object EtaEngine {
         previousEtaMinutes: Int? = null,
         calibratedDwellSeconds: Double = DEFAULT_INTERMEDIATE_DWELL_SECONDS,
         detourRoadDistanceMeters: Double? = null,
-        isDetourActive: Boolean = false
+        isDetourActive: Boolean = false,
+        routeRoadPolyline: List<LatLng>? = null
     ): RouteEtaResult {
         if (stops.isEmpty()) {
             return RouteEtaResult(
@@ -328,7 +451,7 @@ object EtaEngine {
         }
 
         val nextIndex = findNextStopIndex(
-            busLat, busLon, busSpeedMs, busBearing, stops, previousPassedIndex
+            busLat, busLon, busSpeedMs, busBearing, stops, previousPassedIndex, routeRoadPolyline
         )
 
         // 1. Exponential Moving Average for speed smoothing
@@ -339,15 +462,7 @@ object EtaEngine {
         }
         val liveSpeedKmh = smoothedSpeedMs * 3.6f
 
-        // 2. Context-aware stationary vs traffic detection
-        val distToClosestStop = stops.minOfOrNull {
-            calculateDistanceMeters(busLat, busLon, it.latitude, it.longitude)
-        } ?: Double.MAX_VALUE
-        val isAtAnyStop = distToClosestStop <= STOP_ARRIVAL_RADIUS_METERS
-
         // 2. Context-aware transit speed:
-        // For distances > 500m, momentary crawl speed must not blow up the ETA across entire route.
-        // Blend live speed with urban transit nominal baseline (22 km/h).
         val effectiveSpeedKmh = when {
             liveSpeedKmh in 12.0f..65.0f -> {
                 0.50f * liveSpeedKmh + 0.50f * NOMINAL_URBAN_SPEED_KMH
@@ -359,20 +474,22 @@ object EtaEngine {
                 NOMINAL_URBAN_SPEED_KMH
             }
         }
-        val effectiveSpeedMs = max(effectiveSpeedKmh / 3.6, 4.5) // Lower bounded at 4.5 m/s (~16.2 km/h) to prevent runaway ETA
+        val effectiveSpeedMs = max(effectiveSpeedKmh / 3.6, 4.5)
 
         // Terminal check: Bus arrived at the final destination
+        val physicalStops = stops.filter { it.hasCoordinates }
+        val lastPhysicalStop = physicalStops.lastOrNull() ?: stops.last()
         val distToFinalStop = calculateDistanceMeters(
             busLat, busLon,
-            stops.last().latitude, stops.last().longitude
+            lastPhysicalStop.latitude, lastPhysicalStop.longitude
         )
-        val isAtFinalStop = (nextIndex == stops.lastIndex) &&
+        val isAtFinalStop = (nextIndex == stops.indexOfFirst { it.stopId == lastPhysicalStop.stopId }) &&
                 (distToFinalStop <= STOP_ARRIVAL_RADIUS_METERS) &&
                 (liveSpeedKmh < 3.0f)
 
         if (isAtFinalStop) {
             val finalStopEta = StopEta(
-                stop = stops.last(),
+                stop = lastPhysicalStop,
                 etaMinutes = 0,
                 etaFormatted = "Arrived",
                 distanceMeters = distToFinalStop,
@@ -381,10 +498,12 @@ object EtaEngine {
                 isNext = true
             )
             val upcoming = stops.mapIndexed { idx, stop ->
-                if (idx < stops.lastIndex) {
-                    StopEta(stop, null, "Passed", 0.0, "Passed", isPassed = true, isNext = false)
-                } else {
+                if (stop.stopId == lastPhysicalStop.stopId) {
                     finalStopEta
+                } else if (!stop.hasCoordinates) {
+                    StopEta(stop, null, "—", 0.0, "—", isPassed = true, isNext = false)
+                } else {
+                    StopEta(stop, null, "Passed", 0.0, "Passed", isPassed = true, isNext = false)
                 }
             }
             return RouteEtaResult(
@@ -400,12 +519,30 @@ object EtaEngine {
         val resultStops = mutableListOf<StopEta>()
         var cumulativeDistance = 0.0
         var lastValidMinutes = 0
+        var prevPhysicalStop: BusStop? = null
 
         for (i in stops.indices) {
             val stop = stops[i]
+            if (!stop.hasCoordinates) {
+                val isPassed = (i < nextIndex)
+                resultStops.add(
+                    StopEta(
+                        stop = stop,
+                        etaMinutes = null,
+                        etaFormatted = "—",
+                        distanceMeters = 0.0,
+                        distanceFormatted = "—",
+                        isPassed = isPassed,
+                        isNext = false
+                    )
+                )
+                continue
+            }
+
             when {
                 i < nextIndex -> {
                     // Already passed
+                    prevPhysicalStop = stop
                     resultStops.add(
                         StopEta(
                             stop = stop,
@@ -422,26 +559,24 @@ object EtaEngine {
                     // Direct distance from live bus marker to this next stop
                     val directDist = calculateDistanceMeters(busLat, busLon, stop.latitude, stop.longitude)
 
-                    // If detour is active with verified road distance, prioritize real road travel distance
                     val dist = if (isDetourActive && detourRoadDistanceMeters != null && detourRoadDistanceMeters > 0.0) {
                         detourRoadDistanceMeters
-                    } else if (nextIndex > 0 && nextIndex < stops.size) {
-                        val prevStop = stops[nextIndex - 1]
-                        val segLen = calculateDistanceMeters(prevStop.latitude, prevStop.longitude, stop.latitude, stop.longitude)
+                    } else if (prevPhysicalStop != null) {
+                        val segLen = calculateDistanceMeters(prevPhysicalStop.latitude, prevPhysicalStop.longitude, stop.latitude, stop.longitude)
                         if (segLen > 10.0) {
-                            val midLat = Math.toRadians((prevStop.latitude + stop.latitude) / 2.0)
-                            val dx = (stop.longitude - prevStop.longitude) * cos(midLat) * 111320.0
-                            val dy = (stop.latitude - prevStop.latitude) * 111320.0
+                            val midLat = Math.toRadians((prevPhysicalStop.latitude + stop.latitude) / 2.0)
+                            val dx = (stop.longitude - prevPhysicalStop.longitude) * cos(midLat) * 111320.0
+                            val dy = (stop.latitude - prevPhysicalStop.latitude) * 111320.0
                             val segLenSq = dx * dx + dy * dy
-                            val px = (busLon - prevStop.longitude) * cos(midLat) * 111320.0
-                            val py = (busLat - prevStop.latitude) * 111320.0
+                            val px = (busLon - prevPhysicalStop.longitude) * cos(midLat) * 111320.0
+                            val py = (busLat - prevPhysicalStop.latitude) * 111320.0
                             val t = (px * dx + py * dy) / segLenSq
 
                             if (t in 0.0..1.0) {
-                                val projLat = prevStop.latitude + t * (stop.latitude - prevStop.latitude)
-                                val projLon = prevStop.longitude + t * (stop.longitude - prevStop.longitude)
+                                val projLat = prevPhysicalStop.latitude + t * (stop.latitude - prevPhysicalStop.latitude)
+                                val projLon = prevPhysicalStop.longitude + t * (stop.longitude - prevPhysicalStop.longitude)
                                 val crossTrack = calculateDistanceMeters(busLat, busLon, projLat, projLon)
-                                if (crossTrack <= 250.0) {
+                                if (crossTrack <= 450.0) {
                                     val remainingChord = (1.0 - t) * segLen
                                     max(directDist, sqrt(crossTrack * crossTrack + remainingChord * remainingChord))
                                 } else {
@@ -462,6 +597,7 @@ object EtaEngine {
                     val seconds = dist / segSpeedMs
                     val (etaMins, etaFmt) = formatEta(seconds, dist, previousEtaMinutes)
                     lastValidMinutes = etaMins ?: 0
+                    prevPhysicalStop = stop
 
                     resultStops.add(
                         StopEta(
@@ -476,13 +612,17 @@ object EtaEngine {
                     )
                 }
                 else -> {
-                    // Subsequent upcoming stops: hop-by-hop geodesic summation
-                    val prevStop = stops[i - 1]
-                    val hopDist = calculateDistanceMeters(
-                        prevStop.latitude, prevStop.longitude,
-                        stop.latitude, stop.longitude
-                    )
+                    // Subsequent upcoming stops
+                    val hopDist = if (prevPhysicalStop != null) {
+                        calculateDistanceMeters(
+                            prevPhysicalStop.latitude, prevPhysicalStop.longitude,
+                            stop.latitude, stop.longitude
+                        )
+                    } else {
+                        calculateDistanceMeters(busLat, busLon, stop.latitude, stop.longitude)
+                    }
                     cumulativeDistance += hopDist
+                    prevPhysicalStop = stop
 
                     val intermediateStopsCount = i - nextIndex
                     val dwellSeconds = intermediateStopsCount * calibratedDwellSeconds
@@ -492,7 +632,6 @@ object EtaEngine {
 
                     var (etaMins, etaFmt) = formatEta(totalSeconds, cumulativeDistance, null)
 
-                    // Ensure strictly monotonic non-decreasing progression for subsequent stops
                     val minAllowedEta = lastValidMinutes + max(1, (calibratedDwellSeconds / 60.0).roundToInt())
                     if (etaMins != null && etaMins < minAllowedEta) {
                         etaMins = minAllowedEta
@@ -517,7 +656,8 @@ object EtaEngine {
             }
         }
 
-        val nextStopEta = resultStops.find { it.isNext }
+        val nextStopEta = resultStops.find { it.isNext } ?: resultStops.firstOrNull { it.stop.hasCoordinates && !it.isPassed } ?: resultStops.firstOrNull()
+
         val status = when {
             trackingState == TrackingDisplayState.STALE -> EtaStatus.STALE
             isDetourActive -> EtaStatus.DETOUR_ACTIVE
