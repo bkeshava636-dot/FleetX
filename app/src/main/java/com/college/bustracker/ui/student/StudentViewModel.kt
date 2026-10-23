@@ -610,7 +610,8 @@ class StudentViewModel : ViewModel() {
             previousSpeedMs = lastCalculatedSpeedMs,
             previousEtaMinutes = lastNextStopEtaMinutes,
             detourRoadDistanceMeters = detourRoadDistance,
-            isDetourActive = isDetour
+            isDetourActive = isDetour,
+            routeRoadPolyline = if (currentDirection == com.college.bustracker.util.RouteDirection.COLLEGE_TO_STOPS) plannedRoadPoints.reversed() else plannedRoadPoints
         )
 
         _routeEtaResult.value = result

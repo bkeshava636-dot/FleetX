@@ -1032,11 +1032,11 @@ fun AdminDashboardScreen(
         ManageStopsDialog(
             route = currentManageRoute,
             onDismiss = { routeForManageStops = null },
-            onAddStop = { name, lat, lng, active, onResult ->
-                viewModel.addStop(currentManageRoute.routeId, currentManageRoute, name, lat, lng, active, onResult)
+            onAddStop = { name, lat, lng, active, visibleOnMap, onResult ->
+                viewModel.addStop(currentManageRoute.routeId, currentManageRoute, name, lat, lng, active, visibleOnMap, onResult)
             },
-            onEditStop = { stopId, name, lat, lng, active, onResult ->
-                viewModel.editStop(currentManageRoute.routeId, currentManageRoute, stopId, name, lat, lng, active, onResult)
+            onEditStop = { stopId, name, lat, lng, active, visibleOnMap, onResult ->
+                viewModel.editStop(currentManageRoute.routeId, currentManageRoute, stopId, name, lat, lng, active, visibleOnMap, onResult)
             },
             onDeleteStop = { stopId ->
                 viewModel.deleteStop(currentManageRoute.routeId, currentManageRoute, stopId) {}
@@ -1062,8 +1062,8 @@ fun AdminDashboardScreen(
                 showAddStopDialog = false
                 routeForAddStop = null
             },
-            onConfirm = { name, lat, lng, active, onError ->
-                viewModel.addStop(currentRoute.routeId, currentRoute, name, lat, lng, active) { result ->
+            onConfirm = { name, lat, lng, active, visibleOnMap, onError ->
+                viewModel.addStop(currentRoute.routeId, currentRoute, name, lat, lng, active, visibleOnMap) { result ->
                     result.onSuccess {
                         showAddStopDialog = false
                         routeForAddStop = null
@@ -1085,8 +1085,8 @@ fun AdminDashboardScreen(
                 stopToEdit = null
                 routeForAddStop = null
             },
-            onConfirm = { name, lat, lng, active, onError ->
-                viewModel.editStop(currentRoute.routeId, currentRoute, currentStop.stopId, name, lat, lng, active) { result ->
+            onConfirm = { name, lat, lng, active, visibleOnMap, onError ->
+                viewModel.editStop(currentRoute.routeId, currentRoute, currentStop.stopId, name, lat, lng, active, visibleOnMap) { result ->
                     result.onSuccess {
                         stopToEdit = null
                         routeForAddStop = null
@@ -2911,8 +2911,8 @@ private fun RouteCard(
 private fun ManageStopsDialog(
     route: Route,
     onDismiss: () -> Unit,
-    onAddStop: (name: String, lat: Double, lng: Double, active: Boolean, (Result<Unit>) -> Unit) -> Unit,
-    onEditStop: (stopId: String, name: String, lat: Double, lng: Double, active: Boolean, (Result<Unit>) -> Unit) -> Unit,
+    onAddStop: (name: String, lat: Double, lng: Double, active: Boolean, visibleOnMap: Boolean, (Result<Unit>) -> Unit) -> Unit,
+    onEditStop: (stopId: String, name: String, lat: Double, lng: Double, active: Boolean, visibleOnMap: Boolean, (Result<Unit>) -> Unit) -> Unit,
     onDeleteStop: (stopId: String) -> Unit,
     onReorderStop: (stopId: String, moveUp: Boolean) -> Unit,
     onToggleStopActive: (stopId: String, active: Boolean) -> Unit,
@@ -2956,7 +2956,7 @@ private fun ManageStopsDialog(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("MANUAL ENTRY (LAT / LNG)", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Text("MANUAL ENTRY (OR NOTIFICATION ONLY)", fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 }
 
                 if (route.stops.isEmpty()) {
@@ -3004,8 +3004,8 @@ private fun ManageStopsDialog(
         AddEditStopDialog(
             stop = null,
             onDismiss = { showAddStopDialog = false },
-            onConfirm = { name, lat, lng, active, onError ->
-                onAddStop(name, lat, lng, active) { result ->
+            onConfirm = { name, lat, lng, active, visibleOnMap, onError ->
+                onAddStop(name, lat, lng, active, visibleOnMap) { result ->
                     result.onSuccess {
                         showAddStopDialog = false
                     }.onFailure { err ->
@@ -3021,8 +3021,8 @@ private fun ManageStopsDialog(
         AddEditStopDialog(
             stop = currentStopToEdit,
             onDismiss = { stopToEdit = null },
-            onConfirm = { name, lat, lng, active, onError ->
-                onEditStop(currentStopToEdit.stopId, name, lat, lng, active) { result ->
+            onConfirm = { name, lat, lng, active, visibleOnMap, onError ->
+                onEditStop(currentStopToEdit.stopId, name, lat, lng, active, visibleOnMap) { result ->
                     result.onSuccess {
                         stopToEdit = null
                     }.onFailure { err ->
@@ -3116,13 +3116,24 @@ private fun StopItemCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Text(
-                            text = "Lat: ${"%.4f".format(stop.latitude)}, Lng: ${"%.4f".format(stop.longitude)}",
-                            fontSize = 11.sp,
-                            color = Color.Gray,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        if (stop.hasCoordinates) {
+                            Text(
+                                text = "Lat: ${"%.4f".format(stop.latitude)}, Lng: ${"%.4f".format(stop.longitude)}",
+                                fontSize = 11.sp,
+                                color = Color.Gray,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        } else {
+                            Text(
+                                text = "Notification Only • Hidden on Map",
+                                fontSize = 11.sp,
+                                color = Color(0xFFD97706),
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
 
@@ -3349,12 +3360,13 @@ private fun AddEditRouteDialog(
 private fun AddEditStopDialog(
     stop: BusStop?,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, lat: Double, lng: Double, active: Boolean, onError: (String) -> Unit) -> Unit
+    onConfirm: (name: String, lat: Double, lng: Double, active: Boolean, visibleOnMap: Boolean, onError: (String) -> Unit) -> Unit
 ) {
     val isEdit = stop != null
     var name by remember { mutableStateOf(stop?.name ?: "") }
-    var latStr by remember { mutableStateOf(stop?.latitude?.toString() ?: "") }
-    var lngStr by remember { mutableStateOf(stop?.longitude?.toString() ?: "") }
+    var visibleOnMap by remember { mutableStateOf(stop?.visibleOnMap ?: (stop == null || stop.latitude != 0.0 || stop.longitude != 0.0)) }
+    var latStr by remember { mutableStateOf(if (stop != null && stop.latitude != 0.0) stop.latitude.toString() else "") }
+    var lngStr by remember { mutableStateOf(if (stop != null && stop.longitude != 0.0) stop.longitude.toString() else "") }
     var active by remember { mutableStateOf(stop?.active ?: true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isSubmitting by remember { mutableStateOf(false) }
@@ -3378,25 +3390,64 @@ private fun AddEditStopDialog(
                     enabled = !isSubmitting
                 )
 
-                OutlinedTextField(
-                    value = latStr,
-                    onValueChange = { latStr = it },
-                    label = { Text("Latitude (-90.0 to 90.0)") },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    enabled = !isSubmitting
-                )
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Visible on Map", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text(
+                            text = if (visibleOnMap) "Has map pin & coordinates" else "Name only (Hidden on map, for notifications)",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    }
+                    Switch(
+                        checked = visibleOnMap,
+                        onCheckedChange = { visibleOnMap = it },
+                        enabled = !isSubmitting,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = CollegePrimary,
+                            checkedTrackColor = CollegePrimary.copy(alpha = 0.5f)
+                        )
+                    )
+                }
 
-                OutlinedTextField(
-                    value = lngStr,
-                    onValueChange = { lngStr = it },
-                    label = { Text("Longitude (-180.0 to 180.0)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    enabled = !isSubmitting
-                )
+                if (visibleOnMap) {
+                    OutlinedTextField(
+                        value = latStr,
+                        onValueChange = { latStr = it },
+                        label = { Text("Latitude (-90.0 to 90.0)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        enabled = !isSubmitting
+                    )
+
+                    OutlinedTextField(
+                        value = lngStr,
+                        onValueChange = { lngStr = it },
+                        label = { Text("Longitude (-180.0 to 180.0)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        enabled = !isSubmitting
+                    )
+                } else {
+                    Surface(
+                        color = Color(0xFFF1F5F9),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "ℹ️ This stop will not appear as a pin on the map. Drivers and admins can select it to share stop change alerts and notifications.",
+                            fontSize = 12.sp,
+                            color = Color(0xFF475569),
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -3438,20 +3489,29 @@ private fun AddEditStopDialog(
                         errorMessage = "Stop name is required."
                         return@Button
                     }
-                    val lat = latStr.toDoubleOrNull()
-                    if (lat == null || lat !in -90.0..90.0) {
-                        errorMessage = "Please enter a valid latitude between -90.0 and 90.0."
-                        return@Button
-                    }
-                    val lng = lngStr.toDoubleOrNull()
-                    if (lng == null || lng !in -180.0..180.0) {
-                        errorMessage = "Please enter a valid longitude between -180.0 and 180.0."
-                        return@Button
+                    val finalLat: Double
+                    val finalLng: Double
+                    if (visibleOnMap) {
+                        val lat = latStr.toDoubleOrNull()
+                        if (lat == null || lat !in -90.0..90.0) {
+                            errorMessage = "Please enter a valid latitude between -90.0 and 90.0."
+                            return@Button
+                        }
+                        val lng = lngStr.toDoubleOrNull()
+                        if (lng == null || lng !in -180.0..180.0) {
+                            errorMessage = "Please enter a valid longitude between -180.0 and 180.0."
+                            return@Button
+                        }
+                        finalLat = lat
+                        finalLng = lng
+                    } else {
+                        finalLat = 0.0
+                        finalLng = 0.0
                     }
 
                     isSubmitting = true
                     errorMessage = null
-                    onConfirm(name.trim(), lat, lng, active) { err ->
+                    onConfirm(name.trim(), finalLat, finalLng, active, visibleOnMap) { err ->
                         isSubmitting = false
                         errorMessage = err
                     }

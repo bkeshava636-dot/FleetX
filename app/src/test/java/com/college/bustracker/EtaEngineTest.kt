@@ -473,5 +473,86 @@ class EtaEngineTest {
         // Next index must be Stop 1 or Stop 2, NEVER jumping ahead to Stop 7 (Vasvi School)!
         assertTrue("Must select early stop near bus, got index $nextIdx", nextIdx in 0..1)
     }
-}
 
+    @Test
+    fun testFindNextStopIndex_passedStopNotSelectedEvenIfGeographicallyCloser() {
+        val routeStops = listOf(
+            BusStop(stopId = "s6", name = "Royal Circle", latitude = 15.1650, longitude = 76.9450, order = 6),
+            BusStop(stopId = "s7", name = "Vasvi School", latitude = 15.1700, longitude = 76.9500, order = 7),
+            BusStop(stopId = "s8", name = "Cantonment", latitude = 15.1850, longitude = 76.9650, order = 8)
+        )
+
+        // Bus has passed Vasvi School (Stop 7) and is stationary or slow 1.0 km past it along the segment towards Cantonment (Stop 8).
+        // Vasvi School is ~1.0 km away behind the bus.
+        // Cantonment is ~1.3 km away ahead of the bus.
+        val nextIdx = EtaEngine.findNextStopIndex(
+            busLat = 15.1770,
+            busLon = 76.9570,
+            busSpeedMs = 0.0f, // Stationary at traffic junction
+            busBearing = 0.0f,
+            stops = routeStops,
+            previousPassedIndex = 0 // Stop 6 was already passed
+        )
+
+        assertEquals("Next stop must be Stop 8 (Cantonment), NOT the passed Stop 7 (Vasvi School)", 2, nextIdx)
+    }
+
+    @Test
+    fun testFindNextStopIndex_withRoadPolylineProgression() {
+        val routeStops = listOf(
+            BusStop(stopId = "s1", name = "Stop 1", latitude = 15.3400, longitude = 76.1500, order = 1),
+            BusStop(stopId = "s2", name = "Stop 2", latitude = 15.3500, longitude = 76.1550, order = 2),
+            BusStop(stopId = "s3", name = "Stop 3", latitude = 15.3600, longitude = 76.1600, order = 3)
+        )
+
+        val roadCoords = listOf(
+            Pair(15.3400, 76.1500),
+            Pair(15.3450, 76.1525),
+            Pair(15.3500, 76.1550),
+            Pair(15.3550, 76.1575),
+            Pair(15.3600, 76.1600)
+        )
+
+        // Bus is at (15.3530, 76.1565), which is along the road past Stop 2
+        val nextIdx = EtaEngine.findNextStopIndex(
+            busLat = 15.3530,
+            busLon = 76.1565,
+            busSpeedMs = 4.0f,
+            busBearing = 45f,
+            stops = routeStops,
+            previousPassedIndex = 0,
+            routeRoadCoordinates = roadCoords
+        )
+
+        assertEquals("Should advance to Stop 3 along the road polyline", 2, nextIdx)
+    }
+
+    @Test
+    fun testComputeRouteEta_withNotificationOnlyStop() {
+        val routeStops = listOf(
+            BusStop(stopId = "s1", name = "Start Gate", latitude = 15.3400, longitude = 76.1500, order = 1),
+            BusStop(stopId = "s2_notice", name = "Temporary Pickup Point", latitude = 0.0, longitude = 0.0, order = 2, visibleOnMap = false),
+            BusStop(stopId = "s3", name = "Final College Stop", latitude = 15.3600, longitude = 76.1600, order = 3)
+        )
+
+        val result = EtaEngine.computeRouteEta(
+            busLat = 15.3450,
+            busLon = 76.1525,
+            busSpeedMs = 6.0f,
+            busBearing = 30f,
+            trackingState = TrackingDisplayState.ACTIVE,
+            stops = routeStops
+        )
+
+        // Notification-only stop must never be nextStopEta
+        assertEquals("Final College Stop", result.nextStopEta?.stop?.name)
+        assertEquals(2, result.upcomingStops.indexOfFirst { it.isNext })
+
+        // Notification-only stop has blank ETA and 0 distance
+        val noticeStopEta = result.upcomingStops.find { it.stop.stopId == "s2_notice" }
+        assertNotNull(noticeStopEta)
+        assertEquals("—", noticeStopEta?.etaFormatted)
+        assertEquals(0.0, noticeStopEta?.distanceMeters ?: -1.0, 0.01)
+        assertFalse(noticeStopEta?.isNext ?: true)
+    }
+}

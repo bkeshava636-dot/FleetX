@@ -124,7 +124,7 @@ fun StudentMapScreen(
             hasCenteredCameraOnBus = true
             LatLng(initLat, initLng)
         } else {
-            val stops = viewModel.currentRoute.value?.stops ?: emptyList()
+            val stops = viewModel.currentRoute.value?.stops?.filter { it.hasCoordinates } ?: emptyList()
             if (stops.isNotEmpty()) {
                 hasCenteredFallback = true
                 LatLng(stops.first().latitude, stops.first().longitude)
@@ -199,7 +199,7 @@ fun StudentMapScreen(
             val lat = liveLoc?.latitude ?: 0.0
             val lng = liveLoc?.longitude ?: 0.0
             if (lat == 0.0 && lng == 0.0) {
-                val stops = route?.stops ?: emptyList()
+                val stops = route?.stops?.filter { it.hasCoordinates } ?: emptyList()
                 if (stops.isNotEmpty()) {
                     cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(stops.first().latitude, stops.first().longitude), 14.5f))
                     hasCenteredFallback = true
@@ -221,6 +221,7 @@ fun StudentMapScreen(
             )
         ) {
             val stops = route?.stops ?: emptyList()
+            val mapStops = stops.filter { it.hasCoordinates }
             val nextStopId = nextStopEta?.stop?.stopId
             val targetSelectedStopId = selectedStop?.stopId
 
@@ -228,7 +229,7 @@ fun StudentMapScreen(
             val roadPoints = if (routeRoadPolyline.isNotEmpty()) {
                 routeRoadPolyline
             } else {
-                stops.map { LatLng(it.latitude, it.longitude) }
+                mapStops.map { LatLng(it.latitude, it.longitude) }
             }
 
             if (roadPoints.isNotEmpty()) {
@@ -250,7 +251,7 @@ fun StudentMapScreen(
             }
 
             // Route Stop Markers
-            stops.forEach { stop ->
+            mapStops.forEach { stop ->
                 val state = when {
                     stop.stopId == nextStopId -> StopMarkerIconCache.StopState.NEXT_ETA
                     stop.stopId == targetSelectedStopId -> StopMarkerIconCache.StopState.SELECTED
@@ -435,7 +436,7 @@ fun StudentMapScreen(
                             if (lat != 0.0 && lng != 0.0) {
                                 cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lng), 16.0f))
                             } else {
-                                route?.stops?.firstOrNull()?.let {
+                                route?.stops?.firstOrNull { it.hasCoordinates }?.let {
                                     cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(it.latitude, it.longitude), 15.0f))
                                 }
                             }

@@ -62,16 +62,17 @@ object RoadRoutingEngine {
      * Caches results so each route is queried at most once per session.
      */
     suspend fun getRouteRoadPath(stops: List<BusStop>): RoadRouteResult = withContext(Dispatchers.IO) {
-        if (stops.isEmpty()) {
+        val physicalStops = stops.filter { it.hasCoordinates }
+        if (physicalStops.isEmpty()) {
             return@withContext RoadRouteResult(emptyList(), 0.0, false)
         }
-        if (stops.size == 1) {
-            val pt = LatLng(stops[0].latitude, stops[0].longitude)
+        if (physicalStops.size == 1) {
+            val pt = LatLng(physicalStops[0].latitude, physicalStops[0].longitude)
             return@withContext RoadRouteResult(listOf(pt), 0.0, false)
         }
 
         // Cache key based on stops IDs and coordinates
-        val cacheKey = stops.joinToString(";") { "${it.stopId}_${"%.4f".format(it.latitude)}_${"%.4f".format(it.longitude)}" }
+        val cacheKey = physicalStops.joinToString(";") { "${it.stopId}_${"%.4f".format(it.latitude)}_${"%.4f".format(it.longitude)}" }
         routePathCache[cacheKey]?.let {
             return@withContext it
         }
@@ -82,12 +83,12 @@ object RoadRoutingEngine {
             return@withContext diskCached
         }
 
-        val directPoints = stops.map { LatLng(it.latitude, it.longitude) }
+        val directPoints = physicalStops.map { LatLng(it.latitude, it.longitude) }
         val directDistance = computeDirectPolylineDistance(directPoints)
 
         try {
             // OSRM format: lon1,lat1;lon2,lat2;...;lonN,latN
-            val coordString = stops.joinToString(";") { "${it.longitude},${it.latitude}" }
+            val coordString = physicalStops.joinToString(";") { "${it.longitude},${it.latitude}" }
             val requestUrl = "$OSRM_BASE_URL$coordString?overview=full&geometries=geojson"
 
             val url = URL(requestUrl)
