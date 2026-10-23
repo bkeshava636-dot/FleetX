@@ -1,8 +1,8 @@
 {
-  "versionCode": 10032,
-  "versionName": "1.0.32",
-  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.32/FleetX-v1.0.32.apk",
+  "versionCode": 10033,
+  "versionName": "1.0.33",
+  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.33/FleetX-v1.0.33.apk",
   "sha256": "",
-  "releaseNotes": "FleetX v1.0.32: Add in-service operating window end auto-shutdown watchdog, and update exact BITM campus coordinates to (15.1683067, 76.8317217) with 500m arrival geofence.",
-  "publishedAt": "2026-10-19T17:39:00Z"
+  "releaseNotes": "FleetX v1.0.33: Fix passed-stop ETA progression (preventing stuck ETAs on passed stops like Vasavi School), add 1D road polyline progression, and support notification-only stops hidden from maps.",
+  "publishedAt": "2026-10-23T13:30:00Z"
 }
