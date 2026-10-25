@@ -27,19 +27,26 @@ class AutoTrackingBootReceiver : BroadcastReceiver() {
             val persistentPrefs = context.getSharedPreferences(LocationTrackingService.PREFS_PERSISTENT_TRACKING, Context.MODE_PRIVATE)
             val wasSessionActive = persistentPrefs.getBoolean(LocationTrackingService.KEY_IS_SESSION_ACTIVE, false)
             val savedBusId = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_BUS_ID, "") ?: ""
+            val isWithinWindow = ScheduleHelper.isWithinOperatingWindow() && CollegeCalendarService.isWorkingDay() && !CollegeCalendarService.isHoliday()
+
             if (wasSessionActive && savedBusId.isNotBlank() && AutoTrackingScheduler.isDriverLoggedIn(context)) {
-                val savedRouteId = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_ROUTE_ID, "") ?: ""
-                val savedDriverId = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_DRIVER_ID, "") ?: ""
-                val savedMode = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_MODE, "MANUAL") ?: "MANUAL"
-                Log.i(TAG, "[AUTO_TRACK] Device rebooted during active tracking session. Restoring tracking for $savedBusId")
-                TrackingServiceHelper.startTracking(
-                    context = context,
-                    busId = savedBusId,
-                    routeId = savedRouteId,
-                    driverId = savedDriverId,
-                    mode = savedMode,
-                    forceWindow = true
-                )
+                if (!isWithinWindow) {
+                    Log.i(TAG, "[AUTO_TRACK] Device rebooted outside operating window. Clearing stale session for $savedBusId")
+                    persistentPrefs.edit().putBoolean(LocationTrackingService.KEY_IS_SESSION_ACTIVE, false).apply()
+                } else {
+                    val savedRouteId = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_ROUTE_ID, "") ?: ""
+                    val savedDriverId = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_DRIVER_ID, "") ?: ""
+                    val savedMode = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_MODE, "MANUAL") ?: "MANUAL"
+                    Log.i(TAG, "[AUTO_TRACK] Device rebooted during active tracking session within window. Restoring tracking for $savedBusId")
+                    TrackingServiceHelper.startTracking(
+                        context = context,
+                        busId = savedBusId,
+                        routeId = savedRouteId,
+                        driverId = savedDriverId,
+                        mode = savedMode,
+                        forceWindow = false
+                    )
+                }
             }
 
             // 1. Restore Driver Auto-Tracking (if enabled and driver is logged in)

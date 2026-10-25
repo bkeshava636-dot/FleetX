@@ -1,8 +1,8 @@
 {
-  "versionCode": 10034,
-  "versionName": "1.0.34",
-  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.34/FleetX-v1.0.34.apk",
+  "versionCode": 10035,
+  "versionName": "1.0.35",
+  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.35/FleetX-v1.0.35.apk",
   "sha256": "",
-  "releaseNotes": "FleetX v1.0.34: Auto-sync routes & stops from server with stale-while-revalidate (clearing empty-stops cache), live Admin route updates, and notification-only stop visibility improvements.",
-  "publishedAt": "2026-10-23T14:45:00Z"
+  "releaseNotes": "FleetX v1.0.35: Enforce strict operating window auto-shutdown (stops tracking after 9:00 AM) and responsive BITM campus geofence auto-shutdown.",
+  "publishedAt": "2026-10-25T08:45:00Z"
 }
