@@ -69,11 +69,9 @@ object TrackingServiceHelper {
         reason: String = "STOP_TRACKING",
         caller: String = "TrackingServiceHelper"
     ) {
-        if (reason == "USER_MANUAL_STOP" || reason == "CAMPUS_GEOFENCE_AUTO_SHUTDOWN") {
-            val currentWinId = com.college.bustracker.util.ScheduleHelper.getCurrentWindowId()
-            if (currentWinId != null) {
-                AutoTrackingScheduler.setWindowOverriddenOff(context, currentWinId)
-            }
+        val currentWinId = com.college.bustracker.util.ScheduleHelper.getCurrentWindowId()
+        if (currentWinId != null) {
+            AutoTrackingScheduler.setWindowOverriddenOff(context, currentWinId)
         }
         val intent = Intent(context, LocationTrackingService::class.java).apply {
             action = ACTION_STOP_TRACKING

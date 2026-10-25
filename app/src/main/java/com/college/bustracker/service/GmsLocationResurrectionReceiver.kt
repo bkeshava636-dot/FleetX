@@ -53,12 +53,22 @@ class GmsLocationResurrectionReceiver : BroadcastReceiver() {
 
         val schedule = AutoTrackingScheduler.getSavedSchedule(context)
         val isWorkingDay = CollegeCalendarService.isWorkingDay()
-        val isWithinWindow = ScheduleHelper.isWithinOperatingWindow(schedule) && isWorkingDay
+        val isHoliday = CollegeCalendarService.isHoliday()
+        val isWithinWindow = ScheduleHelper.isWithinOperatingWindow(schedule) && isWorkingDay && !isHoliday
 
-        val shouldBeTracking = isPersistentSessionActive || (isAutoEnabled && isWithinWindow)
+        if (!isWithinWindow) {
+            Log.d(TAG, "[GMS_WATCHDOG] Outside operating window or holiday; ignoring tick and clearing stale persistent session")
+            persistentPrefs.edit().putBoolean(LocationTrackingService.KEY_IS_SESSION_ACTIVE, false).apply()
+            if (TrackingServiceHelper.isTracking.value) {
+                TrackingServiceHelper.stopTracking(context, "OUTSIDE_OPERATING_WINDOW", "GmsLocationResurrection")
+            }
+            return
+        }
+
+        val shouldBeTracking = isPersistentSessionActive || isAutoEnabled
 
         if (!shouldBeTracking) {
-            Log.d(TAG, "[GMS_WATCHDOG] Outside operating window and no active session; ignoring tick")
+            Log.d(TAG, "[GMS_WATCHDOG] No active session and auto-tracking disabled; ignoring tick")
             return
         }
 

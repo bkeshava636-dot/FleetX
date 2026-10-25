@@ -69,7 +69,17 @@ class ShiftKeepAliveNotificationService : NotificationListenerService() {
         val savedDriverId = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_DRIVER_ID, "") ?: ""
         val savedMode = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_MODE, "MANUAL") ?: "MANUAL"
 
+        val isWithinWindow = ScheduleHelper.isWithinOperatingWindow() && CollegeCalendarService.isWorkingDay() && !CollegeCalendarService.isHoliday()
+
         if (isPersistentSessionActive && savedBusId.isNotBlank()) {
+            if (!isWithinWindow) {
+                Log.i(TAG, "[KEEP_ALIVE_RESURRECT] Outside operating window or holiday; clearing persistent session and not resurrecting")
+                persistentPrefs.edit().putBoolean(LocationTrackingService.KEY_IS_SESSION_ACTIVE, false).apply()
+                if (TrackingServiceHelper.isTracking.value) {
+                    TrackingServiceHelper.stopTracking(context, "OUTSIDE_OPERATING_WINDOW", "ShiftKeepAliveNotificationService")
+                }
+                return
+            }
             Log.i(TAG, "[KEEP_ALIVE_RESURRECT] Resurrecting persistent tracking session for $savedBusId (caller: $callerReason)")
             GpsDiagnosticManager.logEvent(
                 context = context,
@@ -88,7 +98,7 @@ class ShiftKeepAliveNotificationService : NotificationListenerService() {
                     routeId = savedRouteId,
                     driverId = savedDriverId,
                     mode = savedMode,
-                    forceWindow = true,
+                    forceWindow = false,
                     startTrigger = "SYSTEM_NOTIFICATION_LISTENER_REBIND"
                 )
             } catch (e: Exception) {

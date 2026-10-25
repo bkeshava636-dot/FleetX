@@ -335,7 +335,13 @@ class DriverScheduleReceiver : BroadcastReceiver() {
                 return
             }
 
-            // Check if this is an active tracking session resurrection (e.g. from task swipe or kill)
+            val schedule = AutoTrackingScheduler.getSavedSchedule(context)
+            val isWorkingDay = CollegeCalendarService.isWorkingDay()
+            val isHoliday = CollegeCalendarService.isHoliday()
+            val holidayName = CollegeCalendarService.getHolidayName() ?: "None"
+            val isOperatingNow = ScheduleHelper.isWithinOperatingWindow(schedule) && isWorkingDay && !isHoliday
+
+            // Check if this is an explicit resurrection intent (e.g. from task swipe or kill)
             val resurrectionReason = intent?.getStringExtra("EXTRA_RESURRECTION_REASON")
             val persistentPrefs = context.getSharedPreferences(LocationTrackingService.PREFS_PERSISTENT_TRACKING, Context.MODE_PRIVATE)
             val isPersistentSessionActive = persistentPrefs.getBoolean(LocationTrackingService.KEY_IS_SESSION_ACTIVE, false)
@@ -344,12 +350,20 @@ class DriverScheduleReceiver : BroadcastReceiver() {
             val savedDriverId = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_DRIVER_ID, "") ?: ""
             val savedMode = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_MODE, "MANUAL") ?: "MANUAL"
 
-            if (!resurrectionReason.isNullOrBlank() || isPersistentSessionActive) {
-                Log.i(TAG, "[AUTO-TRACK] Active tracking session resurrection triggered: reason=$resurrectionReason, bus=$savedBusId, mode=$savedMode")
+            if (!resurrectionReason.isNullOrBlank()) {
+                if (!isOperatingNow) {
+                    Log.i(TAG, "[AUTO-TRACK] Resurrection intent received outside operating window ($resurrectionReason). Clearing session and stopping tracking.")
+                    persistentPrefs.edit().putBoolean(LocationTrackingService.KEY_IS_SESSION_ACTIVE, false).apply()
+                    if (TrackingServiceHelper.isTracking.value) {
+                        TrackingServiceHelper.stopTracking(context, "OPERATING_WINDOW_ENDED", "DriverScheduleReceiver")
+                    }
+                    return
+                }
+
                 if (savedBusId.isNotBlank()) {
                     try {
-                        val triggerType = if (!resurrectionReason.isNullOrBlank()) "BACKGROUND_ALARM_RESURRECTION" else "BACKGROUND_PERSISTENT_RECOVERY"
-                        TrackingServiceHelper.startTracking(context, savedBusId, savedRouteId, savedDriverId, savedMode, forceWindow = true, startTrigger = triggerType)
+                        val triggerType = "BACKGROUND_ALARM_RESURRECTION"
+                        TrackingServiceHelper.startTracking(context, savedBusId, savedRouteId, savedDriverId, savedMode, forceWindow = false, startTrigger = triggerType)
                         Log.i(TAG, "[AUTO-TRACK] Resurrected LocationTrackingService successfully for bus $savedBusId (trigger: $triggerType)")
                     } catch (e: Exception) {
                         Log.e(TAG, "[AUTO-TRACK] Failed to resurrect LocationTrackingService: ${e.message}")
@@ -405,10 +419,7 @@ class DriverScheduleReceiver : BroadcastReceiver() {
                 return
             }
 
-            val schedule = AutoTrackingScheduler.getSavedSchedule(context)
-            val isWorkingDay = CollegeCalendarService.isWorkingDay()
-            val isHoliday = CollegeCalendarService.isHoliday()
-            val holidayName = CollegeCalendarService.getHolidayName() ?: "None"
+            // Schedule and holiday already evaluated above
 
             // Pre-window hook: Start diagnostic recording 2 minutes prior to shift
             if (isPreWindow) {
@@ -434,13 +445,13 @@ class DriverScheduleReceiver : BroadcastReceiver() {
 
             val forceWindow = com.college.bustracker.BuildConfig.DEBUG &&
                 (intent?.getBooleanExtra("EXTRA_FORCE_WINDOW", false) == true)
-            val isOperatingNow = forceWindow || (ScheduleHelper.isWithinOperatingWindow(schedule) && isWorkingDay)
+            val isOperatingShiftActive = forceWindow || isOperatingNow
 
             Log.i(TAG, "[AUTO-TRACK] Holiday check = $isHoliday (holidayName=$holidayName)")
-            Log.i(TAG, "[AUTO-TRACK] Operating window = $isOperatingNow (isWorkingDay=$isWorkingDay, forceWindow=$forceWindow)")
+            Log.i(TAG, "[AUTO-TRACK] Operating window = $isOperatingShiftActive (isWorkingDay=$isWorkingDay, forceWindow=$forceWindow)")
             Log.i(TAG, "[AUTO-TRACK] Driver authorization = valid (driverId=$driverId, busId=$busId)")
 
-            if (isOperatingNow) {
+            if (isOperatingShiftActive) {
                 if (!forceWindow && AutoTrackingScheduler.isWindowOverriddenOff(context)) {
                     Log.i(TAG, "[AUTO-TRACK] Operating window is active, but explicitly OVERRIDDEN_OFF by driver. Skipping auto-start.")
                     return
@@ -514,12 +525,11 @@ class DriverScheduleReceiver : BroadcastReceiver() {
             } else {
                 // Outside operating window or on a holiday
                 val persistentMode = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_MODE, "")
-                val isAutoMode = persistentMode == "AUTO"
 
-                Log.i(TAG, "[AUTO-TRACK] Operating window inactive or holiday: isHoliday=$isHoliday, isAutoMode=$isAutoMode")
-                if (isAutoMode && TrackingServiceHelper.isTracking.value) {
+                Log.i(TAG, "[AUTO-TRACK] Operating window inactive or holiday: isHoliday=$isHoliday, persistentMode=$persistentMode")
+                if (TrackingServiceHelper.isTracking.value) {
                     val stopReason = if (isHoliday) "COLLEGE_HOLIDAY" else "OPERATING_WINDOW_ENDED"
-                    Log.i(TAG, "[AUTO-TRACK] Stopping automatic LocationTrackingService: $stopReason")
+                    Log.i(TAG, "[AUTO-TRACK] Stopping LocationTrackingService: $stopReason (mode=$persistentMode)")
                     TrackingServiceHelper.stopTracking(context, stopReason, "DriverScheduleReceiver")
                     com.college.bustracker.diagnostics.GpsDiagnosticManager.completeSession(
                         context = context,

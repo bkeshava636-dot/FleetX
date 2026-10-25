@@ -42,6 +42,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class LocationTrackingService : Service() {
@@ -62,7 +63,7 @@ class LocationTrackingService : Service() {
         const val BITM_CAMPUS_LAT = 15.1683067
         const val BITM_CAMPUS_LNG = 76.8317217
         const val BITM_CAMPUS_GEOFENCE_RADIUS_METERS = 500.0 // 500m radius covers campus entrance, bus grounds & parking
-        const val BITM_CAMPUS_AUTO_SHUTDOWN_DURATION_MS = 60 * 1000L // 60s total dwell or 25s stationary within campus
+        const val BITM_CAMPUS_AUTO_SHUTDOWN_DURATION_MS = 30 * 1000L // 30s total dwell or 15s stationary within campus
 
         fun isPersistentSessionActive(context: Context): Boolean {
             val prefs = context.getSharedPreferences(PREFS_PERSISTENT_TRACKING, Context.MODE_PRIVATE)
@@ -101,6 +102,7 @@ class LocationTrackingService : Service() {
     private var lastFusedLocation: LiveLocation? = null
     private var studentSourcesJob: Job? = null
     private var fallbackWatchdogJob: Job? = null
+    private var operatingWindowWatchdogJob: Job? = null
     private var operatorAuthorizationJob: Job? = null
     private var currentOperatorEpoch: Long? = null
     private var currentTemporaryAssignmentId: String? = null
@@ -266,6 +268,25 @@ class LocationTrackingService : Service() {
         }
     }
 
+    private fun cancelResurrectionAlarm() {
+        try {
+            val restartIntent = Intent(applicationContext, DriverScheduleReceiver::class.java).apply {
+                action = AutoTrackingScheduler.ACTION_DRIVER_SCHEDULE_CHECK
+            }
+            val pi = PendingIntent.getBroadcast(
+                applicationContext,
+                1005,
+                restartIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val am = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            am?.cancel(pi)
+            Log.i(TAG, "[AUTO-TRACE] Cancelled any pending resurrection alarm (reqCode: 1005)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to cancel resurrection alarm: ${e.message}")
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
         when (intent?.action) {
@@ -331,16 +352,21 @@ class LocationTrackingService : Service() {
                     return START_NOT_STICKY
                 }
 
-                if (!forceWindow && activeMode == "AUTO" && !com.college.bustracker.util.CollegeCalendarService.isWorkingDay()) {
-                    val holidayName = com.college.bustracker.util.CollegeCalendarService.getHolidayName() ?: "College Holiday"
-                    Log.w(TAG, "[LOCATION-SERVICE] TRACKING_BLOCKED: Today is a holiday ($holidayName). Tracking service will not continue.")
-                    serviceStopReason = "COLLEGE_HOLIDAY"
-                    serviceStopCaller = "CalendarCheck"
+                val isWithinWindow = ScheduleHelper.isWithinOperatingWindow()
+                val isWorkingDay = com.college.bustracker.util.CollegeCalendarService.isWorkingDay()
+                val isHoliday = com.college.bustracker.util.CollegeCalendarService.evaluateDay().isHoliday
+                val allowForce = com.college.bustracker.BuildConfig.DEBUG && forceWindow
+
+                if (!allowForce && (!isWithinWindow || isHoliday || !isWorkingDay)) {
+                    val stopReason = if (isHoliday || !isWorkingDay) "COLLEGE_HOLIDAY" else "OPERATING_WINDOW_ENDED"
+                    Log.w(TAG, "[LOCATION-SERVICE] TRACKING_BLOCKED: Outside operating window ($stopReason). Tracking service will not continue.")
+                    serviceStopReason = stopReason
+                    serviceStopCaller = "OperatingWindowStartupCheck"
                     persistTrackingSessionState(false)
                     TrackingServiceHelper.updateServiceState(
                         isTracking = false,
                         busId = null,
-                        gps = "Holiday ($holidayName)",
+                        gps = "Off ($stopReason)",
                         timestamp = System.currentTimeMillis()
                     )
                     stopTrackingSession(isExplicitUserStop = true)
@@ -485,6 +511,99 @@ class LocationTrackingService : Service() {
                             TAG,
                             "[LOCATION-SERVICE] MULTI_SOURCE: Driver GPS silent. Failover to ${fusionResult.usedSourcesCount} student source(s)"
                         )
+                    }
+                }
+            }
+        }
+
+        // Periodic 10-second watchdog for operating window end & BITM campus geofence auto-shutdown
+        operatingWindowWatchdogJob?.cancel()
+        operatingWindowWatchdogJob = serviceScope.launch {
+            while (isActive) {
+                delay(10_000L)
+
+                val now = System.currentTimeMillis()
+                val nowKolkata = ScheduleHelper.nowKolkata()
+                val isWithinWindow = ScheduleHelper.isWithinOperatingWindow()
+                val isWorkingDay = com.college.bustracker.util.CollegeCalendarService.isWorkingDay()
+                val isHoliday = com.college.bustracker.util.CollegeCalendarService.evaluateDay().isHoliday
+                val allowForce = com.college.bustracker.BuildConfig.DEBUG && forceWindow
+
+                // 1. Operating Window Expiry Watchdog (Auto-shutdown after window ends / 9:00 AM)
+                if (!allowForce && (!isWithinWindow || isHoliday || !isWorkingDay)) {
+                    val stopReason = if (isHoliday || !isWorkingDay) "COLLEGE_HOLIDAY" else "OPERATING_WINDOW_ENDED"
+                    Log.w(TAG, "[AUTO-WATCHDOG] Operating window inactive ($stopReason) at $nowKolkata. Triggering automatic tracking shutdown.")
+                    val fallbackLoc = lastFusedLocation?.let {
+                        Location("watchdog").apply {
+                            latitude = it.latitude
+                            longitude = it.longitude
+                            bearing = it.bearing
+                            speed = it.speed
+                        }
+                    } ?: Location("watchdog").apply {
+                        latitude = if (lastSentLat != 0.0) lastSentLat else BITM_CAMPUS_LAT
+                        longitude = if (lastSentLng != 0.0) lastSentLng else BITM_CAMPUS_LNG
+                    }
+                    performScheduledWindowEndShutdown(fallbackLoc, stopReason)
+                    break
+                }
+
+                // 2. BITM Campus Geofence Auto-Shutdown Watchdog (Morning shift BITM geofence auto-shutdown)
+                val direction = ScheduleHelper.determineRouteDirection()
+                val isHeadingToCampus = direction == RouteDirection.STOPS_TO_COLLEGE || nowKolkata.isBefore(java.time.LocalTime.of(12, 30))
+
+                val curLat = lastFusedLocation?.latitude ?: lastSentLat
+                val curLng = lastFusedLocation?.longitude ?: lastSentLng
+                val curSpeed = lastFusedLocation?.speed ?: 0f
+
+                if (isHeadingToCampus && curLat != 0.0 && curLng != 0.0) {
+                    var isInsideCampus = false
+                    val distToBitm = LocationThrottler.calculateDistanceMeters(
+                        curLat, curLng,
+                        BITM_CAMPUS_LAT, BITM_CAMPUS_LNG
+                    )
+                    if (distToBitm <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS) {
+                        isInsideCampus = true
+                    }
+                    if (!isInsideCampus && activeRouteId.isNotBlank()) {
+                        val route = CollegeBusApp.instance.routeRepository.getCachedRoute(activeRouteId)
+                        val destinationStop = route?.stops?.lastOrNull()
+                        if (destinationStop != null && destinationStop.latitude != 0.0 && destinationStop.longitude != 0.0) {
+                            val distToDest = LocationThrottler.calculateDistanceMeters(
+                                curLat, curLng,
+                                destinationStop.latitude, destinationStop.longitude
+                            )
+                            if (distToDest <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS) {
+                                isInsideCampus = true
+                            }
+                        }
+                    }
+
+                    if (isInsideCampus) {
+                        if (campusGeofenceStationaryStartTime == 0L) {
+                            campusGeofenceStationaryStartTime = now
+                            Log.i(TAG, "[AUTO-WATCHDOG] Bus detected inside BITM campus (${distToBitm.toInt()}m). Started arrival confirmation timer.")
+                        } else {
+                            val dwellMs = now - campusGeofenceStationaryStartTime
+                            val isStationary = curSpeed < LocationThrottler.SPEED_THRESHOLD_MPS && dwellMs >= 15_000L
+                            val isDwellExceeded = dwellMs >= BITM_CAMPUS_AUTO_SHUTDOWN_DURATION_MS
+
+                            if (isStationary || isDwellExceeded) {
+                                Log.w(TAG, "[AUTO-WATCHDOG] Bus reached BITM Campus (dist=${distToBitm.toInt()}m, speed=${curSpeed}m/s, dwell=${dwellMs/1000}s). Triggering campus auto-shutdown!")
+                                val arrivalLoc = Location("watchdog").apply {
+                                    latitude = curLat
+                                    longitude = curLng
+                                    bearing = lastFusedLocation?.bearing ?: lastSentBearing
+                                    speed = curSpeed
+                                }
+                                performCampusAutoShutdown(arrivalLoc)
+                                break
+                            }
+                        }
+                    } else {
+                        if (campusGeofenceStationaryStartTime != 0L) {
+                            campusGeofenceStationaryStartTime = 0L
+                        }
                     }
                 }
             }
@@ -726,16 +845,15 @@ class LocationTrackingService : Service() {
         )
 
         // 2b. Operating Window End Check
-        // Shuts down tracking automatically when the scheduled operating window ends (unless explicitly force-windowed)
-        if (!forceWindow) {
-            val isWithinWindow = ScheduleHelper.isWithinOperatingWindow()
-            val isHoliday = CollegeCalendarService.evaluateDay().isHoliday
-            if (!isWithinWindow || isHoliday) {
-                val stopReason = if (isHoliday) "COLLEGE_HOLIDAY" else "OPERATING_WINDOW_ENDED"
-                Log.w(TAG, "[AUTO-TRACK] Operating window has ended while service is running ($stopReason). Automatically shutting down tracking.")
-                performScheduledWindowEndShutdown(location, stopReason)
-                return
-            }
+        val isWithinWindow = ScheduleHelper.isWithinOperatingWindow()
+        val isHoliday = CollegeCalendarService.evaluateDay().isHoliday
+        val isWorkingDay = CollegeCalendarService.isWorkingDay()
+        val allowForce = com.college.bustracker.BuildConfig.DEBUG && forceWindow
+        if (!allowForce && (!isWithinWindow || isHoliday || !isWorkingDay)) {
+            val stopReason = if (isHoliday || !isWorkingDay) "COLLEGE_HOLIDAY" else "OPERATING_WINDOW_ENDED"
+            Log.w(TAG, "[AUTO-TRACK] Operating window has ended while service is running ($stopReason). Automatically shutting down tracking.")
+            performScheduledWindowEndShutdown(location, stopReason)
+            return
         }
 
         // 3. College Campus Geofence Auto-Shutdown Check
@@ -802,7 +920,7 @@ class LocationTrackingService : Service() {
             } else {
                 val dwellTimeMs = now - campusGeofenceStationaryStartTime
                 // Trigger auto-shutdown if bus has been inside campus for >= 60 seconds, or stationary (< 1.5 m/s) for >= 25 seconds
-                val isConfirmedStationary = location.speed < LocationThrottler.SPEED_THRESHOLD_MPS && dwellTimeMs >= 25_000L
+                val isConfirmedStationary = location.speed < LocationThrottler.SPEED_THRESHOLD_MPS && dwellTimeMs >= 15_000L
                 val isDwellExceeded = dwellTimeMs >= BITM_CAMPUS_AUTO_SHUTDOWN_DURATION_MS
 
                 if (isConfirmedStationary || isDwellExceeded) {
@@ -942,6 +1060,9 @@ class LocationTrackingService : Service() {
         serviceStopCaller = "BitmCampusGeofence"
         isExplicitStop = true
         persistTrackingSessionState(false)
+        cancelResurrectionAlarm()
+        operatingWindowWatchdogJob?.cancel()
+        operatingWindowWatchdogJob = null
 
         val currentWinId = ScheduleHelper.getCurrentWindowId()
         if (currentWinId != null) {
@@ -1002,6 +1123,9 @@ class LocationTrackingService : Service() {
         serviceStopCaller = "ScheduledWindowEndWatchdog"
         isExplicitStop = true
         persistTrackingSessionState(false)
+        cancelResurrectionAlarm()
+        operatingWindowWatchdogJob?.cancel()
+        operatingWindowWatchdogJob = null
 
         TrackingServiceHelper.updateServiceState(
             isTracking = false,
@@ -1030,6 +1154,8 @@ class LocationTrackingService : Service() {
         Log.i(TAG, "[AUTO-TRACE] $nowIso stopTrackingSession started: bus=$activeBusId, explicitUserStop=$isExplicitUserStop")
         releaseWakeLock()
         hasLoggedFirstLocation = false
+        operatingWindowWatchdogJob?.cancel()
+        operatingWindowWatchdogJob = null
         startupPollingJob?.cancel()
         startupPollingJob = null
         noFixWatchdogJob?.cancel()
