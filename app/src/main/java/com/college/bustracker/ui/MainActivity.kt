@@ -61,6 +61,7 @@ class MainActivity : ComponentActivity() {
         try {
             com.college.bustracker.service.AutoTrackingScheduler.checkAndTriggerAutoTracking(this)
         } catch (ignored: Exception) {}
+        triggerAutoUpdateCheck()
     }
 
     private var startupUpdateInfo by androidx.compose.runtime.mutableStateOf<com.college.bustracker.update.model.AppReleaseInfo?>(null)
@@ -73,23 +74,13 @@ class MainActivity : ComponentActivity() {
         // Request runtime permissions for location and notifications
         requestRequiredPermissions()
 
-        // Non-blocking update check on application start
+        // Non-blocking update check on application start & periodic auto-detection
+        triggerAutoUpdateCheck()
         lifecycleScope.launch {
-            try {
-                val result = com.college.bustracker.update.AppUpdateManager.instance.checkForUpdates(
-                    this@MainActivity,
-                    isManual = false
-                )
-                if (result is com.college.bustracker.update.model.UpdateCheckResult.UpdateAvailable) {
-                    if (!com.college.bustracker.update.AppUpdateManager.instance.isVersionDismissed(
-                            this@MainActivity,
-                            result.releaseInfo.versionCode
-                        )
-                    ) {
-                        startupUpdateInfo = result.releaseInfo
-                    }
-                }
-            } catch (ignored: Exception) {}
+            while (true) {
+                kotlinx.coroutines.delay(15 * 60 * 1000L) // Auto-check every 15 minutes
+                triggerAutoUpdateCheck()
+            }
         }
 
         com.college.bustracker.util.LocaleHelper.init(this)
@@ -181,18 +172,44 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        startupUpdateInfo?.let { release ->
-                            val updateManager = com.college.bustracker.update.AppUpdateManager.instance
+                        val updateManager = com.college.bustracker.update.AppUpdateManager.instance
+                        val requestedUpdate by updateManager.requestShowUpdateDialog.collectAsState()
+                        val activeDialogRelease = startupUpdateInfo ?: requestedUpdate
+                        activeDialogRelease?.let { release ->
                             com.college.bustracker.update.ui.UpdateDialog(
                                 releaseInfo = release,
                                 installedVersionName = updateManager.getInstalledVersionName(this@MainActivity),
                                 installedVersionCode = updateManager.getInstalledVersionCode(this@MainActivity),
-                                onDismiss = { startupUpdateInfo = null }
+                                onDismiss = {
+                                    startupUpdateInfo = null
+                                    updateManager.dismissPrompt()
+                                }
                             )
                         }
                     }
                 }
             }
+        }
+    }
+
+    private fun triggerAutoUpdateCheck() {
+        lifecycleScope.launch {
+            try {
+                val updateManager = com.college.bustracker.update.AppUpdateManager.instance
+                val result = updateManager.checkForUpdates(
+                    this@MainActivity,
+                    isManual = false
+                )
+                if (result is com.college.bustracker.update.model.UpdateCheckResult.UpdateAvailable) {
+                    if (!updateManager.isVersionDismissed(
+                            this@MainActivity,
+                            result.releaseInfo.versionCode
+                        )
+                    ) {
+                        startupUpdateInfo = result.releaseInfo
+                    }
+                }
+            } catch (ignored: Exception) {}
         }
     }
 
