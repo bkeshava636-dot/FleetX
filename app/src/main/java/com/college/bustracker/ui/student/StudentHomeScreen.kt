@@ -25,6 +25,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
+import androidx.compose.animation.animateContentSize
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -324,7 +328,19 @@ fun StudentHomeScreen(
                             onLanguageClick = { showLanguageDialog = true }
                         )
 
-                        Spacer(modifier = Modifier.height(18.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Persistent Update Reminder Banner (reminds users until updated)
+                        val availableUpdate by com.college.bustracker.update.AppUpdateManager.instance.availableUpdateInfo.collectAsState()
+                        if (availableUpdate != null) {
+                            UpdateReminderBanner(
+                                releaseInfo = availableUpdate!!,
+                                onUpdateClick = {
+                                    com.college.bustracker.update.AppUpdateManager.instance.promptUpdate(availableUpdate!!)
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(14.dp))
+                        }
 
                         // Campus Announcements Section (Prominently displayed at top)
                         if (announcements.isNotEmpty()) {
@@ -2192,42 +2208,94 @@ private fun ProminentEtaCard(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // ETA Accuracy Disclaimer (Tapping directly opens the live bus map)
+        // ETA Accuracy Disclaimer Dropdown (Sleek, expandable)
+        var isDisclaimerExpanded by rememberSaveable { mutableStateOf(false) }
+        val isKn = com.college.bustracker.util.LocaleHelper.isKannada(context)
+
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9)),
-            shape = RoundedCornerShape(10.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDisclaimerExpanded) Color(0xFFF1F5F9) else Color(0xFFF8FAFC)
+            ),
+            shape = RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                if (isDisclaimerExpanded) Color(0xFFCBD5E1) else Color(0xFFE2E8F0)
+            ),
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable {
-                    com.college.bustracker.analytics.StudentAnalyticsManager.logEvent(
-                        context,
-                        com.college.bustracker.analytics.StudentAnalyticsManager.EVENT_LIVE_TRACKING_OPENED
-                    )
-                    onNavigateToMap()
-                }
+                .animateContentSize()
+                .clickable { isDisclaimerExpanded = !isDisclaimerExpanded }
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = Color(0xFF64748B),
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                val isKn = com.college.bustracker.util.LocaleHelper.isKannada(context)
-                Text(
-                    text = if (isKn) {
-                        "ಬಸ್ ಆಗಮನದ ಸಮಯವು ಅಂದಾಜು ಮಾತ್ರವಾಗಿದ್ದು, GPS, ನೆಟ್ವರ್ಕ್ ಸಮಸ್ಯೆಗಳು, ಟ್ರಾಫಿಕ್ ಅಥವಾ ಇತರ ವಿಳಂಬಗಳಿಂದಾಗಿ ನಿಖರವಾಗಿರದೇ ಇರಬಹುದು. ಹೆಚ್ಚಿನ ನಿಖರತೆಗಾಗಿ, ದಯವಿಟ್ಟು ಮ್ಯಾಪ್ನಲ್ಲಿ ಬಸ್ನ ಲೈವ್ ಸ್ಥಳವನ್ನು ವೀಕ್ಷಿಸಿ."
-                    } else {
-                        "ETA is approximate and may not be accurate due to GPS, network conditions, traffic, or other delays. For better accuracy, please view the bus's live location on the map."
-                    },
-                    fontSize = 11.sp,
-                    color = Color(0xFF475569),
-                    lineHeight = 15.sp
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = Color(0xFF2563EB),
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isKn) "ETA ಅಂದಾಜು ಮಾಹಿತಿ (ಟ್ರಾಫಿಕ್/ವಿಳಂಬಗಳು)" else "ETA is estimated • Traffic conditions apply",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF334155),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Icon(
+                        imageVector = if (isDisclaimerExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        tint = Color(0xFF64748B),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                if (isDisclaimerExpanded) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (isKn) {
+                            "ಬಸ್ ಆಗಮನದ ಸಮಯವು ಅಂದಾಜು ಮಾತ್ರವಾಗಿದ್ದು, GPS ಸಿಗ್ನಲ್, ನೆಟ್ವರ್ಕ್, ಟ್ರಾಫಿಕ್ ಅಥವಾ ರಸ್ತೆ ವಿಳಂಬಗಳಿಂದಾಗಿ ಬದಲಾಗಬಹುದು. ಗರಿಷ್ಠ ನಿಖರತೆಗಾಗಿ, ದಯವಿಟ್ಟು ಮ್ಯಾಪ್ನಲ್ಲಿ ಬಸ್ನ ರಿಯಲ್-ಟೈಮ್ ಲೈವ್ ಸ್ಥಳವನ್ನು ಪರಿಶೀಲಿಸಿ."
+                        } else {
+                            "Bus arrival times are calculated from live GPS and route progress. Estimates may vary due to signals, traffic density, boarding stops, or network latency. For real-time precision, check the live bus position on the map."
+                        },
+                        fontSize = 11.sp,
+                        color = Color(0xFF475569),
+                        lineHeight = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                com.college.bustracker.analytics.StudentAnalyticsManager.logEvent(
+                                    context,
+                                    com.college.bustracker.analytics.StudentAnalyticsManager.EVENT_LIVE_TRACKING_OPENED
+                                )
+                                onNavigateToMap()
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Text(
+                            text = if (isKn) "ಲೈವ್ ಮ್ಯಾಪ್ ವೀಕ್ಷಿಸಿ →" else "View Live Map →",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1D4ED8)
+                        )
+                    }
+                }
             }
         }
 
@@ -2405,6 +2473,74 @@ private fun DriverInfoCard(
                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
                     )
                 }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun UpdateReminderBanner(
+    releaseInfo: com.college.bustracker.update.model.AppReleaseInfo,
+    onUpdateClick: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isKn = com.college.bustracker.util.LocaleHelper.isKannada(context)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onUpdateClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF3B82F6)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color(0xFFDBEAFE), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SystemUpdate,
+                    contentDescription = null,
+                    tint = Color(0xFF1D4ED8),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isKn) "ಹೊಸ ಅಪ್ಡೇಟ್ ಲಭ್ಯವಿದೆ: v${releaseInfo.versionName}" else "Update Available: FleetX v${releaseInfo.versionName}",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = Color(0xFF1E3A8A)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = if (isKn) "ಉತ್ತಮ ಕಾರ್ಯಕ್ಷಮತೆ ಮತ್ತು ಹೊಸ ವೈಶಿಷ್ಟ್ಯಗಳಿಗಾಗಿ ಅಪ್ಡೇಟ್ ಮಾಡಿ" else "Tap here to download and install the latest version",
+                    fontSize = 11.sp,
+                    color = Color(0xFF2563EB),
+                    lineHeight = 15.sp
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = onUpdateClick,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = if (isKn) "ಅಪ್ಡೇಟ್" else "Update",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
             }
         }
     }

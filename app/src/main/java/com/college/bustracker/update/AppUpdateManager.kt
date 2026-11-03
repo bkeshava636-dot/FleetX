@@ -34,11 +34,27 @@ class AppUpdateManager private constructor() {
         private const val PREFS_NAME = "fleetx_update_prefs"
         private const val KEY_LAST_CHECK_MS = "key_last_check_ms"
         private const val KEY_DISMISSED_VERSION_CODE = "key_dismissed_version_code"
+        private const val KEY_DISMISSED_TIMESTAMP_MS = "key_dismissed_timestamp_ms"
         private const val MIN_CHECK_INTERVAL_MS = 60 * 1000L // 1 minute
+        private const val DISMISS_REMIND_COOLDOWN_MS = 2 * 60 * 60 * 1000L // Remind again after 2 hours
     }
 
     private val _updateCheckResult = MutableStateFlow<UpdateCheckResult?>(null)
     val updateCheckResult: StateFlow<UpdateCheckResult?> = _updateCheckResult.asStateFlow()
+
+    private val _availableUpdateInfo = MutableStateFlow<AppReleaseInfo?>(null)
+    val availableUpdateInfo: StateFlow<AppReleaseInfo?> = _availableUpdateInfo.asStateFlow()
+
+    private val _requestShowUpdateDialog = MutableStateFlow<AppReleaseInfo?>(null)
+    val requestShowUpdateDialog: StateFlow<AppReleaseInfo?> = _requestShowUpdateDialog.asStateFlow()
+
+    fun promptUpdate(releaseInfo: AppReleaseInfo) {
+        _requestShowUpdateDialog.value = releaseInfo
+    }
+
+    fun dismissPrompt() {
+        _requestShowUpdateDialog.value = null
+    }
 
     private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
     val downloadState: StateFlow<DownloadState> = _downloadState.asStateFlow()
@@ -151,7 +167,7 @@ class AppUpdateManager private constructor() {
 
             // Only offer update if remote versionCode is strictly greater than installed versionCode
             if (releaseInfo.versionCode > installedCode) {
-                val dismissedCode = prefs.getLong(KEY_DISMISSED_VERSION_CODE, -1L)
+                _availableUpdateInfo.value = releaseInfo
                 val result = UpdateCheckResult.UpdateAvailable(
                     releaseInfo = releaseInfo,
                     installedVersionCode = installedCode,
@@ -160,6 +176,7 @@ class AppUpdateManager private constructor() {
                 _updateCheckResult.value = result
                 return@withContext result
             } else {
+                _availableUpdateInfo.value = null
                 val upToDate = UpdateCheckResult.UpToDate(installedCode, installedName)
                 _updateCheckResult.value = upToDate
                 return@withContext upToDate
@@ -169,6 +186,7 @@ class AppUpdateManager private constructor() {
             if (fallback != null) {
                 prefs.edit().putLong(KEY_LAST_CHECK_MS, now).apply()
                 if (fallback.versionCode > installedCode) {
+                    _availableUpdateInfo.value = fallback
                     val result = UpdateCheckResult.UpdateAvailable(
                         releaseInfo = fallback,
                         installedVersionCode = installedCode,
@@ -177,6 +195,7 @@ class AppUpdateManager private constructor() {
                     _updateCheckResult.value = result
                     return@withContext result
                 } else {
+                    _availableUpdateInfo.value = null
                     val upToDate = UpdateCheckResult.UpToDate(installedCode, installedName)
                     _updateCheckResult.value = upToDate
                     return@withContext upToDate
@@ -222,19 +241,26 @@ class AppUpdateManager private constructor() {
 
     /**
      * Checks if this version was previously dismissed by the user for automatic prompts.
+     * Re-prompts after DISMISS_REMIND_COOLDOWN_MS (2 hours) so users are actively reminded.
      */
     fun isVersionDismissed(context: Context, versionCode: Long): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val dismissed = prefs.getLong(KEY_DISMISSED_VERSION_CODE, -1L)
-        return dismissed == versionCode
+        if (dismissed != versionCode) return false
+        val dismissedAt = prefs.getLong(KEY_DISMISSED_TIMESTAMP_MS, 0L)
+        val now = System.currentTimeMillis()
+        return (now - dismissedAt) < DISMISS_REMIND_COOLDOWN_MS
     }
 
     /**
-     * Marks a version as dismissed so automatic prompts will not nag the user.
+     * Marks a version as temporarily dismissed. Saves the timestamp for periodic re-prompting.
      */
     fun dismissVersion(context: Context, versionCode: Long) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putLong(KEY_DISMISSED_VERSION_CODE, versionCode).apply()
+        prefs.edit()
+            .putLong(KEY_DISMISSED_VERSION_CODE, versionCode)
+            .putLong(KEY_DISMISSED_TIMESTAMP_MS, System.currentTimeMillis())
+            .apply()
     }
 
     /**
