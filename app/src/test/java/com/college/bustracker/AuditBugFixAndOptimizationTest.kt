@@ -180,7 +180,7 @@ class AuditBugFixAndOptimizationTest {
         val file = File("app/src/main/java/com/college/bustracker/ui/admin/AdminViewModel.kt").let {
             if (it.exists()) it else File("C:/Users/bhrao/college_bus_tracker/app/src/main/java/com/college/bustracker/ui/admin/AdminViewModel.kt")
         }
-        val content = if (file.exists()) file.readText() else ""
+        val content = if (file.exists()) file.readText().replace("\r\n", "\n") else ""
 
         assertTrue("buses in AdminViewModel must be StateFlow<List<Bus>>", content.contains("val buses: StateFlow<List<Bus>>"))
         assertTrue("routes in AdminViewModel must be StateFlow<List<Route>>", content.contains("val routes: StateFlow<List<Route>>"))
@@ -196,7 +196,7 @@ class AuditBugFixAndOptimizationTest {
         val file = File("app/src/main/java/com/college/bustracker/ui/student/StudentViewModel.kt").let {
             if (it.exists()) it else File("C:/Users/bhrao/college_bus_tracker/app/src/main/java/com/college/bustracker/ui/student/StudentViewModel.kt")
         }
-        val content = if (file.exists()) file.readText() else ""
+        val content = if (file.exists()) file.readText().replace("\r\n", "\n") else ""
 
         assertTrue("Ticker must check previousText before setting _lastUpdateText", content.contains("if (newText != previousText)"))
         assertTrue("Ticker should use delay", content.contains("delay("))
@@ -210,7 +210,7 @@ class AuditBugFixAndOptimizationTest {
         val file = File("app/src/main/java/com/college/bustracker/ui/student/StudentMapScreen.kt").let {
             if (it.exists()) it else File("C:/Users/bhrao/college_bus_tracker/app/src/main/java/com/college/bustracker/ui/student/StudentMapScreen.kt")
         }
-        val content = if (file.exists()) file.readText() else ""
+        val content = if (file.exists()) file.readText().replace("\r\n", "\n") else ""
 
         assertTrue("StudentMapScreen must track needsInvalidate", content.contains("var needsInvalidate = false"))
         assertTrue("StudentMapScreen must conditionally call view.invalidate()", content.contains("if (needsInvalidate) {\n                    view.invalidate()\n                }"))

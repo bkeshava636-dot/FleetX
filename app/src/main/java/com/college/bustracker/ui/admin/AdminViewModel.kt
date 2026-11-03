@@ -27,7 +27,7 @@ class AdminViewModel : ViewModel() {
     private val swapRepo = app.busSwapRepository
     private val tempAssignRepo = app.temporaryAssignmentRepository
 
-    val buses: StateFlow<List<Bus>> = busRepo.getBusesFlow(forceRefresh = true)
+    val buses: StateFlow<List<Bus>> = busRepo.getBusesFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val routes: StateFlow<List<Route>> = routeRepo.getRoutesFlow(forceRefresh = true)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -114,6 +114,7 @@ class AdminViewModel : ViewModel() {
         replacementDriverUid: String,
         startAt: Long,
         endAt: Long,
+        reason: String = "",
         onResult: (Boolean, String?) -> Unit
     ) {
         val bus = buses.value.find { it.busId.equals(busId, ignoreCase = true) }
@@ -139,7 +140,8 @@ class AdminViewModel : ViewModel() {
                     permanentDriverId = permanentDriver?.customId ?: bus.driverId ?: "",
                     permanentDriverName = permanentDriver?.name ?: "Permanent Driver",
                     permanentDriverPhone = permanentDriver?.phoneNumber,
-                    replacementDriverProfile = replacementDriver
+                    replacementDriverProfile = replacementDriver,
+                    reason = reason
                 )
                 if (res.isSuccess) {
                     onResult(true, null)
@@ -600,9 +602,81 @@ class AdminViewModel : ViewModel() {
         }
     }
 
+    private val historyRepo = CollegeBusApp.instance.historyRepository
+
+    val busSwapHistory: StateFlow<List<com.college.bustracker.data.model.BusSwapHistory>> = historyRepo.getBusSwapHistoryFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val driverReplacementHistory: StateFlow<List<com.college.bustracker.data.model.DriverReplacementHistory>> = historyRepo.getDriverReplacementHistoryFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val historyAuditLogs: StateFlow<List<com.college.bustracker.data.model.HistoryAuditLog>> = historyRepo.getAuditLogsFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun createBusSwap(
+        originalBusId: String,
+        replacementBusId: String,
+        routeId: String,
+        reason: String,
+        scopeType: String,
+        affectedStops: List<String>,
+        effectiveDate: String,
+        onResult: (Boolean, String?) -> Unit
+    ) {
+        val currentAdmin = app.authRepository.getActiveProfile()
+        val adminUid = currentAdmin?.uid ?: "admin"
+        val adminName = currentAdmin?.name ?: "Admin"
+        val swapId = "swap_${System.currentTimeMillis()}"
+
+        val swap = BusSwap(
+            swapId = swapId,
+            originalBusId = originalBusId,
+            replacementBusId = replacementBusId,
+            routeId = routeId,
+            driverId = adminUid,
+            driverName = adminName,
+            scopeType = scopeType,
+            affectedStopIds = affectedStops,
+            message = reason,
+            status = BusSwap.STATUS_ACTIVE,
+            date = effectiveDate.ifBlank { com.college.bustracker.util.KolkataTimeFormatter.getTodayIso() },
+            createdAt = System.currentTimeMillis(),
+            createdByUid = adminUid
+        )
+
+        viewModelScope.launch {
+            val result = swapRepo.reportSwap(swap)
+            result.fold(
+                onSuccess = { onResult(true, null) },
+                onFailure = { ex -> onResult(false, ex.message ?: "Failed to record bus swap") }
+            )
+        }
+    }
+
     fun cancelSwap(swapId: String) {
         viewModelScope.launch {
-            swapRepo.updateSwapStatus(swapId, "CANCELLED")
+            val adminUid = app.authRepository.getActiveProfile()?.uid ?: ""
+            swapRepo.cancelSwap(swapId, adminUid)
+        }
+    }
+
+    fun clearBusSwapHistory(onResult: (Result<Int>) -> Unit) {
+        val currentAdmin = app.authRepository.getActiveProfile()
+        val adminUid = currentAdmin?.uid ?: "admin"
+        val adminName = currentAdmin?.name ?: "Admin"
+        viewModelScope.launch {
+            val res = historyRepo.clearBusSwapHistory(adminUid, adminName)
+            onResult(res)
+        }
+    }
+
+    fun clearDriverReplacementHistory(onResult: (Result<Int>) -> Unit) {
+        val currentAdmin = app.authRepository.getActiveProfile()
+        val adminUid = currentAdmin?.uid ?: "admin"
+        val adminName = currentAdmin?.name ?: "Admin"
+        viewModelScope.launch {
+            val res = historyRepo.clearDriverReplacementHistory(adminUid, adminName)
+            onResult(res)
         }
     }
 

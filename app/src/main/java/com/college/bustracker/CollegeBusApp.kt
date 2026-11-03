@@ -44,6 +44,7 @@ class CollegeBusApp : Application() {
     lateinit var temporaryAssignmentRepository: com.college.bustracker.data.repository.TemporaryAssignmentRepository
     lateinit var announcementRepository: com.college.bustracker.data.repository.AnnouncementRepository
     lateinit var feedbackRepository: com.college.bustracker.data.repository.FeedbackRepository
+    lateinit var historyRepository: com.college.bustracker.data.repository.HistoryRepository
     lateinit var networkMonitor: NetworkMonitor
 
     override fun onCreate() {
@@ -82,7 +83,17 @@ class CollegeBusApp : Application() {
         temporaryAssignmentRepository = com.college.bustracker.data.repository.TemporaryAssignmentRepository()
         announcementRepository = com.college.bustracker.data.repository.AnnouncementRepository()
         feedbackRepository = com.college.bustracker.data.repository.FeedbackRepository()
+        historyRepository = com.college.bustracker.data.repository.HistoryRepository()
         networkMonitor = NetworkMonitor(this)
+
+        // Subscribe to general announcement topics
+        com.college.bustracker.util.AnnouncementTopicManager.subscribeToGeneralTopics()
+        val currentProfile = authRepository.getActiveProfile()
+        if (currentProfile != null) {
+            com.college.bustracker.util.AnnouncementTopicManager.updateRoleSubscriptions(currentProfile.role)
+        } else {
+            com.college.bustracker.util.AnnouncementTopicManager.updateRoleSubscriptions(com.college.bustracker.data.model.UserRole.STUDENT)
+        }
 
         // 4. Initialize Calendar & Operating Schedule Services and keep caches reactive
         com.college.bustracker.util.CollegeCalendarService.init(this)

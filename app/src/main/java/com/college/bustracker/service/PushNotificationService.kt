@@ -33,11 +33,68 @@ class PushNotificationService : FirebaseMessagingService() {
         val data = remoteMessage.data
         val notificationType = data["notificationType"] ?: "BUS_SWAP"
 
-        if (notificationType.equals("ANNOUNCEMENT", ignoreCase = true)) {
-            handleAnnouncementMessage(remoteMessage, data)
-        } else {
-            handleBusSwapMessage(remoteMessage, data)
+        when {
+            notificationType.equals("ANNOUNCEMENT", ignoreCase = true) -> {
+                handleAnnouncementMessage(remoteMessage, data)
+            }
+            notificationType.equals("DRIVER_REPLACEMENT", ignoreCase = true) -> {
+                handleDriverReplacementMessage(remoteMessage, data)
+            }
+            else -> {
+                handleBusSwapMessage(remoteMessage, data)
+            }
         }
+    }
+
+    private fun handleDriverReplacementMessage(remoteMessage: RemoteMessage, data: Map<String, String>) {
+        val busId = data["busId"] ?: ""
+        val replacementDriverName = data["replacementDriverName"] ?: "Temporary Driver"
+        val reason = data["reason"] ?: ""
+        val status = data["status"] ?: "ACTIVE"
+        val isKn = LocaleHelper.isKannada(applicationContext)
+
+        val defaultTitle = if (status == "CANCELLED") {
+            if (isKn) "👨‍✈️ ಚಾಲಕರ ನಿಯೋಜನೆ ರದ್ದುಗೊಂಡಿದೆ" else "👨‍✈️ Driver Assignment Cancelled"
+        } else {
+            if (isKn) "👨‍✈️ ತಾತ್ಕಾಲಿಕ ಚಾಲಕರ ನಿಯೋಜನೆ" else "👨‍✈️ Driver Replacement Alert"
+        }
+
+        val defaultBody = if (status == "CANCELLED") {
+            if (isKn) "$busId ಗೆ ಶಾಶ್ವತ ಚಾಲಕರು ಮರಳಿದ್ದಾರೆ." else "Permanent driver has returned for $busId."
+        } else {
+            val reasonText = if (reason.isNotBlank()) " ($reason)" else ""
+            if (isKn) "$busId ಗೆ $replacementDriverName ಅವರನ್ನು ನಿಯೋಜಿಸಲಾಗಿದೆ$reasonText." else "$replacementDriverName is assigned to $busId today$reasonText."
+        }
+
+        val title = remoteMessage.notification?.title ?: data["title"] ?: defaultTitle
+        val body = remoteMessage.notification?.body ?: data["body"] ?: defaultBody
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_ROUTE, "student_home")
+            putExtra(EXTRA_BUS_ID, busId)
+        }
+
+        val requestCode = if (busId.isNotBlank()) (busId.hashCode() + 400) else 401
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CollegeBusApp.ALERTS_CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(requestCode, notification)
     }
 
     private fun handleAnnouncementMessage(remoteMessage: RemoteMessage, data: Map<String, String>) {

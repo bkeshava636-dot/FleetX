@@ -1250,6 +1250,8 @@ async function processCreateTemporaryAssignment(data, callerUid, db = admin.fire
   const assignmentId = assignmentRef.id;
   const now = Date.now();
 
+  const reason = String(data.reason || "").trim();
+
   const assignmentData = {
     assignmentId,
     busId,
@@ -1260,6 +1262,7 @@ async function processCreateTemporaryAssignment(data, callerUid, db = admin.fire
     replacementDriverUid: String(replacementDriverUid).trim(),
     replacementDriverName: String(replacement.name || "Driver").trim(),
     replacementDriverPhone: replacement.phoneNumber || null,
+    reason,
     startAt,
     endAt,
     createdByUid: callerUid,
@@ -1274,6 +1277,31 @@ async function processCreateTemporaryAssignment(data, callerUid, db = admin.fire
   };
 
   await assignmentRef.set(assignmentData);
+
+  // Write permanent driver replacement history
+  try {
+    await db.collection("driver_replacement_history").doc(assignmentId).set({
+      historyId: assignmentId,
+      assignmentId,
+      busId,
+      previousDriverUid: String(permanentDriverUid || "").trim(),
+      previousDriverName: String(permanentDriverName || "").trim(),
+      replacementDriverUid: String(replacementDriverUid).trim(),
+      replacementDriverName: String(replacement.name || "Driver").trim(),
+      reason,
+      startAt,
+      endAt,
+      effectiveFrom: startAt,
+      effectiveUntil: endAt,
+      changedByUid: callerUid,
+      changedByName: String(caller.name || caller.email || "Admin").trim(),
+      status: "ACTIVE",
+      createdAt: now,
+      cleared: false
+    });
+  } catch (err) {
+    console.warn(`[processCreateTemporaryAssignment] Warning writing driver_replacement_history:`, err.message);
+  }
 
   // 8. Synchronize Realtime Database /bus_operators/{busId}
   if (rtdb) {
@@ -1346,6 +1374,16 @@ async function processCancelTemporaryAssignment(assignmentId, callerUid, db = ad
     cancelledByRole: cancelledByRole,
     updatedAt: now
   });
+
+  try {
+    await db.collection("driver_replacement_history").doc(assignmentId).update({
+      status: "CANCELLED",
+      cancelledAt: now,
+      cancelledByUid: callerUid
+    });
+  } catch (err) {
+    console.warn(`[processCancelTemporaryAssignment] Warning updating driver_replacement_history:`, err.message);
+  }
 
   // Synchronize RTDB /bus_operators/{busId}
   // Immediately restore permanent driver as effective operator, revoke temporary driver GPS write permission,
@@ -1445,10 +1483,118 @@ exports.onTemporaryAssignmentWritten = regionalFunctions.firestore
     }
   });
 
+/**
+ * Core business logic for processing and dispatching Announcement notifications.
+ */
+async function processAnnouncementWrite(change, context, db = admin.firestore(), messaging = admin.messaging()) {
+  const announcementId = context && context.params ? context.params.announcementId : "unknown";
+  if (!change.after || !change.after.exists) {
+    return null;
+  }
+
+  const data = change.after.data() || {};
+  const isPublished = data.isPublished === true || data.status === "PUBLISHED" || data.status === "ACTIVE";
+  if (!isPublished) {
+    return { skipped: true, reason: "NOT_PUBLISHED" };
+  }
+
+  if (data.notified === true) {
+    return { skipped: true, reason: "ALREADY_NOTIFIED" };
+  }
+
+  const titleEn = data.titleEn || data.title || "Campus Announcement";
+  const titleKn = data.titleKn || titleEn;
+  const contentEn = data.contentEn || data.content || data.body || "";
+  const contentKn = data.contentKn || contentEn;
+  const priority = (data.priority || "NORMAL").toUpperCase();
+  const category = (data.category || "GENERAL").toUpperCase();
+  const targetAudience = (data.targetAudience || "ALL").toUpperCase();
+  const targetBusId = data.targetBusId ? sanitizeTopic(data.targetBusId) : "";
+  const targetRouteId = data.targetRouteId ? sanitizeTopic(data.targetRouteId) : "";
+
+  const topicsToNotify = new Set();
+  if (targetBusId) {
+    topicsToNotify.add(`announcements_bus_${targetBusId}`);
+  } else if (targetRouteId) {
+    topicsToNotify.add(`announcements_route_${targetRouteId}`);
+  } else {
+    if (targetAudience === "DRIVERS_ONLY" || targetAudience === "DRIVERS") {
+      topicsToNotify.add("announcements_drivers");
+    } else if (targetAudience === "STUDENTS_ONLY" || targetAudience === "STUDENTS") {
+      topicsToNotify.add("announcements_students");
+    } else {
+      topicsToNotify.add("announcements_all");
+      topicsToNotify.add("announcements_students");
+    }
+  }
+
+  const sendPromises = Array.from(topicsToNotify).map(async (topic) => {
+    const payload = {
+      topic: topic,
+      notification: {
+        title: titleEn,
+        body: contentEn
+      },
+      data: {
+        notificationType: "ANNOUNCEMENT",
+        announcementId: announcementId,
+        EXTRA_ANNOUNCEMENT_ID: announcementId,
+        title: titleEn,
+        titleKn: titleKn,
+        content: contentEn,
+        contentKn: contentKn,
+        priority: priority,
+        category: category,
+        targetAudience: targetAudience,
+        targetBusId: targetBusId,
+        targetRouteId: targetRouteId,
+        timestamp: String(Date.now())
+      },
+      android: {
+        priority: priority === "URGENT" ? "high" : "normal",
+        notification: {
+          channelId: "announcements_channel",
+          sound: "default"
+        }
+      }
+    };
+    try {
+      await messaging.send(payload);
+      console.log(`[onAnnouncementWritten] Dispatched announcement ${announcementId} to topic ${topic}`);
+    } catch (e) {
+      console.warn(`[onAnnouncementWritten] Error sending to topic ${topic}:`, e.message);
+    }
+  });
+
+  await Promise.all(sendPromises);
+
+  // Mark announcement document as notified
+  try {
+    await change.after.ref.update({
+      notified: true,
+      notifiedAt: Date.now()
+    });
+  } catch (e) {
+    console.warn(`[onAnnouncementWritten] Error marking announcement ${announcementId} notified:`, e.message);
+  }
+
+  return { success: true, announcementId, topics: Array.from(topicsToNotify) };
+}
+
+/**
+ * Firestore Trigger for announcements collection
+ */
+exports.onAnnouncementWritten = regionalFunctions.firestore
+  .document("announcements/{announcementId}")
+  .onWrite(async (change, context) => {
+    return processAnnouncementWrite(change, context, admin.firestore(), admin.messaging());
+  });
+
 // Exports for unit testing
 exports.sanitizeTopic = sanitizeTopic;
 exports.buildBusStopTopic = buildBusStopTopic;
 exports.processBusSwapWrite = processBusSwapWrite;
+exports.processAnnouncementWrite = processAnnouncementWrite;
 exports.sendPasswordResetEmailViaRest = sendPasswordResetEmailViaRest;
 exports.calculateDistanceMeters = calculateDistanceMeters;
 exports.isKinematicallyPlausible = isKinematicallyPlausible;

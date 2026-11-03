@@ -44,6 +44,7 @@ class AuthViewModel : ViewModel() {
             _isLoading.value = false
             result.fold(
                 onSuccess = { profile ->
+                    com.college.bustracker.util.AnnouncementTopicManager.updateRoleSubscriptions(profile.role)
                     onSuccess(profile)
                 },
                 onFailure = { ex ->
@@ -74,6 +75,7 @@ class AuthViewModel : ViewModel() {
 
     fun logout() {
         authRepo.logout()
+        com.college.bustracker.util.AnnouncementTopicManager.updateRoleSubscriptions(com.college.bustracker.data.model.UserRole.STUDENT)
         _errorMessage.value = null
     }
 }

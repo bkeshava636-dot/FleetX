@@ -22,8 +22,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
@@ -46,6 +48,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -159,6 +162,30 @@ fun StudentHomeScreen(
     var selectedAnnouncementForDetail by remember { mutableStateOf<com.college.bustracker.data.model.Announcement?>(null) }
     var busDropdownOpen by remember { mutableStateOf(false) }
     var stopDropdownOpen by remember { mutableStateOf(false) }
+
+    val openAnnouncementId by viewModel.openAnnouncementEvent.collectAsState()
+    LaunchedEffect(openAnnouncementId, announcements) {
+        val targetId = openAnnouncementId
+        if (!targetId.isNullOrBlank() && announcements.isNotEmpty()) {
+            val matching = announcements.find { it.id == targetId }
+            if (matching != null) {
+                com.college.bustracker.data.repository.AnnouncementPreferences.markAsRead(context, matching.id)
+                com.college.bustracker.analytics.StudentAnalyticsManager.logEvent(
+                    context,
+                    com.college.bustracker.analytics.StudentAnalyticsManager.EVENT_ANNOUNCEMENT_VIEWED
+                )
+                selectedAnnouncementForDetail = matching
+                viewModel.clearOpenAnnouncement()
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        com.college.bustracker.analytics.StudentAnalyticsManager.logEvent(
+            context,
+            com.college.bustracker.analytics.StudentAnalyticsManager.EVENT_APP_OPENED
+        )
+    }
 
     val stops = remember(route) { route?.stops ?: emptyList() }
     val isSwapActive = remember(swapAlert) { swapAlert != null && !swapAlert?.replacementBusId.isNullOrBlank() }
@@ -1792,6 +1819,7 @@ private fun ProminentEtaCard(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
+        val context = androidx.compose.ui.platform.LocalContext.current
         Column(modifier = Modifier.padding(20.dp)) {
             // Header Row: Bus Number & Status Badge
             Row(
@@ -2162,11 +2190,58 @@ private fun ProminentEtaCard(
             }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // ETA Accuracy Disclaimer (Tapping directly opens the live bus map)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9)),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    com.college.bustracker.analytics.StudentAnalyticsManager.logEvent(
+                        context,
+                        com.college.bustracker.analytics.StudentAnalyticsManager.EVENT_LIVE_TRACKING_OPENED
+                    )
+                    onNavigateToMap()
+                }
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = Color(0xFF64748B),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                val isKn = com.college.bustracker.util.LocaleHelper.isKannada(context)
+                Text(
+                    text = if (isKn) {
+                        "ಬಸ್ ಆಗಮನದ ಸಮಯವು ಅಂದಾಜು ಮಾತ್ರವಾಗಿದ್ದು, GPS, ನೆಟ್ವರ್ಕ್ ಸಮಸ್ಯೆಗಳು, ಟ್ರಾಫಿಕ್ ಅಥವಾ ಇತರ ವಿಳಂಬಗಳಿಂದಾಗಿ ನಿಖರವಾಗಿರದೇ ಇರಬಹುದು. ಹೆಚ್ಚಿನ ನಿಖರತೆಗಾಗಿ, ದಯವಿಟ್ಟು ಮ್ಯಾಪ್ನಲ್ಲಿ ಬಸ್ನ ಲೈವ್ ಸ್ಥಳವನ್ನು ವೀಕ್ಷಿಸಿ."
+                    } else {
+                        "ETA is approximate and may not be accurate due to GPS, network conditions, traffic, or other delays. For better accuracy, please view the bus's live location on the map."
+                    },
+                    fontSize = 11.sp,
+                    color = Color(0xFF475569),
+                    lineHeight = 15.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
 
         // Map Navigation Button: VIEW BUS MAP ->
         Button(
-            onClick = onNavigateToMap,
+            onClick = {
+                com.college.bustracker.analytics.StudentAnalyticsManager.logEvent(
+                    context,
+                    com.college.bustracker.analytics.StudentAnalyticsManager.EVENT_LIVE_TRACKING_OPENED
+                )
+                onNavigateToMap()
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),

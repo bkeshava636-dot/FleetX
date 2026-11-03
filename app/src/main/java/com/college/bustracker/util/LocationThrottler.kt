@@ -139,17 +139,27 @@ object LocationThrottler {
         newTimestamp: Long,
         speedMps: Float
     ): Boolean {
-        return shouldDispatchAdaptive(
-            lastSentLat = lastSentLat,
-            lastSentLng = lastSentLng,
-            lastSentTimestamp = lastSentTimestamp,
-            lastSentBearing = 0f,
-            newLat = newLat,
-            newLng = newLng,
-            newTimestamp = newTimestamp,
-            newBearing = 0f,
-            speedMps = speedMps,
-            stationaryStartTime = 0L
-        ).shouldDispatch
+        // First update must always be sent
+        if (lastSentTimestamp <= 0L) return true
+
+        val elapsed = newTimestamp - lastSentTimestamp
+        if (elapsed < 3_000L) {
+            // Absolute minimum debounce
+            return false
+        }
+
+        // Forced heartbeat
+        if (elapsed >= 30_000L) {
+            return true
+        }
+
+        val distance = calculateDistanceMeters(lastSentLat, lastSentLng, newLat, newLng)
+        val isMoving = speedMps > 1.0f || distance > 10.0
+
+        return if (isMoving) {
+            elapsed >= 8_000L
+        } else {
+            elapsed >= 25_000L
+        }
     }
 }

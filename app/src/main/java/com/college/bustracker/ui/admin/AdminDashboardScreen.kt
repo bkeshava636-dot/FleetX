@@ -265,11 +265,15 @@ fun AdminDashboardScreen(
                     2 -> stringResource(R.string.routes_and_transit)
                     3 -> stringResource(R.string.college_calendar)
                     4 -> stringResource(R.string.announcements_and_notices)
+                    5 -> "Operations History"
+                    6 -> "Student App Analytics"
                     else -> stringResource(R.string.admin_dashboard)
                 },
                 subtitle = "FleetX",
                 todayEvaluation = todayEvaluation,
                 onNavigateToDiagnostics = onNavigateToDiagnostics,
+                onNavigateToHistory = { selectedSection = 5 },
+                onNavigateToAnalytics = { selectedSection = 6 },
                 onOpenLanguageSelector = { showLanguageDialog = true },
                 onLogout = onLogout
             )
@@ -314,6 +318,12 @@ fun AdminDashboardScreen(
                     },
                     onNavigateToAnnouncements = {
                         selectedSection = 4
+                    },
+                    onNavigateToHistory = {
+                        selectedSection = 5
+                    },
+                    onNavigateToAnalytics = {
+                        selectedSection = 6
                     }
                 )
                 1 -> AdminOperationsScreen(
@@ -508,6 +518,8 @@ fun AdminDashboardScreen(
                         announcementToDelete = ann
                     }
                 )
+                5 -> AdminHistoryScreen(viewModel = viewModel)
+                6 -> AdminAnalyticsScreen()
             }
         }
     }
@@ -546,8 +558,30 @@ fun AdminDashboardScreen(
             drivers = allDrivers,
             routes = routes,
             onDismiss = { showAddReplacementDialog = false },
-            onCreateReplacement = { busId, repUid, startAt, endAt, cb ->
-                viewModel.createTemporaryReplacement(busId, repUid, startAt, endAt, cb)
+            onCreateReplacement = { busId, repUid, startAt, endAt, reason, cb ->
+                viewModel.createTemporaryReplacement(busId, repUid, startAt, endAt, reason, cb)
+            }
+        )
+    }
+
+    // Create Bus Swap Dialog
+    if (showAddSwapDialog) {
+        AdminCreateBusSwapDialog(
+            buses = buses,
+            routes = routes,
+            activeSwaps = swaps,
+            onDismiss = { showAddSwapDialog = false },
+            onCreateSwap = { origBusId, replBusId, routeId, reason, scopeType, affectedStops, effectiveDate, cb ->
+                viewModel.createBusSwap(
+                    originalBusId = origBusId,
+                    replacementBusId = replBusId,
+                    routeId = routeId,
+                    reason = reason,
+                    scopeType = scopeType,
+                    affectedStops = affectedStops,
+                    effectiveDate = effectiveDate,
+                    onResult = cb
+                )
             }
         )
     }
