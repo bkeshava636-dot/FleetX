@@ -16,6 +16,7 @@ import com.college.bustracker.data.model.getDisplayState
 import com.college.bustracker.util.AutomaticRideManager
 import com.college.bustracker.util.AutomaticRideState
 import com.college.bustracker.data.repository.StudentPreferences
+import com.college.bustracker.util.AnnouncementTopicManager
 import com.college.bustracker.util.BusTopicManager
 import com.college.bustracker.util.EtaEngine
 import com.college.bustracker.util.EtaStatus
@@ -409,6 +410,19 @@ class StudentViewModel : ViewModel() {
         )
     }
 
+    private var lastSubscribedBusId: String? = null
+
+    private val _openAnnouncementEvent = MutableStateFlow<String?>(null)
+    val openAnnouncementEvent: StateFlow<String?> = _openAnnouncementEvent.asStateFlow()
+
+    fun openAnnouncementById(announcementId: String) {
+        _openAnnouncementEvent.value = announcementId
+    }
+
+    fun clearOpenAnnouncement() {
+        _openAnnouncementEvent.value = null
+    }
+
     fun selectStop(stop: BusStop) {
         _selectedStop.value = stop
         syncTopicSubscription()
@@ -418,6 +432,10 @@ class StudentViewModel : ViewModel() {
         val busId = _selectedBus.value?.busId
         val stopId = _selectedStop.value?.stopId
         BusTopicManager.updateSubscription(app.applicationContext, busId, stopId)
+        if (busId != lastSubscribedBusId) {
+            AnnouncementTopicManager.updateBusSubscription(lastSubscribedBusId, busId)
+            lastSubscribedBusId = busId
+        }
     }
 
     private var studentSourcesJob: Job? = null

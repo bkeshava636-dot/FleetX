@@ -118,7 +118,8 @@ class TemporaryAssignmentRepository(
         permanentDriverId: String,
         permanentDriverName: String,
         permanentDriverPhone: String? = null,
-        replacementDriverProfile: UserProfile
+        replacementDriverProfile: UserProfile,
+        reason: String = ""
     ): Result<TemporaryAssignment> {
         return try {
             // First attempt secure HTTPS Callable function
@@ -126,7 +127,8 @@ class TemporaryAssignmentRepository(
                 "busId" to busId,
                 "replacementDriverUid" to replacementDriverUid,
                 "startAt" to startAt,
-                "endAt" to endAt
+                "endAt" to endAt,
+                "reason" to reason
             )
 
             try {
@@ -186,6 +188,7 @@ class TemporaryAssignmentRepository(
                 replacementDriverUid = replacementDriverUid,
                 replacementDriverName = replacementDriverProfile.name,
                 replacementDriverPhone = replacementDriverProfile.phoneNumber,
+                reason = reason,
                 startAt = startAt,
                 endAt = endAt,
                 createdByUid = callerUid,
@@ -200,6 +203,32 @@ class TemporaryAssignmentRepository(
             )
 
             newDocRef.set(created).await()
+
+            // Save permanent history
+            try {
+                val history = com.college.bustracker.data.model.DriverReplacementHistory(
+                    historyId = newDocRef.id,
+                    assignmentId = newDocRef.id,
+                    previousDriverUid = permanentDriverUid,
+                    previousDriverName = permanentDriverName,
+                    replacementDriverUid = replacementDriverUid,
+                    replacementDriverName = replacementDriverProfile.name,
+                    busId = busId,
+                    date = com.college.bustracker.util.KolkataTimeFormatter.formatDateOnly(startAt),
+                    timeFormatted = com.college.bustracker.util.KolkataTimeFormatter.formatTimeOnly(startAt),
+                    reason = reason.ifBlank { "Driver replacement" },
+                    changedByUid = callerUid,
+                    changedByName = if (callerRole == "ADMIN") "Admin" else permanentDriverName,
+                    effectiveFrom = startAt,
+                    effectiveUntil = endAt,
+                    status = "ACTIVE",
+                    createdAt = now,
+                    cleared = false
+                )
+                firestore.collection("driver_replacement_history").document(newDocRef.id).set(history).await()
+            } catch (hEx: Exception) {
+                Log.w(TAG, "Failed writing driver replacement history: ${hEx.message}")
+            }
 
             // Synchronize RTDB /bus_operators/{busId}
             try {
@@ -260,6 +289,17 @@ class TemporaryAssignmentRepository(
             firestore.collection("temporary_assignments").document(assignmentId)
                 .update(updatePayload)
                 .await()
+
+            try {
+                firestore.collection("driver_replacement_history").document(assignmentId).update(
+                    mapOf(
+                        "status" to "CANCELLED",
+                        "effectiveUntil" to now
+                    )
+                ).await()
+            } catch (hEx: Exception) {
+                Log.w(TAG, "Failed updating driver replacement history on cancel: ${hEx.message}")
+            }
 
             try {
                 val updateMap = hashMapOf<String, Any?>(

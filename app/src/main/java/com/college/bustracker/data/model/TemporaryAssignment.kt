@@ -14,6 +14,7 @@ data class TemporaryAssignment(
     val replacementDriverUid: String = "",
     val replacementDriverName: String = "",
     val replacementDriverPhone: String? = null,
+    val reason: String = "",
     val startAt: Long = 0L,
     val endAt: Long = 0L,
     val createdByUid: String = "",

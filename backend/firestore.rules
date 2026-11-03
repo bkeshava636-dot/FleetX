@@ -134,5 +134,36 @@ service cloud.firestore {
       allow create: if true;
       allow read, update, delete: if isAdmin();
     }
+
+    // Bus Swap History: readable by admins and public; written by admins and drivers
+    match /bus_swap_history/{historyId} {
+      allow read: if true;
+      allow write: if isAdmin() || isDriver();
+    }
+
+    // Driver Replacement History: readable by admins and public; written by admins and drivers
+    match /driver_replacement_history/{historyId} {
+      allow read: if true;
+      allow write: if isAdmin() || isDriver();
+    }
+
+    // History Audit Logs: recorded actions when admins clear history
+    match /history_audit_logs/{auditId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Student App Installations: anonymous device ping (no PII, no login required)
+    match /student_installations/{installationId} {
+      allow create, update: if true;
+      allow read: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Student Daily Analytics Aggregates: atomic daily counter increments
+    match /student_analytics_daily/{dateStr} {
+      allow create, update: if true;
+      allow read: if isAdmin();
+      allow delete: if isAdmin();
+    }
   }
 }

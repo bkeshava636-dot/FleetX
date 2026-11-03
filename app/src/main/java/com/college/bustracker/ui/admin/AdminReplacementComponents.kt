@@ -494,7 +494,7 @@ fun AdminCreateReplacementDialog(
     drivers: List<UserProfile>,
     routes: List<Route>,
     onDismiss: () -> Unit,
-    onCreateReplacement: (busId: String, replacementUid: String, startAt: Long, endAt: Long, (Boolean, String?) -> Unit) -> Unit
+    onCreateReplacement: (busId: String, replacementUid: String, startAt: Long, endAt: Long, reason: String, (Boolean, String?) -> Unit) -> Unit
 ) {
     val context = LocalContext.current
     var selectedBus by remember { mutableStateOf<Bus?>(null) }
@@ -503,6 +503,9 @@ fun AdminCreateReplacementDialog(
     var driverDropdownOpen by remember { mutableStateOf(false) }
 
     var selectedDuration by remember { mutableStateOf(DurationOption.ONE_DAY) }
+
+    var selectedReasonPreset by remember { mutableStateOf("Sick Leave") }
+    var customReasonNotes by remember { mutableStateOf("") }
 
     var startDate by remember { mutableStateOf(LocalDate.now()) }
     var startTime by remember { mutableStateOf(LocalTime.of(7, 0)) }
@@ -819,6 +822,33 @@ fun AdminCreateReplacementDialog(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Reason for Replacement
+                Text("Reason for Replacement", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF1E293B))
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf("Sick Leave", "Family Emergency", "Scheduled Off", "Standby Duty", "Other").forEach { preset ->
+                        FilterChip(
+                            selected = selectedReasonPreset == preset,
+                            onClick = { selectedReasonPreset = preset },
+                            label = { Text(preset, fontSize = 11.sp) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = customReasonNotes,
+                    onValueChange = { customReasonNotes = it },
+                    label = { Text("Reason Details (Optional)", fontSize = 11.sp) },
+                    placeholder = { Text("e.g. Driver taking medical leave for 2 days", fontSize = 11.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                )
+
                 if (errorMessage != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(errorMessage!!, color = StatusDangerRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -864,6 +894,7 @@ fun AdminCreateReplacementDialog(
 
     // Confirmation Summary Dialog
     if (showConfirmDialog) {
+        val finalReason = if (customReasonNotes.isNotBlank()) "$selectedReasonPreset - $customReasonNotes" else selectedReasonPreset
         AlertDialog(
             onDismissRequest = { if (!isSubmitting) showConfirmDialog = false },
             title = { Text("Confirm Replacement", fontWeight = FontWeight.Bold) },
@@ -874,6 +905,7 @@ fun AdminCreateReplacementDialog(
                     Text("• Bus: ${selectedBus?.busNumber} (${selectedBus?.busId})", fontWeight = FontWeight.SemiBold)
                     Text("• Permanent Driver: ${permanentDriver?.name}")
                     Text("• Temporary Driver: ${selectedReplacementDriver?.name}", color = CollegePrimary, fontWeight = FontWeight.Bold)
+                    Text("• Reason: $finalReason")
                     Text("• Start: ${TemporaryDurationHelper.formatDate(timeWindow.startDate)}, ${TemporaryDurationHelper.formatTime(timeWindow.startTime)}")
                     Text("• End: ${TemporaryDurationHelper.formatDate(timeWindow.endDate)}, ${TemporaryDurationHelper.formatTime(timeWindow.endTime)}")
                     Spacer(modifier = Modifier.height(8.dp))
@@ -890,7 +922,7 @@ fun AdminCreateReplacementDialog(
                         val busId = selectedBus?.busId ?: return@Button
                         val repUid = selectedReplacementDriver?.uid ?: return@Button
                         isSubmitting = true
-                        onCreateReplacement(busId, repUid, timeWindow.startMillis, timeWindow.endMillis) { success, err ->
+                        onCreateReplacement(busId, repUid, timeWindow.startMillis, timeWindow.endMillis, finalReason) { success, err ->
                             isSubmitting = false
                             if (success) {
                                 showConfirmDialog = false

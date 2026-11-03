@@ -56,6 +56,44 @@ class BusSwapRepository(
             kotlinx.coroutines.withTimeoutOrNull(2500L) {
                 firestore.collection("bus_swaps").document(swap.swapId).set(swap).await()
             }
+
+            // Write permanent Bus Swap History record
+            try {
+                val now = System.currentTimeMillis()
+                val historyRecord = com.college.bustracker.data.model.BusSwapHistory(
+                    historyId = swap.swapId,
+                    swapId = swap.swapId,
+                    originalBusId = swap.originalBusId,
+                    replacementBusId = swap.replacementBusId,
+                    routeId = swap.routeId,
+                    date = swap.date.ifBlank { com.college.bustracker.util.KolkataTimeFormatter.getTodayIso() },
+                    timeFormatted = com.college.bustracker.util.KolkataTimeFormatter.formatTimeOnly(now),
+                    reason = swap.message.ifBlank { "Bus swap active" },
+                    changedByUid = swap.createdByUid.ifBlank { swap.driverId },
+                    changedByName = swap.driverName.ifBlank { "Admin" },
+                    effectiveFrom = now,
+                    effectiveUntil = 0L,
+                    status = "ACTIVE",
+                    createdAt = now,
+                    cleared = false
+                )
+                firestore.collection("bus_swap_history").document(swap.swapId).set(historyRecord).await()
+            } catch (ignored: Exception) {}
+
+            // Synchronize RTDB live location source mapping so students track replacement bus
+            try {
+                val rtdb = com.google.firebase.database.FirebaseDatabase.getInstance()
+                rtdb.getReference("bus_swap_mappings/${swap.originalBusId}").setValue(
+                    mapOf(
+                        "originalBusId" to swap.originalBusId,
+                        "replacementBusId" to swap.replacementBusId,
+                        "active" to true,
+                        "swapId" to swap.swapId,
+                        "updatedAt" to System.currentTimeMillis()
+                    )
+                )
+            } catch (ignored: Exception) {}
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -106,6 +144,26 @@ class BusSwapRepository(
                 "cancelledByUid" to cancelledByUid
             )
             firestore.collection("bus_swaps").document(swapId).update(updates).await()
+
+            // Update permanent history
+            try {
+                firestore.collection("bus_swap_history").document(swapId).update(
+                    mapOf(
+                        "status" to "CANCELLED",
+                        "effectiveUntil" to now
+                    )
+                ).await()
+            } catch (ignored: Exception) {}
+
+            // Clear RTDB live location mapping
+            try {
+                val target = original.find { it.swapId == swapId }
+                if (target != null && target.originalBusId.isNotBlank()) {
+                    val rtdb = com.google.firebase.database.FirebaseDatabase.getInstance()
+                    rtdb.getReference("bus_swap_mappings/${target.originalBusId}").removeValue()
+                }
+            } catch (ignored: Exception) {}
+
             Result.success(Unit)
         } catch (e: Exception) {
             _localSwaps.value = original

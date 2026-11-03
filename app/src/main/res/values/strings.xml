@@ -683,4 +683,7 @@
     <string name="feedback_submitted_success_desc">Thank you! Your report has been forwarded to the college transport administration &amp; development team.</string>
     <string name="feedback_validation_error">Please select a category and provide a brief description.</string>
     <string name="report_bus_issue">Report Issue with this Bus</string>
+
+    <!-- ETA Accuracy Disclaimer -->
+    <string name="eta_accuracy_disclaimer">ETA is approximate and may not be accurate due to GPS, network conditions, traffic, or other delays. For better accuracy, please view the bus\'s live location on the map.</string>
 </resources>

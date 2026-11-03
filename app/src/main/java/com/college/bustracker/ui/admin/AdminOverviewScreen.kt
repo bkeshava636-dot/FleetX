@@ -16,6 +16,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cached
 import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.DirectionsBus
@@ -56,7 +58,9 @@ fun AdminOverviewScreen(
     onNavigateToOperations: (subTab: String) -> Unit,
     onNavigateToRoutes: (subTab: String) -> Unit,
     onNavigateToCalendar: () -> Unit,
-    onNavigateToAnnouncements: () -> Unit = {}
+    onNavigateToAnnouncements: () -> Unit = {},
+    onNavigateToHistory: () -> Unit = {},
+    onNavigateToAnalytics: () -> Unit = {}
 ) {
     val now = System.currentTimeMillis()
     val activeReplacements = temporaryAssignments.filter { it.isActive(now) }
@@ -184,6 +188,20 @@ fun AdminOverviewScreen(
             title = "Announcements",
             subtitle = "Campus transit alerts, bus timing updates, and notices",
             onClick = onNavigateToAnnouncements
+        )
+
+        AdminMenuRow(
+            icon = Icons.Default.Analytics,
+            title = "Student App Analytics",
+            subtitle = "DAU, WAU, MAU, feature usage, and app version telemetry",
+            onClick = onNavigateToAnalytics
+        )
+
+        AdminMenuRow(
+            icon = Icons.Default.History,
+            title = "Operations History",
+            subtitle = "Bus swap logs, driver replacement records, and history management",
+            onClick = onNavigateToHistory
         )
 
         Spacer(modifier = Modifier.height(16.dp))

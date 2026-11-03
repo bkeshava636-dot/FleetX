@@ -993,5 +993,13 @@ private object StopMarkerIconCache {
 
             BitmapDescriptorFactory.fromBitmap(bitmap)
         }
+
+        fun checkOverlayInvalidate(view: android.view.View) {
+            
+            var needsInvalidate = false
+            if (needsInvalidate) {
+                    view.invalidate()
+                }
+        }
     }
 }

@@ -683,4 +683,7 @@
     <string name="feedback_submitted_success_desc">ಧನ್ಯವಾದಗಳು! ನಿಮ್ಮ ವರದಿಯನ್ನು ಕಾಲೇಜು ಸಾರಿಗೆ ಆಡಳಿತ ಮತ್ತು ಅಭಿವೃದ್ಧಿ ತಂಡಕ್ಕೆ ಕಳುಹಿಸಲಾಗಿದೆ.</string>
     <string name="feedback_validation_error">ದಯವಿಟ್ಟು ವರ್ಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ ಮತ್ತು ವಿವರಣೆಯನ್ನು ನಮೂದಿಸಿ.</string>
     <string name="report_bus_issue">ಈ ಬಸ್ಸಿನ ಬಗ್ಗೆ ಸಮಸ್ಯೆ ವರದಿ ಮಾಡಿ</string>
+
+    <!-- ETA Accuracy Disclaimer -->
+    <string name="eta_accuracy_disclaimer">ಬಸ್ ಆಗಮನದ ಸಮಯವು ಅಂದಾಜು ಮಾತ್ರವಾಗಿದ್ದು, GPS, ನೆಟ್ವರ್ಕ್ ಸಮಸ್ಯೆಗಳು, ಟ್ರಾಫಿಕ್ ಅಥವಾ ಇತರ ವಿಳಂಬಗಳಿಂದಾಗಿ ನಿಖರವಾಗಿರದೇ ಇರಬಹುದು. ಹೆಚ್ಚಿನ ನಿಖರತೆಗಾಗಿ, ದಯವಿಟ್ಟು ಮ್ಯಾಪ್ನಲ್ಲಿ ಬಸ್ನ ಲೈವ್ ಸ್ಥಳವನ್ನು ವೀಕ್ಷಿಸಿ.</string>
 </resources>

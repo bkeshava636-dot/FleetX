@@ -210,6 +210,14 @@ class MainActivity : ComponentActivity() {
             StudentPreferences.saveSelection(this, busId, stopId)
             studentViewModel.selectBusById(busId, stopId)
         }
+
+        val announcementId = intent.getStringExtra(PushNotificationService.EXTRA_ANNOUNCEMENT_ID)
+            ?: intent.getStringExtra("EXTRA_ANNOUNCEMENT_ID")
+            ?: intent.getStringExtra("announcementId")
+        if (!announcementId.isNullOrBlank()) {
+            studentViewModel.openAnnouncementById(announcementId)
+            com.college.bustracker.data.repository.AnnouncementPreferences.markAsRead(this, announcementId)
+        }
         if (com.college.bustracker.BuildConfig.DEBUG && intent.hasExtra("EXTRA_MORNING_START")) {
             val current = com.college.bustracker.util.OperatingScheduleService.getSchedule()
             val morningStart = intent.getStringExtra("EXTRA_MORNING_START") ?: current.morning.startTime

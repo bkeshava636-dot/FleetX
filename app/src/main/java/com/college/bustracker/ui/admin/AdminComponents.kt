@@ -204,6 +204,8 @@ fun AdminHeader(
     subtitle: String = "FleetX",
     todayEvaluation: DayEvaluation? = null,
     onNavigateToDiagnostics: (() -> Unit)? = null,
+    onNavigateToHistory: (() -> Unit)? = null,
+    onNavigateToAnalytics: (() -> Unit)? = null,
     onOpenLanguageSelector: (() -> Unit)? = null,
     onLogout: () -> Unit
 ) {
@@ -280,6 +282,20 @@ fun AdminHeader(
                         onClick = {
                             showMenu = false
                             onOpenLanguageSelector?.invoke()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Operations History", color = Color(0xFF0F172A), fontWeight = FontWeight.Medium) },
+                        onClick = {
+                            showMenu = false
+                            onNavigateToHistory?.invoke()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Student App Analytics", color = Color(0xFF0F172A), fontWeight = FontWeight.Medium) },
+                        onClick = {
+                            showMenu = false
+                            onNavigateToAnalytics?.invoke()
                         }
                     )
                     DropdownMenuItem(
