@@ -1,8 +1,8 @@
 {
-  "versionCode": 10037,
-  "versionName": "1.0.37",
-  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.37/FleetX-v1.0.37.apk",
+  "versionCode": 10038,
+  "versionName": "1.0.38",
+  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.38/FleetX-v1.0.38.apk",
   "sha256": "",
-  "releaseNotes": "FleetX v1.0.37: Deployed Firestore rules to fix History Clear permission issue, redesigned ETA notice into a sleek expandable dropdown, added auto-detection of updates on app resume, periodic background update checks, 2-hour reminder cooldown, and persistent Update Reminder Banner.",
-  "publishedAt": "2026-11-03T16:45:00Z"
+  "releaseNotes": "FleetX v1.0.38: Clean release removing SYSTEM_ALERT_WINDOW and BIND_NOTIFICATION_LISTENER_SERVICE permissions to completely resolve Google Play Protect installation warnings, plus release asset parsing robustness.",
+  "publishedAt": "2026-11-06T18:05:00Z"
 }

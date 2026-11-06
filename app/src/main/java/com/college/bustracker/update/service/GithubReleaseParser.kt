@@ -93,6 +93,7 @@ object GithubReleaseParser {
 
         val assetsArray = json.optJSONArray("assets") ?: return null
         var apkAsset: ReleaseAsset? = null
+        val apkCandidates = mutableListOf<ReleaseAsset>()
 
         for (i in 0 until assetsArray.length()) {
             val assetObj = assetsArray.getJSONObject(i)
@@ -102,16 +103,21 @@ object GithubReleaseParser {
                 val sizeBytes = assetObj.optLong("size", 0L)
                 val contentType = assetObj.optString("content_type", "application/vnd.android.package-archive")
                 if (downloadUrl.isNotBlank()) {
-                    apkAsset = ReleaseAsset(
-                        name = assetName,
-                        downloadUrl = downloadUrl,
-                        sizeBytes = sizeBytes,
-                        contentType = contentType
+                    apkCandidates.add(
+                        ReleaseAsset(
+                            name = assetName,
+                            downloadUrl = downloadUrl,
+                            sizeBytes = sizeBytes,
+                            contentType = contentType
+                        )
                     )
-                    break
                 }
             }
         }
+
+        // Prefer official release APK (e.g. FleetX-v1.0.38.apk) over generic app-release.apk
+        apkAsset = apkCandidates.firstOrNull { it.name.startsWith("FleetX-", ignoreCase = true) }
+            ?: apkCandidates.firstOrNull()
 
         if (apkAsset == null) {
             return null

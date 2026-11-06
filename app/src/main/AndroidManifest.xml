@@ -25,8 +25,6 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
@@ -65,17 +63,6 @@
             android:name=".service.StudentContributorService"
             android:foregroundServiceType="location"
             android:exported="false" />
-
-        <!-- System-bound NotificationListenerService: Bypasses OEM Autostart blockers on Vivo/Xiaomi -->
-        <service
-            android:name=".service.ShiftKeepAliveNotificationService"
-            android:label="FleetX Shift Guardian"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
 
         <!-- Firebase Cloud Messaging for targeted swap alerts -->
         <meta-data

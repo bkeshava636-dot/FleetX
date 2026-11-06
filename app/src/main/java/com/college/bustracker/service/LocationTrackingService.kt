@@ -115,7 +115,6 @@ class LocationTrackingService : Service() {
     private var totalLocationsDispatched: Int = 0
 
     private var wakeLock: PowerManager.WakeLock? = null
-    private var keepAliveOverlay: KeepAliveOverlayHelper? = null
 
     private fun acquireWakeLock() {
         if (wakeLock?.isHeld == true) return
@@ -424,12 +423,6 @@ class LocationTrackingService : Service() {
 
         // Layer 2: Register privileged GMS hardware piggyback with FusedLocationProviderClient
         GmsHardwareWatchdog.register(this)
-
-        // Layer 4: Attach 1x1 transparent keep-alive overlay window (if permitted)
-        if (keepAliveOverlay == null) {
-            keepAliveOverlay = KeepAliveOverlayHelper(this)
-        }
-        keepAliveOverlay?.attachOverlay()
 
         val fbInit = try { com.google.firebase.FirebaseApp.getApps(this).isNotEmpty() } catch (e: Exception) { false }
         val authUidAvailable = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != null
@@ -1078,8 +1071,6 @@ class LocationTrackingService : Service() {
         )
 
         GmsHardwareWatchdog.unregister(this)
-        keepAliveOverlay?.detachOverlay()
-        keepAliveOverlay = null
 
         // 3. Schedule next afternoon shift alarm via AutoTrackingScheduler
         try {
@@ -1135,8 +1126,6 @@ class LocationTrackingService : Service() {
         )
 
         GmsHardwareWatchdog.unregister(this)
-        keepAliveOverlay?.detachOverlay()
-        keepAliveOverlay = null
 
         try {
             AutoTrackingScheduler.scheduleAlarms(this)
@@ -1193,8 +1182,6 @@ class LocationTrackingService : Service() {
 
             // Unregister privileged GMS hardware piggyback and detach overlay
             GmsHardwareWatchdog.unregister(this)
-            keepAliveOverlay?.detachOverlay()
-            keepAliveOverlay = null
 
             TrackingServiceHelper.updateServiceState(
                 isTracking = false,
@@ -1261,17 +1248,6 @@ class LocationTrackingService : Service() {
             busId = activeBusId,
             isTracking = activeBusId.isNotBlank()
         )
-        // Request system_server rebind via NotificationListenerService (elevates priority and bypasses Vivo Autostart blocker)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            try {
-                android.service.notification.NotificationListenerService.requestRebind(
-                    android.content.ComponentName(this, ShiftKeepAliveNotificationService::class.java)
-                )
-                Log.i(TAG, "[TASK_REMOVED] Requested NotificationListenerService rebind from system_server")
-            } catch (e: Exception) {
-                Log.w(TAG, "[TASK_REMOVED] Failed to request rebind: ${e.message}")
-            }
-        }
         // Immediately resurrect tracking via 5-second AlarmManager setAlarmClock
         scheduleServiceResurrection(delayMs = 5000L, reason = "TASK_REMOVED_SWIPED")
     }
