@@ -1,8 +1,8 @@
 {
-  "versionCode": 10038,
-  "versionName": "1.0.38",
-  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.38/FleetX-v1.0.38.apk",
+  "versionCode": 10039,
+  "versionName": "1.0.39",
+  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.39/FleetX-v1.0.39.apk",
   "sha256": "",
-  "releaseNotes": "FleetX v1.0.38: Clean release removing SYSTEM_ALERT_WINDOW and BIND_NOTIFICATION_LISTENER_SERVICE permissions to completely resolve Google Play Protect installation warnings, plus release asset parsing robustness.",
-  "publishedAt": "2026-11-06T18:05:00Z"
+  "releaseNotes": "FleetX v1.0.39: Fix contradictory bus replacement banner, fix app crash/freeze across versions with safe deserialization and maintenance cache cleanup, fix Admin Operation History with in-memory sorting & fallback, allow multiple disjoint bus swaps per bus, and add next-day driver swap cancellation prompts.",
+  "publishedAt": "2026-11-07T20:55:00Z"
 }

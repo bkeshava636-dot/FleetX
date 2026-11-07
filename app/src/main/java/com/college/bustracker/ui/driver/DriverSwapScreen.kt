@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -61,11 +62,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.res.stringResource
 import com.college.bustracker.R
 import com.college.bustracker.data.model.BusSwap
 import com.college.bustracker.ui.common.EmptyStateCard
@@ -75,6 +76,7 @@ import com.college.bustracker.ui.theme.CollegeSurface
 import com.college.bustracker.ui.theme.StatusActiveGreen
 import com.college.bustracker.ui.theme.StatusDangerRed
 import com.college.bustracker.ui.theme.StatusWarningOrange
+import com.college.bustracker.util.KolkataTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,16 +89,19 @@ fun DriverSwapScreen(
     val allBuses by viewModel.allBuses.collectAsState()
     val successMsg by viewModel.swapSuccessMessage.collectAsState()
     val swapErrorMsg by viewModel.swapErrorMessage.collectAsState()
-    val activeSwap by viewModel.activeSwapForDriver.collectAsState()
+    val activeSwaps by viewModel.activeSwapsForDriver.collectAsState()
     val isSwapLoading by viewModel.isSwapLoading.collectAsState()
 
     val stops = route?.stops ?: emptyList()
+    val todayIso = remember { KolkataTimeFormatter.getTodayIso() }
 
     val replacementOptions = remember(allBuses, assignedBus) {
         DriverViewModel.filterEligibleReplacementBuses(allBuses, assignedBus)
     }
 
-    var isEditMode by remember { mutableStateOf(false) }
+    var editingSwap by remember { mutableStateOf<BusSwap?>(null) }
+    var isAddingAdditionalSwap by remember { mutableStateOf(false) }
+    var swapToCancel by remember { mutableStateOf<BusSwap?>(null) }
 
     // Form fields
     var selectedReplacement by remember { mutableStateOf("") }
@@ -108,24 +113,48 @@ fun DriverSwapScreen(
     // Dialog states
     var showSendConfirmationDialog by remember { mutableStateOf(false) }
     var showUpdateConfirmationDialog by remember { mutableStateOf(false) }
-    var showCancelConfirmationDialog by remember { mutableStateOf(false) }
 
-    // Initialize/Reset form on load or active swap change
-    LaunchedEffect(activeSwap, replacementOptions, isEditMode) {
-        if (activeSwap != null) {
-            if (isEditMode) {
-                selectedReplacement = activeSwap?.replacementBusId ?: ""
-                selectedScopeType = activeSwap?.scopeType ?: BusSwap.SCOPE_ALL_STOPS
-                affectedStopIds.clear()
-                affectedStopIds.addAll(activeSwap?.affectedStopIds ?: emptyList())
-                optionalMessage = activeSwap?.message ?: ""
+    // Identify which stops are already assigned to active swaps
+    val assignedStopMap = remember(activeSwaps) {
+        val map = mutableMapOf<String, String>() // stopId -> replacementBusId
+        activeSwaps.forEach { swap ->
+            if (swap.scopeType == BusSwap.SCOPE_ALL_STOPS) {
+                stops.forEach { s -> map[s.stopId] = swap.replacementBusId }
+            } else {
+                swap.affectedStopIds.forEach { id -> map[id] = swap.replacementBusId }
             }
-        } else {
-            isEditMode = false
+        }
+        map
+    }
+
+    val hasAllStopsActive = remember(activeSwaps) {
+        activeSwaps.any { it.scopeType == BusSwap.SCOPE_ALL_STOPS }
+    }
+
+    val unassignedStops = remember(stops, assignedStopMap) {
+        stops.filter { !assignedStopMap.containsKey(it.stopId) }
+    }
+
+    // Initialize/Reset form fields when editing or creating
+    LaunchedEffect(editingSwap, isAddingAdditionalSwap, replacementOptions) {
+        if (editingSwap != null) {
+            val target = editingSwap!!
+            selectedReplacement = target.replacementBusId
+            selectedScopeType = target.scopeType
+            affectedStopIds.clear()
+            affectedStopIds.addAll(target.affectedStopIds)
+            val msg = target.message.trim()
+            optionalMessage = if (msg.startsWith("Bus swap reported:", ignoreCase = true)) "" else msg
+        } else if (isAddingAdditionalSwap) {
+            if (replacementOptions.isNotEmpty() && selectedReplacement.isBlank()) {
+                selectedReplacement = replacementOptions.first().busNumber
+            }
+            selectedScopeType = BusSwap.SCOPE_SELECTED_STOPS
+            affectedStopIds.clear()
+            optionalMessage = ""
+        } else if (activeSwaps.isEmpty()) {
             if (replacementOptions.isNotEmpty()) {
-                if (replacementOptions.none { it.busNumber == selectedReplacement || it.busId == selectedReplacement }) {
-                    selectedReplacement = replacementOptions.first().busNumber
-                }
+                selectedReplacement = replacementOptions.first().busNumber
             } else {
                 selectedReplacement = ""
             }
@@ -160,13 +189,16 @@ fun DriverSwapScreen(
             Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(
-                    text = if (activeSwap != null && !isEditMode) stringResource(R.string.active_vehicle_swap_title) else if (isEditMode) stringResource(R.string.edit_vehicle_swap_title) else stringResource(R.string.report_vehicle_swap_title),
+                    text = if (editingSwap != null) stringResource(R.string.edit_vehicle_swap_title)
+                    else if (activeSwaps.isNotEmpty()) "Active Bus Swaps"
+                    else stringResource(R.string.report_vehicle_swap_title),
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0F172A)
                 )
                 Text(
-                    text = if (activeSwap != null && !isEditMode) stringResource(R.string.single_swap_broadcasting_subtitle) else stringResource(R.string.broadcast_substitute_bus_subtitle),
+                    text = if (activeSwaps.isNotEmpty()) "${activeSwaps.size} swap alert(s) active for your bus"
+                    else stringResource(R.string.broadcast_substitute_bus_subtitle),
                     fontSize = 12.sp,
                     color = Color(0xFF64748B)
                 )
@@ -233,142 +265,188 @@ fun DriverSwapScreen(
             Spacer(modifier = Modifier.height(14.dp))
         }
 
-        // 1. ACTIVE ALERT CARD (Shown when activeSwap != null and NOT in Edit Mode)
-        if (activeSwap != null && !isEditMode) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+        // 1. ACTIVE SWAPS LIST (Shown when there are active swaps and not currently editing a specific swap)
+        if (activeSwaps.isNotEmpty() && editingSwap == null) {
+            Text(
+                text = "Currently Active Swaps (${activeSwaps.size})",
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = Color(0xFF334155),
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            activeSwaps.forEach { swap ->
+                val isFromPreviousDay = swap.date.isNotBlank() && swap.date != todayIso
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                    border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = StatusWarningOrange,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = stringResource(R.string.active_vehicle_swap_alert),
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF92400E),
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.SwapHoriz,
+                                    contentDescription = null,
+                                    tint = StatusWarningOrange,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Swap Alert Active",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF92400E),
+                                    fontSize = 12.sp
+                                )
+                            }
+
+                            if (isFromPreviousDay) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(Color(0xFFDC2626), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Text(
+                                        text = "From ${swap.date}",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .background(Color(0xFFD97706), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Text(
+                                        text = "Today",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
-                        Box(
-                            modifier = Modifier
-                                .background(Color(0xFFD97706), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.active_badge),
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                    Text(
-                        text = "${assignedBus?.busNumber ?: activeSwap?.originalBusId}  ➔  ${activeSwap?.replacementBusId}",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF78350F)
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Scope Information
-                    val isAllStops = activeSwap?.scopeType == BusSwap.SCOPE_ALL_STOPS || (activeSwap?.affectedStopIds?.isEmpty() == true)
-                    val scopeText = if (isAllStops) {
-                        stringResource(R.string.scope_all_stops_format, stops.size)
-                    } else {
-                        val names = activeSwap?.affectedStopIds?.mapNotNull { id -> stops.find { it.stopId == id }?.name ?: id }?.joinToString(", ") ?: ""
-                        stringResource(R.string.scope_selected_stops_format, activeSwap?.affectedStopIds?.size ?: 0, names)
-                    }
-                    Text(
-                        text = scopeText,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF92400E)
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    if (!activeSwap?.message.isNullOrBlank()) {
                         Text(
-                            text = stringResource(R.string.swap_reason_prefix, activeSwap?.message ?: ""),
-                            fontSize = 13.sp,
+                            text = "${assignedBus?.busNumber ?: swap.originalBusId}  ➔  ${swap.replacementBusId}",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
                             color = Color(0xFF78350F)
                         )
-                    }
 
-                    Text(
-                        text = stringResource(R.string.swap_date_prefix, activeSwap?.date ?: ""),
-                        fontSize = 11.sp,
-                        color = Color(0xFF92400E),
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
+                        Spacer(modifier = Modifier.height(4.dp))
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                        // Scope Information
+                        val isAllStops = swap.scopeType == BusSwap.SCOPE_ALL_STOPS || swap.affectedStopIds.isEmpty()
+                        val scopeText = if (isAllStops) {
+                            stringResource(R.string.scope_all_stops_format, stops.size)
+                        } else {
+                            val names = swap.affectedStopIds.mapNotNull { id -> stops.find { it.stopId == id }?.name ?: id }.joinToString(", ")
+                            stringResource(R.string.scope_selected_stops_format, swap.affectedStopIds.size, names)
+                        }
+                        Text(
+                            text = scopeText,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF92400E)
+                        )
 
-                    // Action Buttons: Edit and Cancel
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { isEditMode = true },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = Color.White,
-                                contentColor = CollegePrimary
-                            ),
-                            border = BorderStroke(1.dp, CollegePrimary),
-                            enabled = !isSwapLoading
-                        ) {
-                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(stringResource(R.string.edit_alert_action), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        val rawMsg = swap.message.trim()
+                        if (rawMsg.isNotBlank() && !rawMsg.startsWith("Bus swap reported:", ignoreCase = true)) {
+                            Text(
+                                text = "Reason: $rawMsg",
+                                fontSize = 12.sp,
+                                color = Color(0xFF78350F),
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
                         }
 
-                        OutlinedButton(
-                            onClick = { showCancelConfirmationDialog = true },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = Color.White,
-                                contentColor = StatusDangerRed
-                            ),
-                            border = BorderStroke(1.dp, StatusDangerRed),
-                            enabled = !isSwapLoading
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Actions: Edit and Cancel
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(stringResource(R.string.cancel_alert_action), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            OutlinedButton(
+                                onClick = {
+                                    editingSwap = swap
+                                    isAddingAdditionalSwap = false
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color.White,
+                                    contentColor = CollegePrimary
+                                ),
+                                border = BorderStroke(1.dp, CollegePrimary),
+                                enabled = !isSwapLoading
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.edit_alert_action), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            OutlinedButton(
+                                onClick = { swapToCancel = swap },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color.White,
+                                    contentColor = StatusDangerRed
+                                ),
+                                border = BorderStroke(1.dp, StatusDangerRed),
+                                enabled = !isSwapLoading
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.cancel_alert_action), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
             }
+
+            // Button to Add Another Swap if unassigned stops exist
+            if (!hasAllStopsActive && unassignedStops.isNotEmpty() && !isAddingAdditionalSwap) {
+                Button(
+                    onClick = {
+                        isAddingAdditionalSwap = true
+                        editingSwap = null
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B))
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Add Another Swap (${unassignedStops.size} stops unassigned)",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+            }
         }
 
-        // 2. FORM CARD (Shown when NO active swap, OR when active swap is in Edit Mode)
-        if (activeSwap == null || isEditMode) {
+        // 2. FORM CARD (Shown when: 0 active swaps, or editing a swap, or adding an additional swap)
+        if (activeSwaps.isEmpty() || editingSwap != null || isAddingAdditionalSwap) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
@@ -376,8 +454,14 @@ fun DriverSwapScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
+                    val formTitle = when {
+                        editingSwap != null -> "Edit Bus Swap (${editingSwap?.replacementBusId})"
+                        isAddingAdditionalSwap -> "Add Additional Bus Swap"
+                        else -> stringResource(R.string.swap_config_title)
+                    }
+
                     SectionHeader(
-                        title = if (isEditMode) stringResource(R.string.edit_swap_config_title) else stringResource(R.string.swap_config_title),
+                        title = formTitle,
                         icon = Icons.Default.SwapHoriz
                     )
 
@@ -449,20 +533,23 @@ fun DriverSwapScreen(
                                     unfocusedBorderColor = Color(0xFFCBD5E1)
                                 )
                             )
+
                             ExposedDropdownMenu(
                                 expanded = expandedDropdown,
                                 onDismissRequest = { expandedDropdown = false }
                             ) {
-                                replacementOptions.forEach { bus ->
+                                replacementOptions.forEach { busOption ->
                                     DropdownMenuItem(
                                         text = {
                                             Column {
-                                                Text(bus.busNumber, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                                Text(stringResource(R.string.plate_format, bus.registrationNumber), fontSize = 11.sp, color = Color(0xFF64748B))
+                                                Text(busOption.busNumber, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                                if (busOption.registrationNumber.isNotBlank()) {
+                                                    Text(busOption.registrationNumber, fontSize = 11.sp, color = Color(0xFF64748B))
+                                                }
                                             }
                                         },
                                         onClick = {
-                                            selectedReplacement = bus.busNumber
+                                            selectedReplacement = busOption.busNumber
                                             expandedDropdown = false
                                         }
                                     )
@@ -471,9 +558,9 @@ fun DriverSwapScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // Step 3: Stop Scope Selection (ALL_STOPS vs SELECTED_STOPS)
+                    // Step 3: Scope Selection
                     Text(
                         text = stringResource(R.string.step3_target_scope),
                         fontSize = 12.sp,
@@ -482,85 +569,104 @@ fun DriverSwapScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        // All Route Stops option
-                        Card(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    selectedScopeType = BusSwap.SCOPE_ALL_STOPS
-                                    affectedStopIds.clear()
-                                },
-                            shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(
-                                1.5.dp,
-                                if (selectedScopeType == BusSwap.SCOPE_ALL_STOPS) CollegePrimary else Color(0xFFE2E8F0)
-                            ),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (selectedScopeType == BusSwap.SCOPE_ALL_STOPS) Color(0xFFEFF6FF) else Color(0xFFF8FAFC)
-                            )
+                    val canSelectAllStops = activeSwaps.isEmpty() || (editingSwap != null && activeSwaps.size == 1)
+
+                    if (canSelectAllStops) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = if (selectedScopeType == BusSwap.SCOPE_ALL_STOPS) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
-                                    contentDescription = null,
-                                    tint = if (selectedScopeType == BusSwap.SCOPE_ALL_STOPS) CollegePrimary else Color(0xFF94A3B8),
-                                    modifier = Modifier.size(18.dp)
+                            // All Stops option
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        selectedScopeType = BusSwap.SCOPE_ALL_STOPS
+                                        affectedStopIds.clear()
+                                    },
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(
+                                    1.5.dp,
+                                    if (selectedScopeType == BusSwap.SCOPE_ALL_STOPS) CollegePrimary else Color(0xFFE2E8F0)
+                                ),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (selectedScopeType == BusSwap.SCOPE_ALL_STOPS) Color(0xFFEFF6FF) else Color(0xFFF8FAFC)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Column {
-                                    Text(stringResource(R.string.all_stops_scope_title), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
-                                    Text(stringResource(R.string.entire_route_desc, stops.size), fontSize = 10.sp, color = Color(0xFF64748B))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (selectedScopeType == BusSwap.SCOPE_ALL_STOPS) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                                        contentDescription = null,
+                                        tint = if (selectedScopeType == BusSwap.SCOPE_ALL_STOPS) CollegePrimary else Color(0xFF94A3B8),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column {
+                                        Text(stringResource(R.string.all_stops_scope_title), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                                        Text(stringResource(R.string.entire_route_desc, stops.size), fontSize = 10.sp, color = Color(0xFF64748B))
+                                    }
+                                }
+                            }
+
+                            // Specific Stops option
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        selectedScopeType = BusSwap.SCOPE_SELECTED_STOPS
+                                        if (affectedStopIds.isEmpty() && stops.isNotEmpty()) {
+                                            affectedStopIds.addAll(stops.map { it.stopId })
+                                        }
+                                    },
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(
+                                    1.5.dp,
+                                    if (selectedScopeType == BusSwap.SCOPE_SELECTED_STOPS) CollegePrimary else Color(0xFFE2E8F0)
+                                ),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (selectedScopeType == BusSwap.SCOPE_SELECTED_STOPS) Color(0xFFEFF6FF) else Color(0xFFF8FAFC)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (selectedScopeType == BusSwap.SCOPE_SELECTED_STOPS) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                                        contentDescription = null,
+                                        tint = if (selectedScopeType == BusSwap.SCOPE_SELECTED_STOPS) CollegePrimary else Color(0xFF94A3B8),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column {
+                                        Text(stringResource(R.string.specific_stops_scope_title), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                                        Text(stringResource(R.string.select_subset_desc), fontSize = 10.sp, color = Color(0xFF64748B))
+                                    }
                                 }
                             }
                         }
-
-                        // Specific Stops option
-                        Card(
+                    } else {
+                        // When adding additional swap, only specific stops is allowed
+                        Box(
                             modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    selectedScopeType = BusSwap.SCOPE_SELECTED_STOPS
-                                    if (affectedStopIds.isEmpty() && stops.isNotEmpty()) {
-                                        affectedStopIds.addAll(stops.map { it.stopId })
-                                    }
-                                },
-                            shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(
-                                1.5.dp,
-                                if (selectedScopeType == BusSwap.SCOPE_SELECTED_STOPS) CollegePrimary else Color(0xFFE2E8F0)
-                            ),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (selectedScopeType == BusSwap.SCOPE_SELECTED_STOPS) Color(0xFFEFF6FF) else Color(0xFFF8FAFC)
-                            )
+                                .fillMaxWidth()
+                                .background(Color(0xFFEFF6FF), RoundedCornerShape(10.dp))
+                                .padding(12.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = if (selectedScopeType == BusSwap.SCOPE_SELECTED_STOPS) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
-                                    contentDescription = null,
-                                    tint = if (selectedScopeType == BusSwap.SCOPE_SELECTED_STOPS) CollegePrimary else Color(0xFF94A3B8),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Column {
-                                    Text(stringResource(R.string.specific_stops_scope_title), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
-                                    Text(stringResource(R.string.select_subset_desc), fontSize = 10.sp, color = Color(0xFF64748B))
-                                }
-                            }
+                            Text(
+                                text = "Specific Stops Scope (Select from remaining unassigned route stops)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = CollegePrimary
+                            )
                         }
                     }
 
-                    // Show checkboxes if SELECTED_STOPS
-                    if (selectedScopeType == BusSwap.SCOPE_SELECTED_STOPS) {
+                    // Checkboxes for stops
+                    if (selectedScopeType == BusSwap.SCOPE_SELECTED_STOPS || !canSelectAllStops) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -573,61 +679,49 @@ fun DriverSwapScreen(
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF64748B)
                             )
-                            if (stops.isNotEmpty()) {
-                                TextButton(
-                                    onClick = {
-                                        if (affectedStopIds.size == stops.size) {
-                                            affectedStopIds.clear()
-                                        } else {
-                                            affectedStopIds.clear()
-                                            affectedStopIds.addAll(stops.map { it.stopId })
-                                        }
-                                    }
-                                ) {
-                                    Text(
-                                        text = if (affectedStopIds.size == stops.size) stringResource(R.string.deselect_all_action) else stringResource(R.string.select_all_action),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = CollegePrimary
-                                    )
-                                }
-                            }
                         }
 
-                        if (stops.isEmpty()) {
-                            Text(
-                                text = stringResource(R.string.no_route_stops_configured),
-                                color = Color(0xFF94A3B8),
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                        } else {
-                            stops.forEach { stop ->
-                                val isChecked = affectedStopIds.contains(stop.stopId)
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 1.dp)
-                                 ) {
-                                    Checkbox(
-                                        checked = isChecked,
-                                        onCheckedChange = { checked ->
-                                            if (checked) {
-                                                affectedStopIds.add(stop.stopId)
-                                            } else {
-                                                affectedStopIds.remove(stop.stopId)
-                                            }
-                                        },
-                                        colors = CheckboxDefaults.colors(checkedColor = CollegePrimary)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        stops.forEach { stop ->
+                            val assignedBusForThisStop = assignedStopMap[stop.stopId]
+                            val isAssignedToOtherSwap = assignedBusForThisStop != null && (editingSwap == null || assignedBusForThisStop != editingSwap?.replacementBusId)
+                            val isChecked = affectedStopIds.contains(stop.stopId)
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                Checkbox(
+                                    checked = isChecked,
+                                    enabled = !isAssignedToOtherSwap,
+                                    onCheckedChange = { checked ->
+                                        if (checked) {
+                                            affectedStopIds.add(stop.stopId)
+                                        } else {
+                                            affectedStopIds.remove(stop.stopId)
+                                        }
+                                    },
+                                    colors = CheckboxDefaults.colors(checkedColor = CollegePrimary)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Column {
                                     Text(
                                         text = "${stop.order}. ${stop.name}",
                                         fontSize = 13.sp,
-                                        color = Color(0xFF0F172A),
+                                        color = if (isAssignedToOtherSwap) Color(0xFF94A3B8) else Color(0xFF0F172A),
                                         fontWeight = if (isChecked) FontWeight.SemiBold else FontWeight.Normal
                                     )
+                                    if (isAssignedToOtherSwap) {
+                                        Text(
+                                            text = "Assigned to $assignedBusForThisStop",
+                                            fontSize = 10.sp,
+                                            color = Color(0xFFD97706),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -646,7 +740,7 @@ fun DriverSwapScreen(
                     OutlinedTextField(
                         value = optionalMessage,
                         onValueChange = { optionalMessage = it },
-                        placeholder = { Text(stringResource(R.string.reason_placeholder), color = Color(0xFF94A3B8), fontSize = 14.sp) },
+                        placeholder = { Text("e.g. Engine breakdown, tire repair (optional)", color = Color(0xFF94A3B8), fontSize = 13.sp) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -655,22 +749,21 @@ fun DriverSwapScreen(
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                    // Buttons
                     val isScopeValid = selectedScopeType == BusSwap.SCOPE_ALL_STOPS || affectedStopIds.isNotEmpty()
                     val canSubmit = replacementOptions.isNotEmpty() && selectedReplacement.isNotBlank() && isScopeValid && !isSwapLoading
 
-                    if (isEditMode) {
+                    if (editingSwap != null) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             OutlinedButton(
-                                onClick = { isEditMode = false },
+                                onClick = { editingSwap = null },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(50.dp),
+                                    .height(48.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isSwapLoading
                             ) {
@@ -683,7 +776,7 @@ fun DriverSwapScreen(
                                 onClick = { showUpdateConfirmationDialog = true },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(50.dp),
+                                    .height(48.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = canSubmit,
                                 colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
@@ -697,28 +790,55 @@ fun DriverSwapScreen(
                                 }
                             }
                         }
+                    } else if (isAddingAdditionalSwap) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { isAddingAdditionalSwap = false },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = !isSwapLoading
+                            ) {
+                                Text(stringResource(R.string.cancel_action))
+                            }
+
+                            Button(
+                                onClick = { showSendConfirmationDialog = true },
+                                modifier = Modifier
+                                    .weight(1.3f)
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = canSubmit,
+                                colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
+                            ) {
+                                if (isSwapLoading) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                                } else {
+                                    Text("Broadcast Swap", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                            }
+                        }
                     } else {
                         Button(
                             onClick = { showSendConfirmationDialog = true },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(52.dp),
+                                .height(50.dp),
                             shape = RoundedCornerShape(12.dp),
                             enabled = canSubmit,
                             colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary)
                         ) {
                             if (isSwapLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = Color.White
-                                )
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
                             } else {
                                 Text(
                                     text = stringResource(R.string.broadcast_vehicle_swap_action),
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    letterSpacing = 0.5.sp
+                                    fontSize = 14.sp
                                 )
                             }
                         }
@@ -728,13 +848,13 @@ fun DriverSwapScreen(
         }
     }
 
-    // 1. Send Confirmation Dialog
+    // Confirmation Dialog for Adding/Sending Swap
     if (showSendConfirmationDialog) {
         val repBusId = replacementOptions.find { it.busNumber == selectedReplacement }?.busId ?: selectedReplacement
         val scopeDesc = if (selectedScopeType == BusSwap.SCOPE_ALL_STOPS) {
             stringResource(R.string.entire_route_desc, stops.size)
         } else {
-            "${affectedStopIds.size} (${affectedStopIds.mapNotNull { id -> stops.find { it.stopId == id }?.name }.joinToString(", ")})"
+            "${affectedStopIds.size} stops selected"
         }
 
         AlertDialog(
@@ -762,7 +882,9 @@ fun DriverSwapScreen(
                             scopeType = selectedScopeType,
                             affectedStopIds = affectedStopIds.toList(),
                             optionalMessage = optionalMessage,
-                            onSuccess = {}
+                            onSuccess = {
+                                isAddingAdditionalSwap = false
+                            }
                         )
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CollegePrimary),
@@ -782,13 +904,14 @@ fun DriverSwapScreen(
         )
     }
 
-    // 2. Update Confirmation Dialog
-    if (showUpdateConfirmationDialog && activeSwap != null) {
+    // Confirmation Dialog for Updating Swap
+    if (showUpdateConfirmationDialog && editingSwap != null) {
+        val target = editingSwap!!
         val repBusId = replacementOptions.find { it.busNumber == selectedReplacement }?.busId ?: selectedReplacement
         val scopeDesc = if (selectedScopeType == BusSwap.SCOPE_ALL_STOPS) {
             stringResource(R.string.entire_route_desc, stops.size)
         } else {
-            stringResource(R.string.scope_selected_stops_format, affectedStopIds.size, "")
+            "${affectedStopIds.size} stops selected"
         }
 
         AlertDialog(
@@ -811,13 +934,13 @@ fun DriverSwapScreen(
                     onClick = {
                         showUpdateConfirmationDialog = false
                         viewModel.updateBusSwap(
-                            swapId = activeSwap?.swapId ?: "",
+                            swapId = target.swapId,
                             replacementBusId = repBusId,
                             scopeType = selectedScopeType,
                             affectedStopIds = affectedStopIds.toList(),
                             optionalMessage = optionalMessage,
                             onSuccess = {
-                                isEditMode = false
+                                editingSwap = null
                             }
                         )
                     },
@@ -838,10 +961,11 @@ fun DriverSwapScreen(
         )
     }
 
-    // 3. Cancel confirmation dialog
-    if (showCancelConfirmationDialog && activeSwap != null) {
+    // Confirmation Dialog for Cancelling Swap
+    if (swapToCancel != null) {
+        val target = swapToCancel!!
         AlertDialog(
-            onDismissRequest = { if (!isSwapLoading) showCancelConfirmationDialog = false },
+            onDismissRequest = { if (!isSwapLoading) swapToCancel = null },
             title = {
                 Text(
                     text = stringResource(R.string.cancel_bus_swap_alert_title),
@@ -851,10 +975,7 @@ fun DriverSwapScreen(
             },
             text = {
                 Text(
-                    text = stringResource(
-                        R.string.cancel_swap_confirm_desc,
-                        assignedBus?.busNumber ?: activeSwap?.originalBusId ?: ""
-                    ),
+                    text = "Are you sure you want to cancel the swap ${target.originalBusId} ➔ ${target.replacementBusId}? Your regular bus assignment will be restored for these stops.",
                     fontSize = 13.sp,
                     color = Color(0xFF475569)
                 )
@@ -862,10 +983,13 @@ fun DriverSwapScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        activeSwap?.let { swap ->
-                            viewModel.cancelSwap(swap) {
-                                showCancelConfirmationDialog = false
-                                isEditMode = false
+                        val toCancel = swapToCancel
+                        swapToCancel = null
+                        if (toCancel != null) {
+                            viewModel.cancelSwap(toCancel) {
+                                if (editingSwap?.swapId == toCancel.swapId) {
+                                    editingSwap = null
+                                }
                             }
                         }
                     },
@@ -877,7 +1001,7 @@ fun DriverSwapScreen(
             },
             dismissButton = {
                 TextButton(
-                    onClick = { showCancelConfirmationDialog = false },
+                    onClick = { swapToCancel = null },
                     enabled = !isSwapLoading
                 ) {
                     Text(stringResource(R.string.keep_active_action))

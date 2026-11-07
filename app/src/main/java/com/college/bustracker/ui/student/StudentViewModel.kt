@@ -90,6 +90,9 @@ class StudentViewModel : ViewModel() {
     private val _activeSwapForStudent = MutableStateFlow<BusSwap?>(null)
     val activeSwapForStudent: StateFlow<BusSwap?> = _activeSwapForStudent.asStateFlow()
 
+    private val _activeSwapsForBus = MutableStateFlow<List<BusSwap>>(emptyList())
+    val activeSwapsForBus: StateFlow<List<BusSwap>> = _activeSwapsForBus.asStateFlow()
+
     private val _activeTemporaryAssignment = MutableStateFlow<TemporaryAssignment?>(null)
     val activeTemporaryAssignment: StateFlow<TemporaryAssignment?> = _activeTemporaryAssignment.asStateFlow()
 
@@ -247,15 +250,18 @@ class StudentViewModel : ViewModel() {
                 _selectedStop
             ) { swaps, bus, stop ->
                 if (bus == null) {
-                    null
+                    emptyList<BusSwap>() to null
                 } else {
-                    swaps.find { swap ->
-                        swap.status == "ACTIVE" &&
-                        swap.originalBusId == bus.busId &&
+                    val activeForBus = swaps.filter {
+                        it.status == "ACTIVE" && it.originalBusId.equals(bus.busId, ignoreCase = true)
+                    }
+                    val matching = activeForBus.find { swap ->
                         (stop == null || swap.isAffectingStop(stop.stopId))
                     }
+                    activeForBus to matching
                 }
-            }.collect { matchingSwap ->
+            }.collect { (activeForBus, matchingSwap) ->
+                _activeSwapsForBus.value = activeForBus
                 _activeSwapForStudent.value = matchingSwap
                 updateDriverDisplayInfo()
                 val bus = _selectedBus.value

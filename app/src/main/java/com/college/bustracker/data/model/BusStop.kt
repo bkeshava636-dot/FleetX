@@ -1,5 +1,8 @@
 package com.college.bustracker.data.model
 
+import com.google.firebase.firestore.IgnoreExtraProperties
+
+@IgnoreExtraProperties
 data class BusStop(
     val stopId: String = "",
     val name: String = "",

@@ -65,6 +65,9 @@ class CollegeBusApp : Application() {
         // 1. Initialize OpenStreetMap Tile Configuration (User-Agent, offline caching)
         OsmConfigHelper.initialize(this)
 
+        // Run self-healing upgrade migration for seamless multi-version updates
+        performAppUpgradeMaintenance(this)
+
         // Initialize Locale preference
         com.college.bustracker.util.LocaleHelper.init(this)
 
@@ -190,6 +193,50 @@ class CollegeBusApp : Application() {
             override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) {}
             override fun onActivityDestroyed(activity: android.app.Activity) {}
         })
+    }
+
+    private fun performAppUpgradeMaintenance(context: Context) {
+        try {
+            val prefs = context.getSharedPreferences("app_version_migration", Context.MODE_PRIVATE)
+            val lastVersion = prefs.getLong("last_installed_version_code", 0L)
+            val packageInfo = try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.packageManager.getPackageInfo(context.packageName, 0)
+                }
+            } catch (e: Exception) { null }
+
+            val currentVersion = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageInfo?.longVersionCode ?: 0L
+            } else {
+                @Suppress("DEPRECATION")
+                packageInfo?.versionCode?.toLong() ?: 0L
+            }
+
+            if (currentVersion > lastVersion) {
+                android.util.Log.i("CollegeBusApp", "App update detected: old=$lastVersion -> new=$currentVersion. Performing cache maintenance.")
+
+                // 1. Clear obsolete route road polyline disk cache that could hold outdated geometries
+                try {
+                    val roadRoutesDir = java.io.File(context.cacheDir, "road_routes")
+                    if (roadRoutesDir.exists()) {
+                        roadRoutesDir.deleteRecursively()
+                    }
+                } catch (ignored: Exception) {}
+
+                // 2. Clear stale cache metadata to force fresh Firestore sync for fleet and routes
+                try {
+                    val cachePrefs = context.getSharedPreferences("firestore_cache_metadata", Context.MODE_PRIVATE)
+                    cachePrefs.edit().clear().apply()
+                } catch (ignored: Exception) {}
+
+                prefs.edit().putLong("last_installed_version_code", currentVersion).apply()
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("CollegeBusApp", "Upgrade maintenance check skipped: ${e.message}")
+        }
     }
 
     private fun createNotificationChannels() {

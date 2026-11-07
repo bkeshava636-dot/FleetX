@@ -1,5 +1,8 @@
-﻿package com.college.bustracker.data.model
+package com.college.bustracker.data.model
 
+import com.google.firebase.firestore.IgnoreExtraProperties
+
+@IgnoreExtraProperties
 data class CalendarException(
     val date: String = "", // Format: "YYYY-MM-DD"
     val type: String = TYPE_FULL_DAY_HOLIDAY, // "FULL_DAY_HOLIDAY" or "WORKING_DAY"

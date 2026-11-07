@@ -1,11 +1,13 @@
 package com.college.bustracker.data.repository
 
+import android.util.Log
+import com.college.bustracker.data.model.BusSwap
 import com.college.bustracker.data.model.BusSwapHistory
 import com.college.bustracker.data.model.DriverReplacementHistory
 import com.college.bustracker.data.model.HistoryAuditLog
+import com.college.bustracker.data.model.TemporaryAssignment
 import com.college.bustracker.util.KolkataTimeFormatter
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -15,42 +17,168 @@ class HistoryRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
 
+    companion object {
+        private const val TAG = "HistoryRepository"
+    }
+
     /**
      * Flow of bus swap history records, newest first.
+     * Uses memory-side sorting to eliminate composite index requirements,
+     * and seamlessly integrates fallback to bus_swaps for complete legacy visibility.
      */
     fun getBusSwapHistoryFlow(): Flow<List<BusSwapHistory>> = callbackFlow {
-        val registration = firestore.collection("bus_swap_history")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) {
-                    trySend(emptyList())
-                    return@addSnapshotListener
+        var dedicatedHistory = emptyList<BusSwapHistory>()
+        var fallbackSwaps = emptyList<BusSwap>()
+
+        fun emitMerged() {
+            val dedicatedMap = dedicatedHistory.associateBy { it.swapId }
+            val merged = dedicatedHistory.toMutableList()
+
+            // Merge from bus_swaps if not already present in dedicated history
+            for (swap in fallbackSwaps) {
+                if (swap.swapId.isNotBlank() && !dedicatedMap.containsKey(swap.swapId)) {
+                    val createdAt = if (swap.createdAt > 0L) swap.createdAt else System.currentTimeMillis()
+                    merged.add(
+                        BusSwapHistory(
+                            historyId = swap.swapId,
+                            swapId = swap.swapId,
+                            originalBusId = swap.originalBusId,
+                            replacementBusId = swap.replacementBusId,
+                            routeId = swap.routeId,
+                            date = swap.date.ifBlank { KolkataTimeFormatter.getTodayIso() },
+                            timeFormatted = KolkataTimeFormatter.formatTimeOnly(createdAt),
+                            reason = swap.message.ifBlank { "Bus swap active" },
+                            changedByUid = swap.createdByUid.ifBlank { swap.driverId },
+                            changedByName = swap.driverName.ifBlank { "Staff" },
+                            effectiveFrom = createdAt,
+                            effectiveUntil = swap.cancelledAt,
+                            status = swap.status,
+                            createdAt = createdAt,
+                            cleared = false
+                        )
+                    )
                 }
-                val list = snapshot.documents.mapNotNull { doc ->
-                    doc.toObject(BusSwapHistory::class.java)?.copy(historyId = doc.id)
-                }.filter { !it.cleared }
-                trySend(list)
             }
-        awaitClose { registration.remove() }
+
+            val result = merged.filter { !it.cleared }.sortedByDescending { it.createdAt }
+            trySend(result)
+        }
+
+        val regHistory = firestore.collection("bus_swap_history")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w(TAG, "bus_swap_history listener error: ${error.message}")
+                }
+                dedicatedHistory = snapshot?.documents?.mapNotNull { doc ->
+                    try {
+                        doc.toObject(BusSwapHistory::class.java)?.copy(historyId = doc.id)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed parsing BusSwapHistory ${doc.id}: ${e.message}")
+                        null
+                    }
+                } ?: emptyList()
+                emitMerged()
+            }
+
+        val regSwaps = firestore.collection("bus_swaps")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w(TAG, "bus_swaps fallback listener error: ${error.message}")
+                }
+                fallbackSwaps = snapshot?.documents?.mapNotNull { doc ->
+                    try {
+                        doc.toObject(BusSwap::class.java)?.copy(swapId = doc.id)
+                    } catch (e: Exception) {
+                        null
+                    }
+                } ?: emptyList()
+                emitMerged()
+            }
+
+        awaitClose {
+            regHistory.remove()
+            regSwaps.remove()
+        }
     }
 
     /**
      * Flow of driver replacement history records, newest first.
+     * Uses memory-side sorting and seamlessly integrates fallback to temporary_assignments.
      */
     fun getDriverReplacementHistoryFlow(): Flow<List<DriverReplacementHistory>> = callbackFlow {
-        val registration = firestore.collection("driver_replacement_history")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) {
-                    trySend(emptyList())
-                    return@addSnapshotListener
+        var dedicatedHistory = emptyList<DriverReplacementHistory>()
+        var fallbackAssignments = emptyList<TemporaryAssignment>()
+
+        fun emitMerged() {
+            val dedicatedMap = dedicatedHistory.associateBy { it.assignmentId }
+            val merged = dedicatedHistory.toMutableList()
+
+            for (assign in fallbackAssignments) {
+                if (assign.assignmentId.isNotBlank() && !dedicatedMap.containsKey(assign.assignmentId)) {
+                    val createdAt = if (assign.createdAt > 0L) assign.createdAt else assign.startAt
+                    merged.add(
+                        DriverReplacementHistory(
+                            historyId = assign.assignmentId,
+                            assignmentId = assign.assignmentId,
+                            previousDriverUid = assign.permanentDriverUid,
+                            previousDriverName = assign.permanentDriverName,
+                            replacementDriverUid = assign.replacementDriverUid,
+                            replacementDriverName = assign.replacementDriverName,
+                            busId = assign.busId,
+                            date = KolkataTimeFormatter.formatDateOnly(createdAt),
+                            timeFormatted = KolkataTimeFormatter.formatTimeOnly(createdAt),
+                            reason = assign.reason.ifBlank { "Temporary driver coverage" },
+                            changedByUid = assign.createdByUid,
+                            changedByName = assign.createdByRole.ifBlank { "Staff" },
+                            effectiveFrom = assign.startAt,
+                            effectiveUntil = assign.endAt,
+                            status = assign.status ?: "ACTIVE",
+                            createdAt = createdAt,
+                            cleared = false
+                        )
+                    )
                 }
-                val list = snapshot.documents.mapNotNull { doc ->
-                    doc.toObject(DriverReplacementHistory::class.java)?.copy(historyId = doc.id)
-                }.filter { !it.cleared }
-                trySend(list)
             }
-        awaitClose { registration.remove() }
+
+            val result = merged.filter { !it.cleared }.sortedByDescending { it.createdAt }
+            trySend(result)
+        }
+
+        val regHistory = firestore.collection("driver_replacement_history")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w(TAG, "driver_replacement_history listener error: ${error.message}")
+                }
+                dedicatedHistory = snapshot?.documents?.mapNotNull { doc ->
+                    try {
+                        doc.toObject(DriverReplacementHistory::class.java)?.copy(historyId = doc.id)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed parsing DriverReplacementHistory ${doc.id}: ${e.message}")
+                        null
+                    }
+                } ?: emptyList()
+                emitMerged()
+            }
+
+        val regAssignments = firestore.collection("temporary_assignments")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w(TAG, "temporary_assignments fallback listener error: ${error.message}")
+                }
+                fallbackAssignments = snapshot?.documents?.mapNotNull { doc ->
+                    try {
+                        doc.toObject(TemporaryAssignment::class.java)?.copy(assignmentId = doc.id)
+                    } catch (e: Exception) {
+                        null
+                    }
+                } ?: emptyList()
+                emitMerged()
+            }
+
+        awaitClose {
+            regHistory.remove()
+            regAssignments.remove()
+        }
     }
 
     /**
@@ -58,15 +186,19 @@ class HistoryRepository(
      */
     fun getAuditLogsFlow(): Flow<List<HistoryAuditLog>> = callbackFlow {
         val registration = firestore.collection("history_audit_logs")
-            .orderBy("timestamp", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) {
+                    Log.w(TAG, "history_audit_logs listener error: ${error?.message}")
                     trySend(emptyList())
                     return@addSnapshotListener
                 }
                 val list = snapshot.documents.mapNotNull { doc ->
-                    doc.toObject(HistoryAuditLog::class.java)?.copy(auditId = doc.id)
-                }
+                    try {
+                        doc.toObject(HistoryAuditLog::class.java)?.copy(auditId = doc.id)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }.sortedByDescending { it.timestamp }
                 trySend(list)
             }
         awaitClose { registration.remove() }
@@ -77,7 +209,6 @@ class HistoryRepository(
      * Safety guarantee:
      * - Only marks non-active / completed / cancelled swaps as cleared.
      * - NEVER cancels an active bus swap.
-     * - NEVER restores old driver assignments, changes schedules, or alters GPS routing.
      * - Logs operation into history_audit_logs.
      */
     suspend fun clearBusSwapHistory(adminUid: String, adminName: String): Result<Int> {
@@ -90,12 +221,23 @@ class HistoryRepository(
             for (doc in snapshot.documents) {
                 val status = doc.getString("status") ?: ""
                 val isCleared = doc.getBoolean("cleared") ?: false
-                // Strict Safety Check: NEVER clear active swaps
                 if (status != "ACTIVE" && !isCleared) {
                     batch.update(doc.reference, mapOf("cleared" to true, "clearedAt" to now))
                     count++
                 }
             }
+
+            // Also check bus_swaps collection for any non-active swaps to ensure fallback records are cleared
+            try {
+                val swapsSnap = firestore.collection("bus_swaps").get().await()
+                for (doc in swapsSnap.documents) {
+                    val status = doc.getString("status") ?: ""
+                    val isCleared = doc.getBoolean("cleared") ?: false
+                    if (status != BusSwap.STATUS_ACTIVE && !isCleared) {
+                        batch.update(doc.reference, mapOf("cleared" to true, "clearedAt" to now))
+                    }
+                }
+            } catch (ignored: Exception) {}
 
             if (count > 0) {
                 val auditRef = firestore.collection("history_audit_logs").document()
@@ -110,11 +252,12 @@ class HistoryRepository(
                     clearedCount = count
                 )
                 batch.set(auditRef, audit)
-                batch.commit().await()
             }
 
+            batch.commit().await()
             Result.success(count)
         } catch (e: Exception) {
+            Log.e(TAG, "clearBusSwapHistory failed: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -136,12 +279,23 @@ class HistoryRepository(
             for (doc in snapshot.documents) {
                 val status = doc.getString("status") ?: ""
                 val isCleared = doc.getBoolean("cleared") ?: false
-                // Strict Safety Check: NEVER clear active assignments
                 if (status != "ACTIVE" && !isCleared) {
                     batch.update(doc.reference, mapOf("cleared" to true, "clearedAt" to now))
                     count++
                 }
             }
+
+            // Also check temporary_assignments collection
+            try {
+                val assignSnap = firestore.collection("temporary_assignments").get().await()
+                for (doc in assignSnap.documents) {
+                    val status = doc.getString("status") ?: ""
+                    val isCleared = doc.getBoolean("cleared") ?: false
+                    if (status != "ACTIVE" && !isCleared) {
+                        batch.update(doc.reference, mapOf("cleared" to true, "clearedAt" to now))
+                    }
+                }
+            } catch (ignored: Exception) {}
 
             if (count > 0) {
                 val auditRef = firestore.collection("history_audit_logs").document()
@@ -156,11 +310,12 @@ class HistoryRepository(
                     clearedCount = count
                 )
                 batch.set(auditRef, audit)
-                batch.commit().await()
             }
 
+            batch.commit().await()
             Result.success(count)
         } catch (e: Exception) {
+            Log.e(TAG, "clearDriverReplacementHistory failed: ${e.message}", e)
             Result.failure(e)
         }
     }

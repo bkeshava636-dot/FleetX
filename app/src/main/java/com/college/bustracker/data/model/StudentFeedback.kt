@@ -1,10 +1,13 @@
 package com.college.bustracker.data.model
 
+import com.google.firebase.firestore.IgnoreExtraProperties
+
 /**
  * Represents a feedback submission or issue report submitted by a student.
  * Supports both FleetX App Feedback (bugs, suggestions) and College Bus Transit Issues (GPS, delays, stops).
  * Stored in Firestore at /student_feedback/{feedbackId}.
  */
+@IgnoreExtraProperties
 data class StudentFeedback(
     val feedbackId: String = "",
     val feedbackType: String = TYPE_BUS, // "APP" or "BUS"
