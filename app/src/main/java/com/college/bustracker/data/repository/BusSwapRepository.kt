@@ -23,7 +23,13 @@ class BusSwapRepository(
                     trySend(_localSwaps.value)
                     return@addSnapshotListener
                 }
-                val list = snapshot.documents.mapNotNull { it.toObject(BusSwap::class.java) }
+                val list = snapshot.documents.mapNotNull { doc ->
+                    try {
+                        doc.toObject(BusSwap::class.java)?.copy(swapId = doc.id)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
                 _localSwaps.value = list
                 trySend(list)
             }
@@ -32,19 +38,39 @@ class BusSwapRepository(
     }
 
     /**
-     * Reports a new bus swap alert with single-active-alert-per-bus enforcement.
-     * Throws IllegalStateException if an active swap already exists for the same original bus.
+     * Reports a new bus swap alert with multiple active swaps support per bus.
+     * Allows multiple swaps for the same original bus as long as they cover different stops.
+     * An ALL_STOPS swap automatically supersedes any previous active swaps for that bus.
      */
     suspend fun reportSwap(swap: BusSwap): Result<Unit> {
-        val existingActive = _localSwaps.value.firstOrNull {
+        val activeSwapsForSameBus = _localSwaps.value.filter {
             it.originalBusId.equals(swap.originalBusId, ignoreCase = true) &&
                     it.status == BusSwap.STATUS_ACTIVE &&
                     it.swapId != swap.swapId
         }
-        if (existingActive != null) {
-            return Result.failure(
-                IllegalStateException("An active bus swap alert already exists for ${swap.originalBusId}. Please edit or cancel the current swap before creating a new one.")
-            )
+
+        if (swap.scopeType == BusSwap.SCOPE_ALL_STOPS) {
+            // An all-stops swap replaces any existing active swaps for this original bus
+            for (oldSwap in activeSwapsForSameBus) {
+                cancelSwap(oldSwap.swapId, swap.createdByUid.ifBlank { swap.driverId })
+            }
+        } else {
+            // Selected stops: verify that an ALL_STOPS swap doesn't conflict
+            val allStopsSwap = activeSwapsForSameBus.find { it.scopeType == BusSwap.SCOPE_ALL_STOPS }
+            if (allStopsSwap != null) {
+                return Result.failure(
+                    IllegalStateException("An active swap covering ALL stops already exists for ${swap.originalBusId}. Please edit or cancel it to assign specific stops.")
+                )
+            }
+
+            // Ensure no overlapping stop IDs across active swaps
+            val alreadyAssignedStops = activeSwapsForSameBus.flatMap { it.affectedStopIds }.toSet()
+            val overlapping = swap.affectedStopIds.filter { alreadyAssignedStops.contains(it) }
+            if (overlapping.isNotEmpty()) {
+                return Result.failure(
+                    IllegalStateException("One or more selected stops are already assigned to another replacement bus. Each stop can only be assigned to one replacement bus.")
+                )
+            }
         }
 
         val current = _localSwaps.value.toMutableList()
@@ -70,7 +96,7 @@ class BusSwapRepository(
                     timeFormatted = com.college.bustracker.util.KolkataTimeFormatter.formatTimeOnly(now),
                     reason = swap.message.ifBlank { "Bus swap active" },
                     changedByUid = swap.createdByUid.ifBlank { swap.driverId },
-                    changedByName = swap.driverName.ifBlank { "Admin" },
+                    changedByName = swap.driverName.ifBlank { "Staff" },
                     effectiveFrom = now,
                     effectiveUntil = 0L,
                     status = "ACTIVE",
@@ -115,6 +141,15 @@ class BusSwapRepository(
             kotlinx.coroutines.withTimeoutOrNull(2500L) {
                 firestore.collection("bus_swaps").document(swap.swapId).set(updatedSwap).await()
             }
+            try {
+                firestore.collection("bus_swap_history").document(swap.swapId).update(
+                    mapOf(
+                        "replacementBusId" to updatedSwap.replacementBusId,
+                        "reason" to updatedSwap.message,
+                        "status" to updatedSwap.status
+                    )
+                ).await()
+            } catch (ignored: Exception) {}
             Result.success(Unit)
         } catch (e: Exception) {
             _localSwaps.value = original

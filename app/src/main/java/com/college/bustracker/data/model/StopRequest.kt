@@ -1,9 +1,12 @@
 package com.college.bustracker.data.model
 
+import com.google.firebase.firestore.IgnoreExtraProperties
+
 /**
  * Represents a driver's proposed bus stop submission sent to Admin for review.
  * Stored in Firestore at /stop_requests/{requestId}.
  */
+@IgnoreExtraProperties
 data class StopRequest(
     val requestId: String = "",
     val driverUid: String = "",

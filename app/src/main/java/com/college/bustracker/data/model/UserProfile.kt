@@ -1,5 +1,8 @@
 package com.college.bustracker.data.model
 
+import com.google.firebase.firestore.IgnoreExtraProperties
+
+@IgnoreExtraProperties
 data class UserProfile(
     val uid: String = "",
     val customId: String = "",            // Unique staff ID code (e.g. staff badge / employee code)

@@ -152,6 +152,7 @@ fun StudentHomeScreen(
     val upcomingStopsEta by viewModel.upcomingStopsEta.collectAsState()
     val routeEtaResult by viewModel.routeEtaResult.collectAsState()
     val swapAlert by viewModel.activeSwapForStudent.collectAsState()
+    val activeSwapsForBus by viewModel.activeSwapsForBus.collectAsState()
     val lastUpdateText by viewModel.lastUpdateText.collectAsState()
     val isHolidayToday by viewModel.isHolidayToday.collectAsState()
     val todayHolidayName by viewModel.todayHolidayName.collectAsState()
@@ -364,8 +365,8 @@ fun StudentHomeScreen(
                             )
                         } else {
                             // Location-Specific Bus Swap Banner
-                            if (swapAlert != null) {
-                                BusSwapAlertBanner(swapAlert = swapAlert, selectedStop = selectedStop)
+                            if (swapAlert != null || (activeSwapsForBus.isNotEmpty() && selectedStop == null)) {
+                                BusSwapAlertBanner(swapAlert = swapAlert, allSwapsForBus = activeSwapsForBus, selectedStop = selectedStop)
                                 Spacer(modifier = Modifier.height(14.dp))
                             }
 
@@ -1007,8 +1008,11 @@ private fun CampusAnnouncementsBanner(
 @Composable
 private fun BusSwapAlertBanner(
     swapAlert: BusSwap?,
+    allSwapsForBus: List<BusSwap> = emptyList(),
     selectedStop: BusStop?
 ) {
+    if (swapAlert == null && allSwapsForBus.isEmpty()) return
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -1034,32 +1038,57 @@ private fun BusSwapAlertBanner(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = stringResource(
-                    R.string.bus_replacement_operating_today,
-                    swapAlert?.replacementBusId ?: "",
-                    swapAlert?.originalBusId ?: ""
-                ),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF78350F)
-            )
-
-            Text(
-                text = stringResource(
-                    R.string.affects_stop,
-                    selectedStop?.name ?: stringResource(R.string.all_route_stops_label)
-                ),
-                fontSize = 12.sp,
-                color = Color(0xFF92400E),
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-
-            if (!swapAlert?.message.isNullOrBlank()) {
+            if (swapAlert != null) {
                 Text(
-                    text = swapAlert?.message ?: "",
+                    text = stringResource(
+                        R.string.bus_replacement_operating_today,
+                        swapAlert.replacementBusId,
+                        swapAlert.originalBusId
+                    ),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF78350F)
+                )
+
+                Text(
+                    text = stringResource(
+                        R.string.affects_stop,
+                        selectedStop?.name ?: stringResource(R.string.all_route_stops_label)
+                    ),
                     fontSize = 12.sp,
+                    color = Color(0xFF92400E),
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+
+                val rawMsg = swapAlert.message.trim()
+                if (rawMsg.isNotBlank() && !rawMsg.startsWith("Bus swap reported:", ignoreCase = true)) {
+                    Text(
+                        text = "Reason: " + rawMsg,
+                        fontSize = 12.sp,
+                        color = Color(0xFF78350F)
+                    )
+                }
+            } else if (allSwapsForBus.size > 1 && selectedStop == null) {
+                Text(
+                    text = "Multiple replacement buses operating today for this route:",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF78350F)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                allSwapsForBus.forEach { swap ->
+                    Text(
+                        text = "• " + swap.replacementBusId + " operating for selected stops",
+                        fontSize = 12.sp,
+                        color = Color(0xFF92400E),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Select your boarding stop above to view tracking for your bus.",
+                    fontSize = 11.sp,
                     color = Color(0xFF78350F)
                 )
             }

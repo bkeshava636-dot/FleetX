@@ -101,6 +101,9 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
     private val _activeSwapForDriver = MutableStateFlow<BusSwap?>(null)
     val activeSwapForDriver: StateFlow<BusSwap?> = _activeSwapForDriver.asStateFlow()
 
+    private val _activeSwapsForDriver = MutableStateFlow<List<BusSwap>>(emptyList())
+    val activeSwapsForDriver: StateFlow<List<BusSwap>> = _activeSwapsForDriver.asStateFlow()
+
     private val _holidayWarningMessage = MutableStateFlow<String?>(null)
     val holidayWarningMessage: StateFlow<String?> = _holidayWarningMessage.asStateFlow()
 
@@ -219,7 +222,7 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
 
-        // Observe active swap reported for the current driver's assigned bus
+        // Observe all active swaps reported for the current driver's assigned bus
         viewModelScope.launch {
             combine(
                 swapRepo.getSwapsFlow(),
@@ -227,12 +230,13 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
                 _assignedBus
             ) { swaps, authProfile, assignedBus ->
                 val assignedBusId = authProfile?.assignedBusId ?: assignedBus?.busId ?: ""
-                swaps.find { swap ->
+                swaps.filter { swap ->
                     swap.status == BusSwap.STATUS_ACTIVE &&
                     swap.originalBusId.equals(assignedBusId, ignoreCase = true)
                 }
-            }.collect { matchingSwap ->
-                _activeSwapForDriver.value = matchingSwap
+            }.collect { matchingSwaps ->
+                _activeSwapsForDriver.value = matchingSwaps
+                _activeSwapForDriver.value = matchingSwaps.firstOrNull()
             }
         }
 
@@ -409,8 +413,16 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
-        if (_activeSwapForDriver.value != null) {
-            _swapErrorMessage.value = "An active bus swap alert already exists for ${originalBus.busNumber}. Please edit or cancel the active alert."
+        // Check if an existing swap covers all stops
+        val activeSwaps = _activeSwapsForDriver.value
+        val hasAllStopsSwap = activeSwaps.any { it.scopeType == BusSwap.SCOPE_ALL_STOPS }
+        if (hasAllStopsSwap) {
+            _swapErrorMessage.value = "An active bus swap covering all stops already exists for ${originalBus.busNumber}. Please edit or cancel it."
+            return
+        }
+
+        if (scopeType == BusSwap.SCOPE_ALL_STOPS && activeSwaps.isNotEmpty()) {
+            _swapErrorMessage.value = "Existing stop-specific swaps are active for ${originalBus.busNumber}. Please cancel them before creating an all-stops swap."
             return
         }
 
@@ -424,14 +436,25 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
-        if (scopeType == BusSwap.SCOPE_SELECTED_STOPS && affectedStopIds.isEmpty()) {
-            _swapErrorMessage.value = "Please select at least one route stop for selected stops scope."
-            return
+        if (scopeType == BusSwap.SCOPE_SELECTED_STOPS) {
+            if (affectedStopIds.isEmpty()) {
+                _swapErrorMessage.value = "Please select at least one route stop for selected stops scope."
+                return
+            }
+            // Check if selected stops overlap with existing active swaps
+            val alreadyAssignedStops = activeSwaps.flatMap { it.affectedStopIds }.toSet()
+            val overlapping = affectedStopIds.filter { alreadyAssignedStops.contains(it) }
+            if (overlapping.isNotEmpty()) {
+                _swapErrorMessage.value = "One or more selected stops are already assigned to another replacement bus."
+                return
+            }
         }
 
         val activeProfile = app.authRepository.getActiveProfile()
         val driverUid = activeProfile?.uid ?: originalBus.driverId ?: ""
         val driverName = activeProfile?.name ?: originalBus.driverName ?: "Driver"
+        val cleanMessage = if (optionalMessage.startsWith("Bus swap reported:")) "" else optionalMessage.trim()
+
         val swap = BusSwap(
             swapId = "SWAP-${System.currentTimeMillis()}",
             originalBusId = originalBus.busId,
@@ -441,9 +464,9 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
             driverName = driverName,
             scopeType = scopeType,
             affectedStopIds = if (scopeType == BusSwap.SCOPE_ALL_STOPS) emptyList() else affectedStopIds,
-            message = optionalMessage.ifBlank { "Bus swap reported: ${originalBus.busNumber} → $replacementBusId" },
+            message = cleanMessage,
             status = BusSwap.STATUS_ACTIVE,
-            date = LocalDate.now().toString(),
+            date = com.college.bustracker.util.KolkataTimeFormatter.getTodayIso(),
             createdAt = System.currentTimeMillis(),
             createdByUid = driverUid
         )
@@ -472,9 +495,10 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
         onSuccess: () -> Unit
     ) {
         val originalBus = _assignedBus.value
-        val activeSwap = _activeSwapForDriver.value
+        val activeSwaps = _activeSwapsForDriver.value
+        val targetSwap = activeSwaps.find { it.swapId == swapId } ?: _activeSwapForDriver.value
 
-        if (activeSwap == null || activeSwap.swapId != swapId) {
+        if (targetSwap == null || targetSwap.swapId != swapId) {
             _swapErrorMessage.value = "Active bus swap alert not found."
             return
         }
@@ -489,16 +513,27 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
-        if (scopeType == BusSwap.SCOPE_SELECTED_STOPS && affectedStopIds.isEmpty()) {
-            _swapErrorMessage.value = "Please select at least one route stop for selected stops scope."
-            return
+        if (scopeType == BusSwap.SCOPE_SELECTED_STOPS) {
+            if (affectedStopIds.isEmpty()) {
+                _swapErrorMessage.value = "Please select at least one route stop for selected stops scope."
+                return
+            }
+            // Check collision with other active swaps (excluding this swap being edited)
+            val otherAssignedStops = activeSwaps.filter { it.swapId != swapId }.flatMap { it.affectedStopIds }.toSet()
+            val overlapping = affectedStopIds.filter { otherAssignedStops.contains(it) }
+            if (overlapping.isNotEmpty()) {
+                _swapErrorMessage.value = "One or more selected stops are already assigned to another replacement bus."
+                return
+            }
         }
 
-        val updatedSwap = activeSwap.copy(
+        val cleanMessage = if (optionalMessage.startsWith("Bus swap reported:")) "" else optionalMessage.trim()
+
+        val updatedSwap = targetSwap.copy(
             replacementBusId = replacementBusId,
             scopeType = scopeType,
             affectedStopIds = if (scopeType == BusSwap.SCOPE_ALL_STOPS) emptyList() else affectedStopIds,
-            message = optionalMessage.ifBlank { "Bus swap reported: ${originalBus?.busNumber ?: activeSwap.originalBusId} → $replacementBusId" },
+            message = cleanMessage,
             updatedAt = System.currentTimeMillis()
         )
 
@@ -544,6 +579,32 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
             }.onFailure { e ->
                 _swapErrorMessage.value = e.message ?: "Failed to cancel bus swap."
                 onResult?.invoke(Result.failure(e))
+            }
+        }
+    }
+
+    fun cancelSwapById(
+        swapId: String,
+        onResult: ((Result<Unit>) -> Unit)? = null
+    ) {
+        val swap = _activeSwapsForDriver.value.find { it.swapId == swapId }
+        if (swap != null) {
+            cancelSwap(swap, onResult)
+        } else {
+            val currentProfile = app.authRepository.getActiveProfile()
+            val bus = _assignedBus.value
+            val driverUid = currentProfile?.uid ?: bus?.driverId ?: ""
+            _isSwapLoading.value = true
+            viewModelScope.launch {
+                val result = swapRepo.cancelSwap(swapId, driverUid)
+                _isSwapLoading.value = false
+                result.onSuccess {
+                    _swapSuccessMessage.value = "Bus swap alert cancelled successfully."
+                    onResult?.invoke(Result.success(Unit))
+                }.onFailure { e ->
+                    _swapErrorMessage.value = e.message ?: "Failed to cancel bus swap."
+                    onResult?.invoke(Result.failure(e))
+                }
             }
         }
     }

@@ -1,7 +1,9 @@
 package com.college.bustracker.data.model
 
 import com.google.firebase.firestore.Exclude
+import com.google.firebase.firestore.IgnoreExtraProperties
 
+@IgnoreExtraProperties
 data class Bus(
     val busId: String = "",
     val busNumber: String = "",

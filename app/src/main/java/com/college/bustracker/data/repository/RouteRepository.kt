@@ -50,12 +50,17 @@ class RouteRepository(
             val cacheSnap = firestore.collection("routes").get(Source.CACHE).await()
             if (cacheSnap != null && !cacheSnap.isEmpty) {
                 val list = cacheSnap.documents.mapNotNull { doc ->
-                    val r = doc.toObject(Route::class.java)
-                    if (r != null) {
-                        val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
-                        val finalName = if (r.name.isNotBlank()) r.name else doc.id
-                        r.copy(routeId = finalId, name = finalName)
-                    } else null
+                    try {
+                        val r = doc.toObject(Route::class.java)
+                        if (r != null) {
+                            val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
+                            val finalName = if (r.name.isNotBlank()) r.name else doc.id
+                            r.copy(routeId = finalId, name = finalName)
+                        } else null
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed deserializing cached route ${doc.id}: ${e.message}")
+                        null
+                    }
                 }
                 if (list.isNotEmpty()) {
                     _localRoutes.value = list
@@ -75,12 +80,17 @@ class RouteRepository(
             try {
                 val serverSnap = firestore.collection("routes").get(Source.SERVER).await()
                 val list = serverSnap.documents.mapNotNull { doc ->
-                    val r = doc.toObject(Route::class.java)
-                    if (r != null) {
-                        val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
-                        val finalName = if (r.name.isNotBlank()) r.name else doc.id
-                        r.copy(routeId = finalId, name = finalName)
-                    } else null
+                    try {
+                        val r = doc.toObject(Route::class.java)
+                        if (r != null) {
+                            val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
+                            val finalName = if (r.name.isNotBlank()) r.name else doc.id
+                            r.copy(routeId = finalId, name = finalName)
+                        } else null
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed deserializing server route ${doc.id}: ${e.message}")
+                        null
+                    }
                 }
                 _localRoutes.value = list
                 prefs?.edit()?.putLong(KEY_LAST_ROUTE_SYNC_MS, now)?.apply()
@@ -99,12 +109,17 @@ class RouteRepository(
             firestore.collection("routes").addSnapshotListener { snapshot, error ->
                 if (error == null && snapshot != null) {
                     val list = snapshot.documents.mapNotNull { doc ->
-                        val r = doc.toObject(Route::class.java)
-                        if (r != null) {
-                            val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
-                            val finalName = if (r.name.isNotBlank()) r.name else doc.id
-                            r.copy(routeId = finalId, name = finalName)
-                        } else null
+                        try {
+                            val r = doc.toObject(Route::class.java)
+                            if (r != null) {
+                                val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
+                                val finalName = if (r.name.isNotBlank()) r.name else doc.id
+                                r.copy(routeId = finalId, name = finalName)
+                            } else null
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed deserializing real-time route ${doc.id}: ${e.message}")
+                            null
+                        }
                     }
                     _localRoutes.value = list
                     trySend(list)

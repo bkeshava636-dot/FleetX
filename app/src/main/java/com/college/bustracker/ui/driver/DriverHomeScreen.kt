@@ -1,5 +1,7 @@
 package com.college.bustracker.ui.driver
 
+import com.college.bustracker.data.model.BusSwap
+
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -117,6 +119,20 @@ fun DriverHomeScreen(
     val isInternet by viewModel.isInternetConnected.collectAsState()
     val lastUpdateText by viewModel.lastUpdateText.collectAsState()
     val activeSwap by viewModel.activeSwapForDriver.collectAsState()
+    val activeSwaps by viewModel.activeSwapsForDriver.collectAsState()
+    val todayIso = remember { com.college.bustracker.util.KolkataTimeFormatter.getTodayIso() }
+    val previousDaySwaps = remember(activeSwaps, todayIso) {
+        activeSwaps.filter { it.date.isNotBlank() && it.date != todayIso }
+    }
+    var promptSwapFromYesterday by remember { mutableStateOf<com.college.bustracker.data.model.BusSwap?>(null) }
+    var hasPromptedPreviousDaySwap by remember { mutableStateOf(false) }
+
+    LaunchedEffect(previousDaySwaps) {
+        if (previousDaySwaps.isNotEmpty() && !hasPromptedPreviousDaySwap) {
+            promptSwapFromYesterday = previousDaySwaps.first()
+            hasPromptedPreviousDaySwap = true
+        }
+    }
     val holidayWarning by viewModel.holidayWarningMessage.collectAsState()
     val isHolidayToday by viewModel.isHolidayToday.collectAsState()
     val todayHolidayName by viewModel.todayHolidayName.collectAsState()
@@ -160,6 +176,71 @@ fun DriverHomeScreen(
     var proposedStopName by remember { mutableStateOf("") }
     var stopNameError by remember { mutableStateOf<String?>(null) }
 
+
+    if (promptSwapFromYesterday != null) {
+        val targetSwap = promptSwapFromYesterday!!
+        AlertDialog(
+            onDismissRequest = { promptSwapFromYesterday = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = StatusWarningOrange,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text("Active Bus Swap from Yesterday", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column {
+                    Text(
+                        "Your bus (${bus?.busNumber ?: targetSwap.originalBusId}) has an active bus swap reported from yesterday (${targetSwap.date}):",
+                        fontSize = 13.sp,
+                        color = Color(0xFF334155)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "${bus?.busNumber ?: targetSwap.originalBusId}  ➔  ${targetSwap.replacementBusId}",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = Color(0xFF78350F)
+                    )
+                    if (targetSwap.affectedStopIds.isNotEmpty()) {
+                        val stopNames = targetSwap.affectedStopIds.mapNotNull { id -> route?.stops?.find { it.stopId == id }?.name ?: id }.joinToString(", ")
+                        Text("Affects: $stopNames", fontSize = 12.sp, color = Color(0xFF92400E))
+                    } else {
+                        Text("Affects: All route stops", fontSize = 12.sp, color = Color(0xFF92400E))
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Before starting today's route, would you like to cancel this swap and restore your regular bus, or keep it active for today?",
+                        fontSize = 13.sp,
+                        color = Color(0xFF1E293B)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val s = promptSwapFromYesterday
+                        promptSwapFromYesterday = null
+                        if (s != null) {
+                            viewModel.cancelSwap(s)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed)
+                ) {
+                    Text("Cancel Swap & Restore Bus", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { promptSwapFromYesterday = null }) {
+                    Text("Keep Active for Today")
+                }
+            }
+        )
+    }
 
     if (showVivoRecentsLockDialog) {
         AlertDialog(
@@ -984,7 +1065,11 @@ fun DriverHomeScreen(
 
                     Button(
                         onClick = {
-                            viewModel.startManualTracking()
+                            if (previousDaySwaps.isNotEmpty()) {
+                                promptSwapFromYesterday = previousDaySwaps.first()
+                            } else {
+                                viewModel.startManualTracking()
+                            }
                         },
                         enabled = !isReplacedNow,
                         modifier = Modifier
@@ -1034,42 +1119,54 @@ fun DriverHomeScreen(
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
 
-                if (activeSwap != null) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                if (activeSwaps.isNotEmpty()) {
+                    activeSwaps.forEach { s ->
+                        val isOld = s.date.isNotBlank() && s.date != todayIso
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                            border = if (isOld) BorderStroke(1.dp, Color(0xFFF59E0B)) else null
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = StatusWarningOrange,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(
-                                        R.string.active_swap_format,
-                                        activeSwap?.originalBusId ?: "",
-                                        activeSwap?.replacementBusId ?: ""
-                                    ),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    color = Color(0xFF92400E)
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = StatusWarningOrange,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                Text(
-                                    text = activeSwap?.message ?: "",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF78350F),
-                                    maxLines = 1
-                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "${bus?.busNumber ?: s.originalBusId}  ➔  ${s.replacementBusId}",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = Color(0xFF92400E)
+                                        )
+                                        if (isOld) {
+                                            Spacer(Modifier.width(6.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(Color(0xFFDC2626), RoundedCornerShape(4.dp))
+                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                                            ) {
+                                                Text("From Yesterday", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                    val scopeSummary = if (s.scopeType == BusSwap.SCOPE_ALL_STOPS || s.affectedStopIds.isEmpty()) "All route stops" else "${s.affectedStopIds.size} stop(s)"
+                                    Text(
+                                        text = "Scope: $scopeSummary",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF78350F)
+                                    )
+                                }
                             }
                         }
                     }
@@ -1083,7 +1180,7 @@ fun DriverHomeScreen(
                     Icon(Icons.Default.Cached, contentDescription = null, tint = CollegePrimary)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (activeSwap != null) stringResource(R.string.manage_active_swap) else stringResource(R.string.report_bus_swap),
+                        text = if (activeSwaps.isNotEmpty()) "${activeSwaps.size} Active Swap(s) • Manage or Add" else stringResource(R.string.report_bus_swap),
                         fontWeight = FontWeight.Bold,
                         color = CollegePrimary,
                         fontSize = 13.sp

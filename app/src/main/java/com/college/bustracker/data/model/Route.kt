@@ -1,5 +1,8 @@
 package com.college.bustracker.data.model
 
+import com.google.firebase.firestore.IgnoreExtraProperties
+
+@IgnoreExtraProperties
 data class Route(
     val routeId: String = "",
     val name: String = "",

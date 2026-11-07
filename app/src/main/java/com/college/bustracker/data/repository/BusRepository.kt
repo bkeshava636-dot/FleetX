@@ -169,8 +169,13 @@ class BusRepository(
                 val cacheSnap = firestore.collection("buses").get(Source.CACHE).await()
                 if (cacheSnap != null && !cacheSnap.isEmpty) {
                     val list = cacheSnap.documents.mapNotNull { doc ->
-                        doc.toObject(Bus::class.java)?.let { bus ->
-                            bus.copy(busId = bus.busId.ifBlank { doc.id })
+                        try {
+                            doc.toObject(Bus::class.java)?.let { bus ->
+                                bus.copy(busId = bus.busId.ifBlank { doc.id })
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed deserializing cached bus ${doc.id}: ${e.message}")
+                            null
                         }
                     }.sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
                     if (list.isNotEmpty()) {
@@ -190,8 +195,13 @@ class BusRepository(
             try {
                 val serverSnap = firestore.collection("buses").get(Source.SERVER).await()
                 val list = serverSnap.documents.mapNotNull { doc ->
-                    doc.toObject(Bus::class.java)?.let { bus ->
-                        bus.copy(busId = bus.busId.ifBlank { doc.id })
+                    try {
+                        doc.toObject(Bus::class.java)?.let { bus ->
+                            bus.copy(busId = bus.busId.ifBlank { doc.id })
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed deserializing server bus ${doc.id}: ${e.message}")
+                        null
                     }
                 }.sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
                 _localBuses.value = list
@@ -211,8 +221,13 @@ class BusRepository(
             firestore.collection("buses").addSnapshotListener { snapshot, error ->
                 if (error == null && snapshot != null) {
                     val list = snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(Bus::class.java)?.let { bus ->
-                            bus.copy(busId = bus.busId.ifBlank { doc.id })
+                        try {
+                            doc.toObject(Bus::class.java)?.let { bus ->
+                                bus.copy(busId = bus.busId.ifBlank { doc.id })
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed deserializing real-time bus ${doc.id}: ${e.message}")
+                            null
                         }
                     }.sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
                     _localBuses.value = list
