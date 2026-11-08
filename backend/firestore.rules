@@ -135,35 +135,93 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
-    // Bus Swap History: readable by admins and public; written by admins and drivers
+    // Bus Swap History: readable by authenticated users; created/updated by owner driver or admin; deleted by admin
     match /bus_swap_history/{historyId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read: if isUserActive();
+      allow create: if isAdmin() || (
+        isDriver() &&
+        request.resource.data.changedByUid == request.auth.uid &&
+        request.resource.data.originalBusId == getDriverAssignedBusId()
+      );
+      allow update: if isAdmin() || (
+        isDriver() &&
+        resource.data.originalBusId == getDriverAssignedBusId() &&
+        request.resource.data.originalBusId == resource.data.originalBusId &&
+        request.resource.data.changedByUid == resource.data.changedByUid &&
+        request.resource.data.get('cleared', false) == resource.data.get('cleared', false) && (
+          resource.data.changedByUid == request.auth.uid ||
+          (request.resource.data.status in ['CANCELLED', 'COMPLETED'] &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt', 'endAt', 'cancelledBy', 'cancelledByName', 'updatedAt']))
+        )
+      );
+      allow delete: if isAdmin();
     }
 
-    // Driver Replacement History: readable by admins and public; written by admins and drivers
+    // Driver Replacement History: readable by authenticated users; created/updated by owner driver or admin; deleted by admin
     match /driver_replacement_history/{historyId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read: if isUserActive();
+      allow create: if isAdmin() || (
+        isDriver() &&
+        request.resource.data.changedByUid == request.auth.uid &&
+        request.resource.data.busId == getDriverAssignedBusId()
+      );
+      allow update: if isAdmin() || (
+        isDriver() &&
+        resource.data.busId == getDriverAssignedBusId() &&
+        request.resource.data.busId == resource.data.busId &&
+        request.resource.data.changedByUid == resource.data.changedByUid &&
+        request.resource.data.get('cleared', false) == resource.data.get('cleared', false) && (
+          resource.data.changedByUid == request.auth.uid ||
+          (request.resource.data.status in ['CANCELLED', 'COMPLETED'] &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt', 'endAt', 'cancelledBy', 'cancelledByName', 'updatedAt']))
+        )
+      );
+      allow delete: if isAdmin();
     }
 
     // History Audit Logs: recorded actions when admins clear history
     match /history_audit_logs/{auditId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAdmin();
+      allow create: if isAdmin() &&
+        request.resource.data.adminUid == request.auth.uid &&
+        request.resource.data.action in ['CLEAR_BUS_SWAP_HISTORY', 'CLEAR_DRIVER_REPLACEMENT_HISTORY'] &&
+        request.resource.data.clearedCount is int;
+      allow update, delete: if false;
     }
 
     // Student App Installations: anonymous device ping (no PII, no login required)
     match /student_installations/{installationId} {
-      allow create, update: if true;
-      allow read: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update: if request.resource.data.keys().hasOnly(['installationId', 'appVersion', 'language', 'lastActiveDate', 'updatedAt']) &&
+        request.resource.data.installationId == installationId &&
+        request.resource.data.installationId is string && request.resource.data.installationId.size() <= 64 &&
+        request.resource.data.appVersion is string && request.resource.data.appVersion.size() <= 32 &&
+        request.resource.data.language is string && request.resource.data.language.size() <= 16 &&
+        request.resource.data.lastActiveDate is string && request.resource.data.lastActiveDate.size() <= 16 &&
+        request.resource.data.updatedAt is int;
+      allow read, delete: if isAdmin();
     }
 
     // Student Daily Analytics Aggregates: atomic daily counter increments
+    // Validates real ISO date format, enforces allowed keys (including legacy dotted event/lang/version keys), and limits map sizes
     match /student_analytics_daily/{dateStr} {
-      allow create, update: if true;
-      allow read: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update: if dateStr.matches('^20[2-9][0-9]-[0-1][0-9]-[0-3][0-9]$') &&
+        request.resource.data.date == dateStr &&
+        request.resource.data.updatedAt is int &&
+        request.resource.data.keys().hasOnly([
+          'date', 'totalEvents', 'events', 'languages', 'versions', 'updatedAt', 'dauCount', 'newInstallations', 'returningUsers',
+          'events.app_opened', 'events.live_tracking_opened', 'events.bus_details_viewed', 'events.stop_selected',
+          'events.announcement_viewed', 'events.bus_swap_alert_viewed', 'events.settings_opened', 'events.update_available', 'events.update_installed',
+          'languages.en', 'languages.kn', 'languages.hi', 'languages.te', 'languages.ta',
+          'versions.1.0.30', 'versions.1.0.31', 'versions.1.0.32', 'versions.1.0.33', 'versions.1.0.34', 'versions.1.0.35', 'versions.1.0.36', 'versions.1.0.37', 'versions.1.0.38', 'versions.1.0.39', 'versions.1.0.40'
+        ]) &&
+        (!('totalEvents' in request.resource.data) || request.resource.data.totalEvents is int) &&
+        (!('dauCount' in request.resource.data) || request.resource.data.dauCount is int) &&
+        (!('newInstallations' in request.resource.data) || request.resource.data.newInstallations is int) &&
+        (!('returningUsers' in request.resource.data) || request.resource.data.returningUsers is int) &&
+        (!('events' in request.resource.data) || (request.resource.data.events is map && request.resource.data.events.size() <= 20)) &&
+        (!('languages' in request.resource.data) || (request.resource.data.languages is map && request.resource.data.languages.size() <= 10)) &&
+        (!('versions' in request.resource.data) || (request.resource.data.versions is map && request.resource.data.versions.size() <= 10));
+      allow read, delete: if isAdmin();
     }
   }
 }

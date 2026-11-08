@@ -168,20 +168,22 @@ fun AdminHistoryScreen(
                         Text("Asia/Kolkata Server Time", fontSize = 12.sp, color = Color(0xFF64748B))
                     }
 
-                    OutlinedButton(
-                        onClick = {
-                            clearTargetType = if (selectedTab == 1) "DRIVER_REPLACEMENT" else "BUS_SWAP"
-                            clearStage = 1
-                            clearResultMsg = null
-                            showClearHistoryDialog = true
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = StatusDangerRed),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                    ) {
-                        Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Clear History", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    if (selectedTab != 2) {
+                        OutlinedButton(
+                            onClick = {
+                                clearTargetType = if (selectedTab == 1) "DRIVER_REPLACEMENT" else "BUS_SWAP"
+                                clearStage = 1
+                                clearResultMsg = null
+                                showClearHistoryDialog = true
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = StatusDangerRed),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Clear History", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
 
