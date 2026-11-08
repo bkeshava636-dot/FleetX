@@ -25,25 +25,30 @@ object KolkataTimeFormatter {
         timeZone = TIME_ZONE
     }
 
+    @Synchronized
     fun formatFullDateTime(epochMillis: Long): String {
         if (epochMillis <= 0L) return "—"
         return fullDateTimeFormat.format(Date(epochMillis))
     }
 
+    @Synchronized
     fun formatDateOnly(epochMillis: Long): String {
         if (epochMillis <= 0L) return "—"
         return dateOnlyFormat.format(Date(epochMillis))
     }
 
+    @Synchronized
     fun formatTimeOnly(epochMillis: Long): String {
         if (epochMillis <= 0L) return "—"
         return timeOnlyFormat.format(Date(epochMillis))
     }
 
+    @Synchronized
     fun getTodayIso(): String {
         return isoDateFormat.format(Date())
     }
 
+    @Synchronized
     fun formatIsoDate(epochMillis: Long): String {
         if (epochMillis <= 0L) return ""
         return isoDateFormat.format(Date(epochMillis))

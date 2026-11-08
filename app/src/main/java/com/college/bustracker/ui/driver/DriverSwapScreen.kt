@@ -115,13 +115,13 @@ fun DriverSwapScreen(
     var showUpdateConfirmationDialog by remember { mutableStateOf(false) }
 
     // Identify which stops are already assigned to active swaps
-    val assignedStopMap = remember(activeSwaps) {
-        val map = mutableMapOf<String, String>() // stopId -> replacementBusId
+    val assignedStopMap = remember(activeSwaps, stops) {
+        val map = mutableMapOf<String, BusSwap>() // stopId -> owning BusSwap
         activeSwaps.forEach { swap ->
             if (swap.scopeType == BusSwap.SCOPE_ALL_STOPS) {
-                stops.forEach { s -> map[s.stopId] = swap.replacementBusId }
+                stops.forEach { s -> map[s.stopId] = swap }
             } else {
-                swap.affectedStopIds.forEach { id -> map[id] = swap.replacementBusId }
+                swap.affectedStopIds.forEach { id -> map[id] = swap }
             }
         }
         map
@@ -684,8 +684,8 @@ fun DriverSwapScreen(
                         Spacer(modifier = Modifier.height(6.dp))
 
                         stops.forEach { stop ->
-                            val assignedBusForThisStop = assignedStopMap[stop.stopId]
-                            val isAssignedToOtherSwap = assignedBusForThisStop != null && (editingSwap == null || assignedBusForThisStop != editingSwap?.replacementBusId)
+                            val owningSwapForThisStop = assignedStopMap[stop.stopId]
+                            val isAssignedToOtherSwap = owningSwapForThisStop != null && (editingSwap == null || owningSwapForThisStop.swapId != editingSwap?.swapId)
                             val isChecked = affectedStopIds.contains(stop.stopId)
 
                             Row(
@@ -714,9 +714,9 @@ fun DriverSwapScreen(
                                         color = if (isAssignedToOtherSwap) Color(0xFF94A3B8) else Color(0xFF0F172A),
                                         fontWeight = if (isChecked) FontWeight.SemiBold else FontWeight.Normal
                                     )
-                                    if (isAssignedToOtherSwap) {
+                                    if (isAssignedToOtherSwap && owningSwapForThisStop != null) {
                                         Text(
-                                            text = "Assigned to $assignedBusForThisStop",
+                                            text = "Assigned to ${owningSwapForThisStop.replacementBusId}",
                                             fontSize = 10.sp,
                                             color = Color(0xFFD97706),
                                             fontWeight = FontWeight.Medium

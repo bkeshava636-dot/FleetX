@@ -135,6 +135,11 @@ class StudentViewModel : ViewModel() {
 
     private val allRoutes = MutableStateFlow<List<Route>>(emptyList())
 
+    private var lastSubscribedBusId: String? = null
+
+    private val _openAnnouncementEvent = MutableStateFlow<String?>(null)
+    val openAnnouncementEvent: StateFlow<String?> = _openAnnouncementEvent.asStateFlow()
+
     private val _lastUpdateText = MutableStateFlow("Never")
     val lastUpdateText: StateFlow<String> = _lastUpdateText.asStateFlow()
 
@@ -255,8 +260,11 @@ class StudentViewModel : ViewModel() {
                     val activeForBus = swaps.filter {
                         it.status == "ACTIVE" && it.originalBusId.equals(bus.busId, ignoreCase = true)
                     }
-                    val matching = activeForBus.find { swap ->
-                        (stop == null || swap.isAffectingStop(stop.stopId))
+                    val matching = if (stop == null) {
+                        if (activeForBus.size == 1) activeForBus.first()
+                        else activeForBus.find { it.scopeType == BusSwap.SCOPE_ALL_STOPS }
+                    } else {
+                        activeForBus.find { it.isAffectingStop(stop.stopId) }
                     }
                     activeForBus to matching
                 }
@@ -415,11 +423,6 @@ class StudentViewModel : ViewModel() {
             nowMillis = tempAssignRepo.getEstimatedServerTime()
         )
     }
-
-    private var lastSubscribedBusId: String? = null
-
-    private val _openAnnouncementEvent = MutableStateFlow<String?>(null)
-    val openAnnouncementEvent: StateFlow<String?> = _openAnnouncementEvent.asStateFlow()
 
     fun openAnnouncementById(announcementId: String) {
         _openAnnouncementEvent.value = announcementId

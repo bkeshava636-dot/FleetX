@@ -1,8 +1,8 @@
 {
-  "versionCode": 10039,
-  "versionName": "1.0.39",
-  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.39/FleetX-v1.0.39.apk",
+  "versionCode": 10040,
+  "versionName": "1.0.40",
+  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.40/FleetX-v1.0.40.apk",
   "sha256": "",
-  "releaseNotes": "FleetX v1.0.39: Fix contradictory bus replacement banner, fix app crash/freeze across versions with safe deserialization and maintenance cache cleanup, fix Admin Operation History with in-memory sorting & fallback, allow multiple disjoint bus swaps per bus, and add next-day driver swap cancellation prompts.",
-  "publishedAt": "2026-11-07T20:55:00Z"
+  "releaseNotes": "FleetX v1.0.40: Prevent unintended driver tracking on launch yesterday-swap prompt, robust 450-doc batch clear and audit trail, harden Firestore security rules, and optimize student offline analytics with timeout safety.",
+  "publishedAt": "2026-11-08T13:45:00Z"
 }

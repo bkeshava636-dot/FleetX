@@ -87,6 +87,7 @@ class HistoryRepository(
                 }
                 fallbackSwaps = snapshot?.documents?.mapNotNull { doc ->
                     try {
+                        if (doc.getBoolean("cleared") == true) return@mapNotNull null
                         doc.toObject(BusSwap::class.java)?.copy(swapId = doc.id)
                     } catch (e: Exception) {
                         null
@@ -167,6 +168,7 @@ class HistoryRepository(
                 }
                 fallbackAssignments = snapshot?.documents?.mapNotNull { doc ->
                     try {
+                        if (doc.getBoolean("cleared") == true) return@mapNotNull null
                         doc.toObject(TemporaryAssignment::class.java)?.copy(assignmentId = doc.id)
                     } catch (e: Exception) {
                         null
@@ -215,15 +217,16 @@ class HistoryRepository(
         return try {
             val snapshot = firestore.collection("bus_swap_history").get().await()
             val now = System.currentTimeMillis()
-            var count = 0
+            val updates = mutableListOf<Pair<com.google.firebase.firestore.DocumentReference, String>>()
 
-            val batch = firestore.batch()
             for (doc in snapshot.documents) {
                 val status = doc.getString("status") ?: ""
                 val isCleared = doc.getBoolean("cleared") ?: false
-                if (status != "ACTIVE" && !isCleared) {
-                    batch.update(doc.reference, mapOf("cleared" to true, "clearedAt" to now))
-                    count++
+                val effectiveUntil = doc.getLong("effectiveUntil") ?: doc.getLong("cancelledAt") ?: 0L
+                val isExpired = effectiveUntil in 1 until now
+                if ((status != "ACTIVE" || isExpired) && !isCleared) {
+                    val swapId = doc.getString("swapId") ?: doc.id
+                    updates.add(doc.reference to swapId)
                 }
             }
 
@@ -234,12 +237,34 @@ class HistoryRepository(
                     val status = doc.getString("status") ?: ""
                     val isCleared = doc.getBoolean("cleared") ?: false
                     if (status != BusSwap.STATUS_ACTIVE && !isCleared) {
-                        batch.update(doc.reference, mapOf("cleared" to true, "clearedAt" to now))
+                        val swapId = doc.getString("swapId") ?: doc.id
+                        updates.add(doc.reference to swapId)
                     }
                 }
             } catch (ignored: Exception) {}
 
-            if (count > 0) {
+            val committedIds = mutableSetOf<String>()
+            var commitException: Exception? = null
+
+            // Commit updates in batches of up to 450 writes (staying safely below Firestore 500-write limit)
+            for (chunk in updates.chunked(450)) {
+                val batch = firestore.batch()
+                for ((ref, _) in chunk) {
+                    batch.update(ref, mapOf("cleared" to true, "clearedAt" to now))
+                }
+                try {
+                    batch.commit().await()
+                    for ((_, id) in chunk) {
+                        committedIds.add(id)
+                    }
+                } catch (e: Exception) {
+                    commitException = e
+                    break
+                }
+            }
+
+            // Write audit entry if any chunks were committed
+            if (committedIds.isNotEmpty()) {
                 val auditRef = firestore.collection("history_audit_logs").document()
                 val audit = HistoryAuditLog(
                     auditId = auditRef.id,
@@ -249,13 +274,20 @@ class HistoryRepository(
                     timestamp = now,
                     dateFormatted = KolkataTimeFormatter.formatDateOnly(now),
                     timeFormatted = KolkataTimeFormatter.formatTimeOnly(now),
-                    clearedCount = count
+                    clearedCount = committedIds.size
                 )
-                batch.set(auditRef, audit)
+                try {
+                    auditRef.set(audit).await()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to write clear bus swap audit log: ${e.message}")
+                }
             }
 
-            batch.commit().await()
-            Result.success(count)
+            if (commitException != null) {
+                throw commitException
+            }
+
+            Result.success(committedIds.size)
         } catch (e: Exception) {
             Log.e(TAG, "clearBusSwapHistory failed: ${e.message}", e)
             Result.failure(e)
@@ -273,15 +305,16 @@ class HistoryRepository(
         return try {
             val snapshot = firestore.collection("driver_replacement_history").get().await()
             val now = System.currentTimeMillis()
-            var count = 0
+            val updates = mutableListOf<Pair<com.google.firebase.firestore.DocumentReference, String>>()
 
-            val batch = firestore.batch()
             for (doc in snapshot.documents) {
                 val status = doc.getString("status") ?: ""
                 val isCleared = doc.getBoolean("cleared") ?: false
-                if (status != "ACTIVE" && !isCleared) {
-                    batch.update(doc.reference, mapOf("cleared" to true, "clearedAt" to now))
-                    count++
+                val endAt = doc.getLong("effectiveUntil") ?: doc.getLong("endAt") ?: 0L
+                val isExpired = endAt in 1 until now
+                if ((status != "ACTIVE" || isExpired) && !isCleared) {
+                    val assignId = doc.getString("assignmentId") ?: doc.id
+                    updates.add(doc.reference to assignId)
                 }
             }
 
@@ -292,12 +325,34 @@ class HistoryRepository(
                     val status = doc.getString("status") ?: ""
                     val isCleared = doc.getBoolean("cleared") ?: false
                     if (status != "ACTIVE" && !isCleared) {
-                        batch.update(doc.reference, mapOf("cleared" to true, "clearedAt" to now))
+                        val assignId = doc.getString("assignmentId") ?: doc.id
+                        updates.add(doc.reference to assignId)
                     }
                 }
             } catch (ignored: Exception) {}
 
-            if (count > 0) {
+            val committedIds = mutableSetOf<String>()
+            var commitException: Exception? = null
+
+            // Commit updates in batches of up to 450 writes (staying safely below Firestore 500-write limit)
+            for (chunk in updates.chunked(450)) {
+                val batch = firestore.batch()
+                for ((ref, _) in chunk) {
+                    batch.update(ref, mapOf("cleared" to true, "clearedAt" to now))
+                }
+                try {
+                    batch.commit().await()
+                    for ((_, id) in chunk) {
+                        committedIds.add(id)
+                    }
+                } catch (e: Exception) {
+                    commitException = e
+                    break
+                }
+            }
+
+            // Write audit entry if any chunks were committed
+            if (committedIds.isNotEmpty()) {
                 val auditRef = firestore.collection("history_audit_logs").document()
                 val audit = HistoryAuditLog(
                     auditId = auditRef.id,
@@ -307,13 +362,20 @@ class HistoryRepository(
                     timestamp = now,
                     dateFormatted = KolkataTimeFormatter.formatDateOnly(now),
                     timeFormatted = KolkataTimeFormatter.formatTimeOnly(now),
-                    clearedCount = count
+                    clearedCount = committedIds.size
                 )
-                batch.set(auditRef, audit)
+                try {
+                    auditRef.set(audit).await()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to write clear driver replacement audit log: ${e.message}")
+                }
             }
 
-            batch.commit().await()
-            Result.success(count)
+            if (commitException != null) {
+                throw commitException
+            }
+
+            Result.success(committedIds.size)
         } catch (e: Exception) {
             Log.e(TAG, "clearDriverReplacementHistory failed: ${e.message}", e)
             Result.failure(e)

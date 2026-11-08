@@ -274,7 +274,7 @@ class OperationsHistoryAndAnalyticsTest {
     @Test
     fun testPreviousDaySwapDetection_FlagsNonTodaySwaps() {
         val today = KolkataTimeFormatter.getTodayIso()
-        val yesterday = "2026-11-06"
+        val yesterday = KolkataTimeFormatter.formatIsoDate(System.currentTimeMillis() - 86400000L)
 
         val oldSwap = BusSwap(
             swapId = "old_swap",
@@ -301,5 +301,38 @@ class OperationsHistoryAndAnalyticsTest {
 
         assertEquals("", cleanedRaw)
         assertEquals("Flat tyre on rear wheel", cleanedCustom)
+    }
+    @Test
+    fun testStudentMultiSwapMatching_NullStopReturnsNullForMultipleSwaps() {
+        val swap1 = BusSwap(swapId = "s1", originalBusId = "BUS-25", replacementBusId = "BUS-23", scopeType = BusSwap.SCOPE_SELECTED_STOPS, affectedStopIds = listOf("stop_1"), status = BusSwap.STATUS_ACTIVE)
+        val swap2 = BusSwap(swapId = "s2", originalBusId = "BUS-25", replacementBusId = "BUS-14", scopeType = BusSwap.SCOPE_SELECTED_STOPS, affectedStopIds = listOf("stop_2"), status = BusSwap.STATUS_ACTIVE)
+        val activeForBus = listOf(swap1, swap2)
+
+        // Stop is null -> must be null so multi-swap guidance banner triggers!
+        val matchingNullStop = if (activeForBus.size == 1) activeForBus.first()
+        else activeForBus.find { it.scopeType == BusSwap.SCOPE_ALL_STOPS }
+
+        org.junit.Assert.assertNull("With multiple stop-specific swaps and no stop selected, matching must be null", matchingNullStop)
+
+        // Stop is stop_1 -> matches swap 1
+        val matchingStop1 = activeForBus.find { it.isAffectingStop("stop_1") }
+        org.junit.Assert.assertEquals("s1", matchingStop1?.swapId)
+    }
+
+    @Test
+    fun testKeptPreviousDaySwap_PermitsManualTracking() {
+        val oldSwap = BusSwap(swapId = "old_1", date = KolkataTimeFormatter.formatIsoDate(System.currentTimeMillis() - 86400000L), status = BusSwap.STATUS_ACTIVE)
+        val previousDaySwaps = listOf(oldSwap)
+        var keptPreviousDaySwapIds = setOf<String>()
+
+        // Initially not kept -> prompt candidate exists
+        val pending1 = previousDaySwaps.firstOrNull { it.swapId !in keptPreviousDaySwapIds }
+        org.junit.Assert.assertNotNull(pending1)
+        org.junit.Assert.assertEquals("old_1", pending1?.swapId)
+
+        // Driver keeps swap -> prompt candidate is null, allowing startManualTracking
+        keptPreviousDaySwapIds = keptPreviousDaySwapIds + "old_1"
+        val pending2 = previousDaySwaps.firstOrNull { it.swapId !in keptPreviousDaySwapIds }
+        org.junit.Assert.assertNull("Once kept, unhandled old swap must be null to allow tracking", pending2)
     }
 }

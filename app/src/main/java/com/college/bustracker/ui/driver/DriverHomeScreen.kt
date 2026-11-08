@@ -126,6 +126,8 @@ fun DriverHomeScreen(
     }
     var promptSwapFromYesterday by remember { mutableStateOf<com.college.bustracker.data.model.BusSwap?>(null) }
     var hasPromptedPreviousDaySwap by remember { mutableStateOf(false) }
+    var handledPreviousDaySwapIds by remember { mutableStateOf(setOf<String>()) }
+    var startTrackingAfterPrompt by remember { mutableStateOf(false) }
 
     LaunchedEffect(previousDaySwaps) {
         if (previousDaySwaps.isNotEmpty() && !hasPromptedPreviousDaySwap) {
@@ -180,7 +182,10 @@ fun DriverHomeScreen(
     if (promptSwapFromYesterday != null) {
         val targetSwap = promptSwapFromYesterday!!
         AlertDialog(
-            onDismissRequest = { promptSwapFromYesterday = null },
+            onDismissRequest = {
+                promptSwapFromYesterday = null
+                startTrackingAfterPrompt = false
+            },
             icon = {
                 Icon(
                     imageVector = Icons.Default.Warning,
@@ -224,9 +229,20 @@ fun DriverHomeScreen(
                 Button(
                     onClick = {
                         val s = promptSwapFromYesterday
-                        promptSwapFromYesterday = null
                         if (s != null) {
-                            viewModel.cancelSwap(s)
+                            val updatedHandled = handledPreviousDaySwapIds + s.swapId
+                            handledPreviousDaySwapIds = updatedHandled
+                            val nextPending = previousDaySwaps.firstOrNull { it.swapId !in updatedHandled }
+                            promptSwapFromYesterday = nextPending
+                            viewModel.cancelSwap(s) { result ->
+                                if (result.isSuccess && nextPending == null && startTrackingAfterPrompt) {
+                                    startTrackingAfterPrompt = false
+                                    viewModel.startManualTracking()
+                                }
+                            }
+                        } else {
+                            promptSwapFromYesterday = null
+                            startTrackingAfterPrompt = false
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed)
@@ -235,7 +251,17 @@ fun DriverHomeScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { promptSwapFromYesterday = null }) {
+                TextButton(onClick = {
+                    val currentId = promptSwapFromYesterday?.swapId ?: ""
+                    val updatedKept = handledPreviousDaySwapIds + currentId
+                    handledPreviousDaySwapIds = updatedKept
+                    val nextPending = previousDaySwaps.firstOrNull { it.swapId !in updatedKept }
+                    promptSwapFromYesterday = nextPending
+                    if (nextPending == null && startTrackingAfterPrompt) {
+                        startTrackingAfterPrompt = false
+                        viewModel.startManualTracking()
+                    }
+                }) {
                     Text("Keep Active for Today")
                 }
             }
@@ -1065,8 +1091,10 @@ fun DriverHomeScreen(
 
                     Button(
                         onClick = {
-                            if (previousDaySwaps.isNotEmpty()) {
-                                promptSwapFromYesterday = previousDaySwaps.first()
+                            val pending = previousDaySwaps.firstOrNull { it.swapId !in handledPreviousDaySwapIds }
+                            if (pending != null) {
+                                startTrackingAfterPrompt = true
+                                promptSwapFromYesterday = pending
                             } else {
                                 viewModel.startManualTracking()
                             }
