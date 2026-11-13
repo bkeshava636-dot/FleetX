@@ -36,6 +36,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -96,6 +97,23 @@ class LocationTrackingService : Service() {
     private var stationaryStartTime = 0L
     private var campusGeofenceStationaryStartTime = 0L
     private lateinit var offlineQueue: OfflineLocationQueue
+
+    // Real-time bus travel path recording: collects the actual road coordinates the bus travels
+    private val activeTripBreadcrumbs = mutableListOf<LatLng>()
+    private var lastRecordedBreadcrumbLat: Double = 0.0
+    private var lastRecordedBreadcrumbLng: Double = 0.0
+    private var lastBreadcrumbUploadTimeMs: Long = 0L
+    private var breadcrumbOwnerBusId: String = ""
+    private var breadcrumbOwnerRouteId: String = ""
+    private var breadcrumbOwnerDirection: String = ""
+    private var lastSubmittedBreadcrumbs: List<LatLng> = emptyList()
+    @Volatile
+    private var breadcrumbOwnerGeneration: Long = 0L
+    private val checkpointLock = Any()
+    @Volatile
+    private var isCheckpointingDisabled = false
+    private val pendingTravelPathLock = Any()
+    private val inFlightRetryUploadIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     private var lastDriverSource: LocationSource? = null
     private var currentStudentSources = listOf<LocationSource>()
@@ -197,6 +215,9 @@ class LocationTrackingService : Service() {
         // Initialize dead-zone telemetry queue with .info/connected listener
         offlineQueue = OfflineLocationQueue(serviceScope)
         offlineQueue.startListening()
+
+        // Retry pending travel path upload if previous upload was interrupted
+        retryPendingTravelPathUpload()
     }
 
     private fun persistTrackingSessionState(isActive: Boolean) {
@@ -216,6 +237,301 @@ class LocationTrackingService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "[AUTO-TRACE] Failed to persist tracking session state: ${e.message}")
         }
+    }
+
+    private fun checkpointBreadcrumbs(busId: String, routeId: String, direction: String, generation: Long, points: List<LatLng>) {
+        synchronized(checkpointLock) {
+            if (isCheckpointingDisabled || generation != breadcrumbOwnerGeneration) return
+            try {
+                val prefs = getSharedPreferences("tracking_breadcrumbs_checkpoint", Context.MODE_PRIVATE)
+                val json = org.json.JSONArray()
+                for (p in points) {
+                    val coord = org.json.JSONArray()
+                    coord.put(p.latitude)
+                    coord.put(p.longitude)
+                    json.put(coord)
+                }
+                prefs.edit()
+                    .putString("checkpoint_bus_id", busId)
+                    .putString("checkpoint_route_id", routeId)
+                    .putString("checkpoint_direction", direction)
+                    .putString("checkpoint_points", json.toString())
+                    .putLong("checkpoint_saved_at", System.currentTimeMillis())
+                    .apply()
+            } catch (ignored: Exception) {}
+        }
+    }
+
+    private fun clearBreadcrumbsCheckpoint(busId: String? = null, routeId: String? = null, direction: String? = null) {
+        synchronized(checkpointLock) {
+            try {
+                val prefs = getSharedPreferences("tracking_breadcrumbs_checkpoint", Context.MODE_PRIVATE)
+                if (busId != null && routeId != null && direction != null) {
+                    val savedBus = prefs.getString("checkpoint_bus_id", null)
+                    val savedRoute = prefs.getString("checkpoint_route_id", null)
+                    val savedDir = prefs.getString("checkpoint_direction", null)
+                    if (savedBus != busId || savedRoute != routeId || savedDir != direction) {
+                        return // Preserve checkpoint belonging to another trip
+                    }
+                }
+                prefs.edit().clear().apply()
+            } catch (ignored: Exception) {}
+        }
+    }
+
+    private fun restoreBreadcrumbsCheckpoint(busId: String, routeId: String, direction: String): List<LatLng>? {
+        synchronized(checkpointLock) {
+            return try {
+                val prefs = getSharedPreferences("tracking_breadcrumbs_checkpoint", Context.MODE_PRIVATE)
+                val savedBus = prefs.getString("checkpoint_bus_id", null)
+                val savedRoute = prefs.getString("checkpoint_route_id", null)
+                val savedDir = prefs.getString("checkpoint_direction", null)
+                val savedAt = prefs.getLong("checkpoint_saved_at", 0L)
+                val isFresh = (System.currentTimeMillis() - savedAt) < (3 * 60 * 60 * 1000L) // Reject checkpoints older than 3 hours
+                if (savedBus == busId && savedRoute == routeId && savedDir == direction && isFresh) {
+                    val raw = prefs.getString("checkpoint_points", null) ?: return null
+                    val array = org.json.JSONArray(raw)
+                    val list = mutableListOf<LatLng>()
+                    for (i in 0 until array.length()) {
+                        val c = array.getJSONArray(i)
+                        list.add(LatLng(c.getDouble(0), c.getDouble(1)))
+                    }
+                    list
+                } else null
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    private data class PendingUploadItem(
+        val uploadId: String,
+        val busId: String,
+        val routeId: String,
+        val direction: String,
+        val points: List<LatLng>,
+        val timestamp: Long
+    )
+
+    private data class PendingUploadRecord(val uploadId: String, val timestamp: Long)
+
+    private fun savePendingTravelPathUpload(busId: String, routeId: String, direction: String, points: List<LatLng>): PendingUploadRecord {
+        val uploadId = java.util.UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        synchronized(pendingTravelPathLock) {
+            try {
+                val prefs = CollegeBusApp.instance.getSharedPreferences("pending_travel_path_upload", Context.MODE_PRIVATE)
+                val obj = org.json.JSONObject()
+                obj.put("uploadId", uploadId)
+                obj.put("busId", busId)
+                obj.put("routeId", routeId)
+                obj.put("direction", direction)
+                obj.put("timestamp", now)
+                val jsonPoints = org.json.JSONArray()
+                for (p in points) {
+                    val coord = org.json.JSONArray()
+                    coord.put(p.latitude)
+                    coord.put(p.longitude)
+                    jsonPoints.put(coord)
+                }
+                obj.put("points", jsonPoints)
+                prefs.edit().putString("record_$uploadId", obj.toString()).apply()
+            } catch (ignored: Exception) {}
+        }
+        return PendingUploadRecord(uploadId, now)
+    }
+
+    private fun clearPendingTravelPathUpload(uploadId: String, busId: String? = null, timestamp: Long? = null) {
+        synchronized(pendingTravelPathLock) {
+            inFlightRetryUploadIds.remove(uploadId)
+            try {
+                val prefs = CollegeBusApp.instance.getSharedPreferences("pending_travel_path_upload", Context.MODE_PRIVATE)
+                val editor = prefs.edit().remove("record_$uploadId")
+                if (busId != null && timestamp != null) {
+                    val prevMax = prefs.getLong("last_uploaded_time_$busId", 0L)
+                    editor.putLong("last_uploaded_time_$busId", maxOf(prevMax, timestamp))
+                }
+                editor.apply()
+            } catch (ignored: Exception) {}
+        }
+    }
+
+    private var pendingUploadRetryJob: Job? = null
+
+    private fun schedulePendingUploadRetry() {
+        if (pendingUploadRetryJob?.isActive == true) return
+        pendingUploadRetryJob = CollegeBusApp.instance.appScope.launch {
+            delay(15_000L)
+            pendingUploadRetryJob = null
+            retryPendingTravelPathUpload()
+        }
+    }
+
+    private fun retryPendingTravelPathUpload() {
+        val pendingItems = mutableListOf<PendingUploadItem>()
+        synchronized(pendingTravelPathLock) {
+            try {
+                val prefs = CollegeBusApp.instance.getSharedPreferences("pending_travel_path_upload", Context.MODE_PRIVATE)
+                for ((key, value) in prefs.all) {
+                    if (key.startsWith("record_") && value is String) {
+                        try {
+                            val obj = org.json.JSONObject(value)
+                            val uploadId = obj.getString("uploadId")
+                            val busId = obj.getString("busId")
+                            val routeId = obj.getString("routeId")
+                            val direction = obj.optString("direction", "STOPS_TO_COLLEGE")
+                            val timestamp = obj.optLong("timestamp", 0L)
+                            val jsonPoints = obj.getJSONArray("points")
+                            val points = mutableListOf<LatLng>()
+                            for (i in 0 until jsonPoints.length()) {
+                                val coord = jsonPoints.getJSONArray(i)
+                                points.add(LatLng(coord.getDouble(0), coord.getDouble(1)))
+                            }
+                            if (points.isNotEmpty()) {
+                                pendingItems.add(PendingUploadItem(uploadId, busId, routeId, direction, points, timestamp))
+                            }
+                        } catch (ignored: Exception) {}
+                    }
+                }
+            } catch (ignored: Exception) {}
+        }
+
+        // Group by busId, drop superseded uploads, and upload only the latest revision per bus
+        val byBus = pendingItems.groupBy { it.busId }
+        val toUpload = mutableListOf<PendingUploadItem>()
+        synchronized(pendingTravelPathLock) {
+            val prefs = CollegeBusApp.instance.getSharedPreferences("pending_travel_path_upload", Context.MODE_PRIVATE)
+            for ((busId, items) in byBus) {
+                val lastUploadedTime = prefs.getLong("last_uploaded_time_$busId", 0L)
+                val newest = items.maxByOrNull { it.timestamp } ?: continue
+                for (item in items) {
+                    if (item.uploadId != newest.uploadId || item.timestamp <= lastUploadedTime) {
+                        prefs.edit().remove("record_${item.uploadId}").apply()
+                        inFlightRetryUploadIds.remove(item.uploadId)
+                    }
+                }
+                if (newest.timestamp > lastUploadedTime && inFlightRetryUploadIds.add(newest.uploadId)) {
+                    toUpload.add(newest)
+                }
+            }
+
+            for (item in toUpload) {
+                CollegeBusApp.instance.trackingRepository.updateTravelPath(
+                    busId = item.busId,
+                    routeId = item.routeId,
+                    points = item.points,
+                    direction = item.direction,
+                    onSuccess = { clearPendingTravelPathUpload(item.uploadId, item.busId, item.timestamp) },
+                    onFailure = {
+                        inFlightRetryUploadIds.remove(item.uploadId)
+                        schedulePendingUploadRetry()
+                    }
+                )
+            }
+        }
+    }
+
+    private fun isCompleteRouteTraversal(
+        busId: String,
+        routeId: String,
+        direction: String,
+        points: List<LatLng>,
+        isCampusArrival: Boolean
+    ): Boolean {
+        if (points.size < 5) return false
+        val firstPoint = points.first()
+        val lastPoint = points.last()
+
+        val spanDistance = LocationThrottler.calculateDistanceMeters(
+            firstPoint.latitude, firstPoint.longitude,
+            lastPoint.latitude, lastPoint.longitude
+        )
+
+        val route = if (routeId.isNotBlank()) {
+            CollegeBusApp.instance.routeRepository.getCachedRoute(routeId)
+        } else null
+
+        if (isCampusArrival) {
+            // Check proximity to any supported campus location / route destination
+            val campusLocations = mutableListOf(
+                LatLng(BITM_CAMPUS_LAT, BITM_CAMPUS_LNG),
+                LatLng(15.1680, 76.8505),
+                LatLng(15.1425, 76.8925)
+            )
+            val destStop = route?.stops?.lastOrNull()
+            if (destStop != null && destStop.latitude != 0.0 && destStop.longitude != 0.0) {
+                campusLocations.add(LatLng(destStop.latitude, destStop.longitude))
+            }
+
+            val minStartToCampus = campusLocations.minOfOrNull { loc ->
+                LocationThrottler.calculateDistanceMeters(firstPoint.latitude, firstPoint.longitude, loc.latitude, loc.longitude)
+            } ?: Double.MAX_VALUE
+
+            val minEndToCampus = campusLocations.minOfOrNull { loc ->
+                LocationThrottler.calculateDistanceMeters(lastPoint.latitude, lastPoint.longitude, loc.latitude, loc.longitude)
+            } ?: Double.MAX_VALUE
+
+            // Bus must have started outside campus (at least 1500m away) and reached campus geofence
+            val campusGeofencePassed = minStartToCampus >= 1500.0 && minEndToCampus <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS
+            if (!campusGeofencePassed) return false
+
+            // When qualifying cached route endpoints exist, also verify bus started near route's initial stop (within 1000m)
+            val validStops = route?.stops?.filter { it.latitude != 0.0 && it.longitude != 0.0 } ?: emptyList()
+            if (validStops.size >= 2) {
+                val startStop = if (direction == RouteDirection.COLLEGE_TO_STOPS.name) validStops.last() else validStops.first()
+                val distToStartStop = LocationThrottler.calculateDistanceMeters(
+                    firstPoint.latitude, firstPoint.longitude,
+                    startStop.latitude, startStop.longitude
+                )
+                if (distToStartStop > 1000.0) {
+                    return false
+                }
+            }
+
+            return true
+        }
+
+        // Check against route endpoints if cached route stops are available
+        val validStops = route?.stops?.filter { it.latitude != 0.0 && it.longitude != 0.0 } ?: emptyList()
+        if (validStops.size >= 2) {
+            val firstStop = validStops.first()
+            val lastStop = validStops.last()
+            val (expectedStartStop, expectedEndStop) = if (direction == RouteDirection.COLLEGE_TO_STOPS.name) {
+                lastStop to firstStop
+            } else {
+                firstStop to lastStop
+            }
+
+            val distToStartStop = LocationThrottler.calculateDistanceMeters(
+                firstPoint.latitude, firstPoint.longitude,
+                expectedStartStop.latitude, expectedStartStop.longitude
+            )
+            val distToEndStop = LocationThrottler.calculateDistanceMeters(
+                lastPoint.latitude, lastPoint.longitude,
+                expectedEndStop.latitude, expectedEndStop.longitude
+            )
+
+            // Traversed from near start to near end stop (within 1000m) with reasonable span
+            return distToStartStop <= 1000.0 && distToEndStop <= 1000.0 && spanDistance >= 1500.0
+        }
+
+        // Fallback when qualifying route stops aren't cached: require verified campus endpoint evidence
+        val campusLocations = listOf(
+            LatLng(BITM_CAMPUS_LAT, BITM_CAMPUS_LNG),
+            LatLng(15.1680, 76.8505),
+            LatLng(15.1425, 76.8925)
+        )
+        val minStartToCampus = campusLocations.minOfOrNull { loc ->
+            LocationThrottler.calculateDistanceMeters(firstPoint.latitude, firstPoint.longitude, loc.latitude, loc.longitude)
+        } ?: Double.MAX_VALUE
+        val minEndToCampus = campusLocations.minOfOrNull { loc ->
+            LocationThrottler.calculateDistanceMeters(lastPoint.latitude, lastPoint.longitude, loc.latitude, loc.longitude)
+        } ?: Double.MAX_VALUE
+
+        val isCampusDeparture = minStartToCampus <= 1200.0 && minEndToCampus >= 3000.0
+        val isCampusDestination = minStartToCampus >= 3000.0 && minEndToCampus <= 1200.0
+
+        return spanDistance >= 3000.0 && (isCampusDeparture || isCampusDestination)
     }
 
     private fun scheduleServiceResurrection(delayMs: Long, reason: String) {
@@ -301,6 +617,9 @@ class LocationTrackingService : Service() {
             }
             TrackingServiceHelper.ACTION_START_TRACKING, null -> {
                 isExplicitStop = false
+                synchronized(checkpointLock) {
+                    isCheckpointingDisabled = false
+                }
                 serviceStopReason = "SYSTEM_OR_EXTERNAL_TERMINATION"
                 serviceStopCaller = "ANDROID_FRAMEWORK"
                 activeBusId = intent?.getStringExtra(TrackingServiceHelper.EXTRA_BUS_ID) ?: ""
@@ -325,6 +644,76 @@ class LocationTrackingService : Service() {
 
                 // Identity fallback recovery for background execution
                 resolveDriverIdentityFallbacks()
+
+                // Reset breadcrumbs if bus or route identity changed after resolution
+                val initialDir = ScheduleHelper.determineRouteDirection().name
+                val isInitialSetup = breadcrumbOwnerBusId.isBlank()
+                val isOwnerChanged = !isInitialSetup && (breadcrumbOwnerBusId != activeBusId || breadcrumbOwnerRouteId != activeRouteId || breadcrumbOwnerDirection != initialDir)
+
+                if (isOwnerChanged) {
+                    val prevBus = breadcrumbOwnerBusId
+                    val prevRoute = breadcrumbOwnerRouteId
+                    val prevDir = breadcrumbOwnerDirection
+
+                    // Invalidate in-flight writers and clear old checkpoint atomically under checkpointLock
+                    val previousBreadcrumbs = synchronized(checkpointLock) {
+                        breadcrumbOwnerGeneration++
+                        clearBreadcrumbsCheckpoint(prevBus, prevRoute, prevDir)
+                        synchronized(activeTripBreadcrumbs) {
+                            val list = activeTripBreadcrumbs.toList()
+                            activeTripBreadcrumbs.clear()
+                            breadcrumbOwnerBusId = activeBusId
+                            breadcrumbOwnerRouteId = activeRouteId
+                            breadcrumbOwnerDirection = initialDir
+                            list
+                        }
+                    }
+
+                    if (prevBus.isNotBlank() && prevRoute.isNotBlank() && isCompleteRouteTraversal(prevBus, prevRoute, prevDir, previousBreadcrumbs, isCampusArrival = false)) {
+                        if (previousBreadcrumbs != lastSubmittedBreadcrumbs) {
+                            lastSubmittedBreadcrumbs = previousBreadcrumbs
+                            val pending = savePendingTravelPathUpload(prevBus, prevRoute, prevDir, previousBreadcrumbs)
+                            CollegeBusApp.instance.trackingRepository.updateTravelPath(
+                                busId = prevBus,
+                                routeId = prevRoute,
+                                points = previousBreadcrumbs,
+                                direction = prevDir,
+                                onSuccess = {
+                                    clearPendingTravelPathUpload(pending.uploadId, prevBus, pending.timestamp)
+                                },
+                                onFailure = {
+                                    schedulePendingUploadRetry()
+                                }
+                            )
+                        }
+                    }
+
+                    lastRecordedBreadcrumbLat = 0.0
+                    lastRecordedBreadcrumbLng = 0.0
+                    lastBreadcrumbUploadTimeMs = System.currentTimeMillis()
+                    lastSubmittedBreadcrumbs = emptyList()
+                    Log.i(TAG, "[AUTO-TRACE] Breadcrumbs reset for bus=$activeBusId, route=$activeRouteId, dir=$initialDir")
+                } else if (isInitialSetup && activeBusId.isNotBlank()) {
+                    synchronized(activeTripBreadcrumbs) {
+                        breadcrumbOwnerGeneration++
+                        breadcrumbOwnerBusId = activeBusId
+                        breadcrumbOwnerRouteId = activeRouteId
+                        breadcrumbOwnerDirection = initialDir
+                    }
+                }
+
+                // Restore checkpointed breadcrumbs if resuming the same session across service recreation
+                if (activeTripBreadcrumbs.isEmpty() && activeBusId.isNotBlank()) {
+                    val checkpointed = restoreBreadcrumbsCheckpoint(activeBusId, activeRouteId, initialDir)
+                    if (!checkpointed.isNullOrEmpty()) {
+                        synchronized(activeTripBreadcrumbs) {
+                            activeTripBreadcrumbs.addAll(checkpointed)
+                        }
+                        lastRecordedBreadcrumbLat = checkpointed.last().latitude
+                        lastRecordedBreadcrumbLng = checkpointed.last().longitude
+                        Log.i(TAG, "[AUTO-TRACE] Restored ${checkpointed.size} breadcrumb checkpoints across recreation for bus $activeBusId")
+                    }
+                }
 
                 if (activeBusId.isNotBlank()) {
                     persistTrackingSessionState(true)
@@ -537,7 +926,7 @@ class LocationTrackingService : Service() {
                         latitude = if (lastSentLat != 0.0) lastSentLat else BITM_CAMPUS_LAT
                         longitude = if (lastSentLng != 0.0) lastSentLng else BITM_CAMPUS_LNG
                     }
-                    performScheduledWindowEndShutdown(fallbackLoc, stopReason)
+                    performScheduledWindowEndShutdown(fallbackLoc, stopReason, recordEndpoint = false)
                     break
                 }
 
@@ -777,6 +1166,7 @@ class LocationTrackingService : Service() {
     }
 
     private fun onNewLocation(location: Location) {
+        val callbackGeneration = breadcrumbOwnerGeneration
         if (!AutoTrackingScheduler.isDriverLoggedIn(this)) {
             Log.w(TAG, "[LOCATION-SERVICE] TRACKING_STOPPED: Driver is logged out during location callback. Stopping tracking.")
             serviceStopReason = "DRIVER_LOGGED_OUT"
@@ -845,7 +1235,7 @@ class LocationTrackingService : Service() {
         if (!allowForce && (!isWithinWindow || isHoliday || !isWorkingDay)) {
             val stopReason = if (isHoliday || !isWorkingDay) "COLLEGE_HOLIDAY" else "OPERATING_WINDOW_ENDED"
             Log.w(TAG, "[AUTO-TRACK] Operating window has ended while service is running ($stopReason). Automatically shutting down tracking.")
-            performScheduledWindowEndShutdown(location, stopReason)
+            performScheduledWindowEndShutdown(location, stopReason, recordEndpoint = true)
             return
         }
 
@@ -1019,6 +1409,107 @@ class LocationTrackingService : Service() {
             gps = "Locked",
             timestamp = now
         )
+
+        // Direction change check: reset breadcrumbs if schedule transitioned between shifts
+        val currentDir = ScheduleHelper.determineRouteDirection().name
+        if (breadcrumbOwnerDirection.isNotBlank() && breadcrumbOwnerDirection != currentDir) {
+            val previousBreadcrumbs: List<LatLng>
+            val prevBus: String
+            val prevRoute: String
+            val prevDir: String
+            val changedDirection: Boolean
+            synchronized(activeTripBreadcrumbs) {
+                if (breadcrumbOwnerGeneration == callbackGeneration && breadcrumbOwnerDirection.isNotBlank() && breadcrumbOwnerDirection != currentDir) {
+                    breadcrumbOwnerGeneration++
+                    previousBreadcrumbs = activeTripBreadcrumbs.toList()
+                    activeTripBreadcrumbs.clear()
+                    prevBus = breadcrumbOwnerBusId
+                    prevRoute = breadcrumbOwnerRouteId
+                    prevDir = breadcrumbOwnerDirection
+                    breadcrumbOwnerDirection = currentDir
+                    changedDirection = true
+                } else {
+                    previousBreadcrumbs = emptyList()
+                    prevBus = ""
+                    prevRoute = ""
+                    prevDir = ""
+                    changedDirection = false
+                }
+            }
+            if (changedDirection) {
+                clearBreadcrumbsCheckpoint(prevBus, prevRoute, prevDir)
+                if (prevBus.isNotBlank() && prevRoute.isNotBlank() && isCompleteRouteTraversal(prevBus, prevRoute, prevDir, previousBreadcrumbs, isCampusArrival = false)) {
+                    if (previousBreadcrumbs != lastSubmittedBreadcrumbs) {
+                        lastSubmittedBreadcrumbs = previousBreadcrumbs
+                        val pending = savePendingTravelPathUpload(prevBus, prevRoute, prevDir, previousBreadcrumbs)
+                        CollegeBusApp.instance.trackingRepository.updateTravelPath(
+                            busId = prevBus,
+                            routeId = prevRoute,
+                            points = previousBreadcrumbs,
+                            direction = prevDir,
+                            onSuccess = {
+                                clearPendingTravelPathUpload(pending.uploadId, prevBus, pending.timestamp)
+                            },
+                            onFailure = {
+                                schedulePendingUploadRetry()
+                            }
+                        )
+                    }
+                }
+                lastRecordedBreadcrumbLat = 0.0
+                lastRecordedBreadcrumbLng = 0.0
+                lastSubmittedBreadcrumbs = emptyList()
+                Log.i(TAG, "[AUTO-TRACE] Reset breadcrumbs due to direction change from $prevDir to $currentDir")
+            }
+        } else {
+            synchronized(activeTripBreadcrumbs) {
+                if (breadcrumbOwnerGeneration == callbackGeneration) {
+                    breadcrumbOwnerDirection = currentDir
+                }
+            }
+        }
+
+        // Record breadcrumb point for actual travel route optimization
+        val distBreadcrumb = LocationThrottler.calculateDistanceMeters(
+            lastRecordedBreadcrumbLat, lastRecordedBreadcrumbLng,
+            location.latitude, location.longitude
+        )
+        if (distBreadcrumb >= 18.0 && (!location.hasAccuracy() || location.accuracy <= 35.0f)) {
+            val snapshot: List<LatLng>
+            val capturedBusId: String
+            val capturedRouteId: String
+            val capturedDirection: String
+            val capturedGen: Long
+            synchronized(activeTripBreadcrumbs) {
+                if (breadcrumbOwnerGeneration != callbackGeneration) {
+                    snapshot = emptyList()
+                    capturedBusId = ""
+                    capturedRouteId = ""
+                    capturedDirection = ""
+                    capturedGen = 0L
+                } else {
+                    activeTripBreadcrumbs.add(LatLng(location.latitude, location.longitude))
+                    lastRecordedBreadcrumbLat = location.latitude
+                    lastRecordedBreadcrumbLng = location.longitude
+                    if (activeTripBreadcrumbs.size % 10 == 0) {
+                        snapshot = activeTripBreadcrumbs.toList()
+                        capturedBusId = breadcrumbOwnerBusId
+                        capturedRouteId = breadcrumbOwnerRouteId
+                        capturedDirection = breadcrumbOwnerDirection
+                        capturedGen = breadcrumbOwnerGeneration
+                    } else {
+                        snapshot = emptyList()
+                        capturedBusId = ""
+                        capturedRouteId = ""
+                        capturedDirection = ""
+                        capturedGen = 0L
+                    }
+                }
+            }
+            if (snapshot.isNotEmpty()) {
+                checkpointBreadcrumbs(capturedBusId, capturedRouteId, capturedDirection, capturedGen, snapshot)
+            }
+        }
     }
 
     private fun performCampusAutoShutdown(location: Location) {
@@ -1080,11 +1571,18 @@ class LocationTrackingService : Service() {
             Log.e(TAG, "Failed to schedule afternoon shift alarm: ${e.message}")
         }
 
+        // Ensure confirmed arrival location is included in breadcrumbs for endpoint check
+        if (location.latitude != 0.0 && location.longitude != 0.0) {
+            synchronized(activeTripBreadcrumbs) {
+                activeTripBreadcrumbs.add(LatLng(location.latitude, location.longitude))
+            }
+        }
+
         stopTrackingSession(isExplicitUserStop = true)
         stopSelf()
     }
 
-    private fun performScheduledWindowEndShutdown(location: Location, stopReason: String) {
+    private fun performScheduledWindowEndShutdown(location: Location, stopReason: String, recordEndpoint: Boolean = true) {
         val now = System.currentTimeMillis()
         val finalLocation = LiveLocation(
             busId = activeBusId,
@@ -1134,6 +1632,13 @@ class LocationTrackingService : Service() {
             Log.e(TAG, "Failed to re-schedule shift alarms: ${e.message}")
         }
 
+        // Ensure confirmed arrival location is included in breadcrumbs for endpoint check only if observed
+        if (recordEndpoint && location.latitude != 0.0 && location.longitude != 0.0) {
+            synchronized(activeTripBreadcrumbs) {
+                activeTripBreadcrumbs.add(LatLng(location.latitude, location.longitude))
+            }
+        }
+
         stopTrackingSession(isExplicitUserStop = true)
         stopSelf()
     }
@@ -1173,6 +1678,50 @@ class LocationTrackingService : Service() {
         // Only mark the bus OFFLINE in Firebase if the user deliberately pressed Stop Tracking!
         // If swiped or killed by OS memory pressure, leave the active state intact while service resurrects.
         if (isExplicitUserStop && activeBusId.isNotBlank()) {
+            val finalBreadcrumbs: List<LatLng>
+            val targetBus: String
+            val targetRoute: String
+            val targetDir: String
+            synchronized(activeTripBreadcrumbs) {
+                breadcrumbOwnerGeneration++
+                finalBreadcrumbs = activeTripBreadcrumbs.toList()
+                activeTripBreadcrumbs.clear()
+                targetBus = breadcrumbOwnerBusId.ifBlank { activeBusId }
+                targetRoute = breadcrumbOwnerRouteId.ifBlank { activeRouteId }
+                targetDir = breadcrumbOwnerDirection.ifBlank { ScheduleHelper.determineRouteDirection().name }
+            }
+
+            // Completion criteria: arrived at campus geofence or completed route traversal
+            val isCampusArrival = serviceStopCaller == "BitmCampusGeofence"
+
+            val isCompleteRoute = isCompleteRouteTraversal(
+                busId = targetBus,
+                routeId = targetRoute,
+                direction = targetDir,
+                points = finalBreadcrumbs,
+                isCampusArrival = isCampusArrival
+            )
+
+            synchronized(checkpointLock) {
+                isCheckpointingDisabled = true
+                clearBreadcrumbsCheckpoint(targetBus, targetRoute, targetDir)
+            }
+            if (isCompleteRoute && finalBreadcrumbs != lastSubmittedBreadcrumbs) {
+                lastSubmittedBreadcrumbs = finalBreadcrumbs
+                val pending = savePendingTravelPathUpload(targetBus, targetRoute, targetDir, finalBreadcrumbs)
+                CollegeBusApp.instance.trackingRepository.updateTravelPath(
+                    busId = targetBus,
+                    routeId = targetRoute,
+                    points = finalBreadcrumbs,
+                    direction = targetDir,
+                    onSuccess = {
+                        clearPendingTravelPathUpload(pending.uploadId, targetBus, pending.timestamp)
+                    },
+                    onFailure = {
+                        schedulePendingUploadRetry()
+                    }
+                )
+            }
             CollegeBusApp.instance.trackingRepository.removeStudentLocation(activeBusId, activeDriverId)
             CollegeBusApp.instance.trackingRepository.stopTracking(activeBusId, activeDriverId)
         }

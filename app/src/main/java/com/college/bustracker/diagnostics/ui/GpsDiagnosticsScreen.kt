@@ -274,7 +274,7 @@ fun GpsDiagnosticsScreen(
                     ) {
                         Column {
                             Text(
-                                text = "WINDOW-AWARE DIAGNOSTICS",
+                                text = "MANUAL GPS DIAGNOSTICS",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF64748B),
@@ -282,7 +282,6 @@ fun GpsDiagnosticsScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                val isWindowRecording = recordingState.isRecording && recordingState.recordingSessionId.startsWith("win_")
                                 Box(
                                     modifier = Modifier
                                         .size(10.dp)
@@ -293,11 +292,7 @@ fun GpsDiagnosticsScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = when {
-                                        isWindowRecording -> "RECORDING: ON (Shift Window)"
-                                        recordingState.isRecording -> "RECORDING: ON (Manual)"
-                                        else -> "RECORDING: STANDBY"
-                                    },
+                                    text = if (recordingState.isRecording) "RECORDING: ACTIVE (Manual Capture)" else "RECORDING: STANDBY (Manual Only)",
                                     fontWeight = FontWeight.ExtraBold,
                                     fontSize = 15.sp,
                                     color = if (recordingState.isRecording) StatusActiveGreen else Color(0xFF475569)
@@ -325,7 +320,7 @@ fun GpsDiagnosticsScreen(
                             ) {
                                 Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Start Manual", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Start Recording", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -334,9 +329,9 @@ fun GpsDiagnosticsScreen(
 
                     Text(
                         text = if (recordingState.isRecording) {
-                            "Started: ${recordingState.startedAtFormatted.ifBlank { "Active" }} (Recording window events)"
+                            "Started: ${recordingState.startedAtFormatted.ifBlank { "Active" }} (Manual recording in progress)"
                         } else {
-                            "Auto-Window: Starts 2 min prior to shift (e.g. 06:58 / 15:58) and stops when shift ends to conserve storage."
+                            "Manual Mode: Tap 'Start Recording' above to diagnose GPS events during trips. Stops on demand to conserve storage."
                         },
                         fontSize = 11.5.sp,
                         color = Color(0xFF64748B),
@@ -716,8 +711,7 @@ fun GpsDiagnosticsScreen(
                 Button(
                     onClick = {
                         scope.launch {
-                            withContext(Dispatchers.IO) { storage.deleteAllRecords() }
-                            GpsDiagnosticManager.refreshStorageStats()
+                            withContext(Dispatchers.IO) { GpsDiagnosticManager.deleteAllRecords(context) }
                             showDeleteConfirmDialog = false
                             Toast.makeText(context, "All records deleted", Toast.LENGTH_SHORT).show()
                         }
