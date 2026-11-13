@@ -30,7 +30,7 @@ class CollegeBusApp : Application() {
     }
 
     // Managed application-level coroutine scope
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Application-level repositories (Clean lightweight service locator)
     lateinit var authRepository: AuthRepository

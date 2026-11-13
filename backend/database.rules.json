@@ -74,6 +74,18 @@
       "$busId": {
         ".write": true
       }
+    },
+    "bus_travel_paths": {
+      ".read": true,
+      "$busId": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('active').val() == true && (root.child('users').child(auth.uid).child('role').val() == 'ADMIN' || (root.child('users').child(auth.uid).child('role').val() == 'DRIVER' && (root.child('bus_operators').child($busId).child('hasTemporary').val() == true && now >= root.child('bus_operators').child($busId).child('startAt').val() && now < root.child('bus_operators').child($busId).child('endAt').val() ? auth.uid == root.child('bus_operators').child($busId).child('temporaryDriverUid').val() : (root.child('bus_operators').child($busId).child('permanentDriverUid').val() == auth.uid || (!root.child('bus_operators').child($busId).exists() && root.child('users').child(auth.uid).child('assignedBusId').val() == $busId)))))",
+        ".validate": "newData.hasChildren(['busId', 'routeId', 'lastUpdated', 'points']) && newData.child('busId').val() == $busId && newData.child('routeId').isString() && newData.child('lastUpdated').isNumber()",
+        "points": {
+          "$index": {
+            ".validate": "newData.hasChildren(['lat', 'lng']) && newData.child('lat').isNumber() && newData.child('lat').val() >= -90 && newData.child('lat').val() <= 90 && newData.child('lng').isNumber() && newData.child('lng').val() >= -180 && newData.child('lng').val() <= 180"
+          }
+        }
+      }
     }
   }
 }

@@ -222,13 +222,6 @@ class AutoTrackingScheduler {
             Log.i(TAG, "[AUTO-TRACK] $nowIso schedule start check: isOperatingNow=$isOperatingNow, isWorkingDay=$isWorkingDay, busId=$busId, driverId=$driverId")
 
             if (isOperatingNow) {
-                com.college.bustracker.diagnostics.GpsDiagnosticManager.startWindowRecording(
-                    context = context,
-                    reason = "Operating window active check",
-                    busId = busId,
-                    driverId = driverId
-                )
-
                 if (!DriverScheduleReceiver.hasLocationPermission(context)) {
                     Log.w(TAG, "[AUTO-TRACK] $nowIso Location permission missing for driver auto-tracking")
                     DriverScheduleReceiver.showLocationPermissionMissingNotification(context)

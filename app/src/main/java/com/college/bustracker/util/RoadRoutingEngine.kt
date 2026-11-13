@@ -60,8 +60,9 @@ object RoadRoutingEngine {
     /**
      * Computes the road-snapped polyline for a list of consecutive bus stops.
      * Caches results so each route is queried at most once per session.
+     * Prioritizes the actual physical travel path the bus travels most of the time when available.
      */
-    suspend fun getRouteRoadPath(stops: List<BusStop>): RoadRouteResult = withContext(Dispatchers.IO) {
+    suspend fun getRouteRoadPath(stops: List<BusStop>, busId: String? = null): RoadRouteResult = withContext(Dispatchers.IO) {
         val physicalStops = stops.filter { it.hasCoordinates }
         if (physicalStops.isEmpty()) {
             return@withContext RoadRouteResult(emptyList(), 0.0, false)
@@ -69,6 +70,17 @@ object RoadRoutingEngine {
         if (physicalStops.size == 1) {
             val pt = LatLng(physicalStops[0].latitude, physicalStops[0].longitude)
             return@withContext RoadRouteResult(listOf(pt), 0.0, false)
+        }
+
+        // 1. If this bus has a recorded travel path (from how the bus actually drives), prioritize it
+        if (!busId.isNullOrBlank()) {
+            try {
+                val realPath = CollegeBusApp.instance.trackingRepository.getCachedTravelPath(busId)
+                if (!realPath.isNullOrEmpty()) {
+                    val roadDist = computeDirectPolylineDistance(realPath)
+                    return@withContext RoadRouteResult(realPath, roadDist, true)
+                }
+            } catch (ignored: Exception) {}
         }
 
         // Cache key based on stops IDs and coordinates

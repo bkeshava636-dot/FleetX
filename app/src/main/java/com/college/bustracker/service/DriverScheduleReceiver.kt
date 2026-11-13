@@ -400,13 +400,6 @@ class DriverScheduleReceiver : BroadcastReceiver() {
             Log.i(TAG, "[AUTO-TRACE] Driver UID resolved: $driverId")
             Log.i(TAG, "[AUTO-TRACE] Effective bus resolved: $busId")
 
-            // Diagnostic session attached
-            com.college.bustracker.diagnostics.GpsDiagnosticManager.startOrGetSession(
-                context = context,
-                busId = busId,
-                driverId = driverId
-            )
-
             if (busId.isBlank()) {
                 Log.w(TAG, "[AUTO-TRACK] No assigned bus configured for driver; skipping trigger")
                 com.college.bustracker.diagnostics.GpsDiagnosticManager.logEvent(
@@ -421,25 +414,9 @@ class DriverScheduleReceiver : BroadcastReceiver() {
 
             // Schedule and holiday already evaluated above
 
-            // Pre-window hook: Start diagnostic recording 2 minutes prior to shift
+            // Pre-window hook: 2 minutes prior to shift
             if (isPreWindow) {
                 Log.i(TAG, "[AUTO-TRACK] Pre-window alarm fired: requestCode=$requestCode, timeStr=$timeStr, isWorkingDay=$isWorkingDay, isHoliday=$isHoliday")
-                if (isWorkingDay && !isHoliday) {
-                    com.college.bustracker.diagnostics.GpsDiagnosticManager.startWindowRecording(
-                        context = context,
-                        reason = "Pre-window alarm: starting recording 2 min prior to shift ($timeStr)",
-                        busId = busId,
-                        driverId = driverId
-                    )
-                } else {
-                    Log.i(TAG, "[AUTO-TRACK] Pre-window alarm ignored: holiday ($holidayName) or non-working day")
-                    com.college.bustracker.diagnostics.GpsDiagnosticManager.logEvent(
-                        context = context,
-                        stage = com.college.bustracker.diagnostics.DiagnosticStage.OPERATING_WINDOW,
-                        eventName = "PRE_WINDOW_SKIPPED_HOLIDAY",
-                        details = mapOf("holiday" to holidayName, "timeStr" to timeStr)
-                    )
-                }
                 return
             }
 
@@ -456,13 +433,6 @@ class DriverScheduleReceiver : BroadcastReceiver() {
                     Log.i(TAG, "[AUTO-TRACK] Operating window is active, but explicitly OVERRIDDEN_OFF by driver. Skipping auto-start.")
                     return
                 }
-                // Ensure diagnostic window recording is active during operating window
-                com.college.bustracker.diagnostics.GpsDiagnosticManager.startWindowRecording(
-                    context = context,
-                    reason = "Operating window active ($timeStr)",
-                    busId = busId,
-                    driverId = driverId
-                )
 
                 // Pre-flight 1: Location Permissions
                 val hasFinePerm = hasLocationPermission(context)
@@ -531,14 +501,6 @@ class DriverScheduleReceiver : BroadcastReceiver() {
                     val stopReason = if (isHoliday) "COLLEGE_HOLIDAY" else "OPERATING_WINDOW_ENDED"
                     Log.i(TAG, "[AUTO-TRACK] Stopping LocationTrackingService: $stopReason (mode=$persistentMode)")
                     TrackingServiceHelper.stopTracking(context, stopReason, "DriverScheduleReceiver")
-                    com.college.bustracker.diagnostics.GpsDiagnosticManager.completeSession(
-                        context = context,
-                        reason = if (isHoliday) "College holiday ($holidayName)" else "Outside operating window"
-                    )
-                    com.college.bustracker.diagnostics.GpsDiagnosticManager.stopWindowRecording(
-                        context = context,
-                        reason = if (isHoliday) "College holiday ($holidayName)" else "Operating window ended ($timeStr)"
-                    )
                 }
                 dismissLocationDisabledNotification(context)
                 dismissLocationPermissionMissingNotification(context)

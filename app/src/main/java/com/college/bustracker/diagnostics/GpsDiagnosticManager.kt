@@ -80,11 +80,37 @@ object GpsDiagnosticManager {
             storage = store
 
             // 1. Restore recording state from disk
-            val savedState = store.loadRecordingState()
+            var savedState = store.loadRecordingState()
+            if (savedState.isRecording && savedState.recordingSessionId.startsWith("win_")) {
+                savedState = savedState.copy(isRecording = false)
+                store.saveRecordingState(savedState)
+            }
             _recordingState.value = savedState
 
             // 2. Load latest operating window report & storage stats
-            _currentReport.value = store.getLatestReport()
+            val latest = store.getLatestReport()
+            _currentReport.value = latest
+            if (savedState.isRecording && latest != null && latest.completedAtMs == null) {
+                activeSession = MutableSessionState.fromReport(latest)
+                _isSessionActive.value = true
+
+                // Restore diagnostic counters from persisted session evidence
+                val maxHeartbeatFixes = latest.heartbeats.maxOfOrNull { it.locationCallbacksCount } ?: 0
+                val lastFixTotal = latest.events
+                    .lastOrNull { it.eventName == "LOCATION_CALLBACK_RECEIVED" }
+                    ?.details?.get("totalFixes")?.toIntOrNull()
+                    ?: latest.events.count { it.stage == DiagnosticStage.LOCATION_CALLBACK }
+                locationCallbackCount = maxOf(maxHeartbeatFixes, lastFixTotal)
+
+                val maxHeartbeatWrites = latest.heartbeats.maxOfOrNull { it.rtdbWritesCount } ?: 0
+                val lastWriteTotal = latest.events
+                    .lastOrNull { it.eventName == "RTDB_WRITE_SUCCEEDED" || it.eventName == "RTDB_RETRY_SUCCEEDED" }
+                    ?.details?.get("totalWrites")?.toIntOrNull()
+                    ?: latest.events.count { it.eventName == "RTDB_WRITE_SUCCEEDED" || it.eventName == "RTDB_RETRY_SUCCEEDED" }
+                rtdbWriteCount = maxOf(maxHeartbeatWrites, lastWriteTotal)
+
+                lastLocationTimestamp = latest.events.filter { it.stage == DiagnosticStage.LOCATION_CALLBACK }.maxOfOrNull { it.timestampMs } ?: 0L
+            }
             refreshStorageStats()
 
             // 3. Start observation loop if recording is active
@@ -105,6 +131,29 @@ object GpsDiagnosticManager {
         storage?.let {
             _storageStats.value = it.getStorageStats()
         }
+    }
+
+    @Synchronized
+    fun deleteAllRecords(context: Context) {
+        init(context)
+        val wasRecording = _recordingState.value.isRecording
+        activeSession = null
+        _isSessionActive.value = false
+        _currentReport.value = null
+        locationCallbackCount = 0
+        rtdbWriteCount = 0
+        lastLocationTimestamp = 0L
+        lastRtdbWriteLatencyMs = 0L
+        getStorage(context).deleteAllRecords()
+
+        if (wasRecording) {
+            val stoppedState = ContinuousRecordingState(isRecording = false)
+            _recordingState.value = stoppedState
+            getStorage(context).saveRecordingState(stoppedState)
+            observationJob?.cancel()
+            observationJob = null
+        }
+        refreshStorageStats()
     }
 
     // ==========================================
@@ -130,6 +179,13 @@ object GpsDiagnosticManager {
         _recordingState.value = newState
         getStorage(context).saveRecordingState(newState)
 
+        startOrGetSession(
+            context = context,
+            busId = "",
+            driverId = "",
+            customWindowName = "Manual Diagnostic Session"
+        )
+
         logEvent(
             context = context,
             stage = DiagnosticStage.SYSTEM_HEALTH,
@@ -148,6 +204,11 @@ object GpsDiagnosticManager {
     @Synchronized
     fun stopRecording(context: Context) {
         init(context)
+        completeSession(
+            context = context,
+            reason = "Manual recording stopped by user"
+        )
+
         logEvent(
             context = context,
             stage = DiagnosticStage.SYSTEM_HEALTH,
@@ -170,6 +231,10 @@ object GpsDiagnosticManager {
 
     fun isRecordingActive(): Boolean = _recordingState.value.isRecording
 
+    /**
+     * Automatic window recording is retired. GPS diagnosis is strictly manual.
+     * Kept as a safe no-op to ensure backwards compatibility across components.
+     */
     @Synchronized
     fun startWindowRecording(
         context: Context,
@@ -177,73 +242,18 @@ object GpsDiagnosticManager {
         busId: String = "",
         driverId: String = ""
     ) {
-        init(context)
-        if (_recordingState.value.isRecording) {
-            // Already recording; attach session if busId provided
-            if (busId.isNotBlank()) {
-                startOrGetSession(context, busId, driverId)
-            }
-            return
-        }
-
-        val now = System.currentTimeMillis()
-        val nowFormatted = Instant.ofEpochMilli(now).atZone(ScheduleHelper.KOLKATA_ZONE).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US))
-        val sessionId = "win_" + UUID.randomUUID().toString().take(8)
-
-        val newState = ContinuousRecordingState(
-            isRecording = true,
-            startedAtMs = now,
-            startedAtFormatted = nowFormatted,
-            recordingSessionId = sessionId,
-            totalEventsRecorded = _recordingState.value.totalEventsRecorded,
-            lastEventTimestampMs = now,
-            lastEventName = "WINDOW_RECORDING_STARTED"
-        )
-        _recordingState.value = newState
-        getStorage(context).saveRecordingState(newState)
-
-        if (busId.isNotBlank()) {
-            startOrGetSession(context, busId, driverId)
-        }
-
-        logEvent(
-            context = context,
-            stage = DiagnosticStage.SYSTEM_HEALTH,
-            eventName = "WINDOW_RECORDING_STARTED",
-            details = mapOf(
-                "recordingSessionId" to sessionId,
-                "startedAt" to nowFormatted,
-                "note" to reason
-            )
-        )
-
-        startObservationLoop(context.applicationContext)
-        refreshStorageStats()
+        // No-op: automatic diagnosis is disabled; diagnosis is strictly manual via startRecording(context)
+        Log.d(TAG, "startWindowRecording ignored: automatic diagnosis disabled (manual only).")
     }
 
+    /**
+     * Automatic window recording is retired. GPS diagnosis is strictly manual.
+     * Kept as a safe no-op to ensure backwards compatibility across components.
+     */
     @Synchronized
     fun stopWindowRecording(context: Context, reason: String = "Operating window ended") {
-        init(context)
-        if (!_recordingState.value.isRecording) return
-
-        logEvent(
-            context = context,
-            stage = DiagnosticStage.SYSTEM_HEALTH,
-            eventName = "WINDOW_RECORDING_STOPPED",
-            details = mapOf("note" to reason)
-        )
-
-        val updated = _recordingState.value.copy(
-            isRecording = false,
-            lastEventTimestampMs = System.currentTimeMillis(),
-            lastEventName = "WINDOW_RECORDING_STOPPED"
-        )
-        _recordingState.value = updated
-        getStorage(context).saveRecordingState(updated)
-
-        observationJob?.cancel()
-        observationJob = null
-        refreshStorageStats()
+        // No-op: automatic diagnosis is disabled; diagnosis is strictly manual via stopRecording(context)
+        Log.d(TAG, "stopWindowRecording ignored: automatic diagnosis disabled (manual only).")
     }
 
     // ==========================================
@@ -726,7 +736,8 @@ object GpsDiagnosticManager {
             details = mapOf(
                 "busId" to busId,
                 "attempt" to attempt.toString(),
-                "latencyMs" to latencyMs.toString()
+                "latencyMs" to latencyMs.toString(),
+                "totalWrites" to rtdbWriteCount.toString()
             )
         )
     }
@@ -808,8 +819,12 @@ object GpsDiagnosticManager {
 
         // 2. Also forward to operating window session if active
         val session = activeSession
-        if (session != null && session.sessionStatus == SessionStatus.RUNNING) {
+        if (session != null && session.completedAtMs == null) {
+            session.totalEventsLogged++
             session.events.add(event)
+            if (session.events.size > 200) {
+                session.events.removeAt(0)
+            }
             updatePipelineStatus(session, stage, isFailure)
             if (isFailure && failureType != FailureType.NONE) {
                 if (session.primaryFailure == FailureType.NONE) {
@@ -822,7 +837,9 @@ object GpsDiagnosticManager {
             }
             val rep = session.toReport()
             _currentReport.value = rep
-            getStorage(context).saveReport(rep)
+            if (isFailure || session.totalEventsLogged % 20L == 0L || eventName == "OPERATING_WINDOW_STARTED" || eventName == "OPERATING_WINDOW_ENDED") {
+                getStorage(context).saveReport(rep)
+            }
         }
 
         refreshStorageStats()
@@ -846,7 +863,7 @@ object GpsDiagnosticManager {
         val todayStr = LocalDate.now(ScheduleHelper.KOLKATA_ZONE).format(dateFormatter)
 
         val current = activeSession
-        if (current != null && current.date == todayStr && current.windowName == winName && current.sessionStatus == SessionStatus.RUNNING) {
+        if (current != null && current.date == todayStr && current.windowName == winName && current.completedAtMs == null) {
             if (busId.isNotBlank()) current.busId = busId
             if (driverId.isNotBlank()) current.driverIdMasked = maskDriverId(driverId)
             return current.toReport()
@@ -871,7 +888,7 @@ object GpsDiagnosticManager {
         rtdbWriteCount = 0
         lastLocationTimestamp = 0L
         lastRtdbWriteLatencyMs = 0L
-        isServiceAlive = false
+        isServiceAlive = isServiceAlive || com.college.bustracker.service.TrackingServiceHelper.isTracking.value
 
         logEvent(
             context = context,
@@ -893,7 +910,27 @@ object GpsDiagnosticManager {
 
     @Synchronized
     fun completeSession(context: Context, reason: String = "Operating window ended") {
-        val session = activeSession ?: return
+        val session = activeSession
+            ?: _currentReport.value?.takeIf { it.completedAtMs == null }?.let { report ->
+                val restored = MutableSessionState.fromReport(report)
+                if (locationCallbackCount == 0 && rtdbWriteCount == 0) {
+                    val maxHeartbeatFixes = report.heartbeats.maxOfOrNull { it.locationCallbacksCount } ?: 0
+                    val lastFixTotal = report.events
+                        .lastOrNull { it.eventName == "LOCATION_CALLBACK_RECEIVED" }
+                        ?.details?.get("totalFixes")?.toIntOrNull()
+                        ?: report.events.count { it.stage == DiagnosticStage.LOCATION_CALLBACK }
+                    locationCallbackCount = maxOf(maxHeartbeatFixes, lastFixTotal)
+
+                    val maxHeartbeatWrites = report.heartbeats.maxOfOrNull { it.rtdbWritesCount } ?: 0
+                    val lastWriteTotal = report.events
+                        .lastOrNull { it.eventName == "RTDB_WRITE_SUCCEEDED" || it.eventName == "RTDB_RETRY_SUCCEEDED" }
+                        ?.details?.get("totalWrites")?.toIntOrNull()
+                        ?: report.events.count { it.eventName == "RTDB_WRITE_SUCCEEDED" || it.eventName == "RTDB_RETRY_SUCCEEDED" }
+                    rtdbWriteCount = maxOf(maxHeartbeatWrites, lastWriteTotal)
+                }
+                restored
+            }
+            ?: return
         val now = System.currentTimeMillis()
         session.completedAtMs = now
 
@@ -992,21 +1029,23 @@ object GpsDiagnosticManager {
         )
 
         // Record heartbeat to active operating session if present
-        activeSession?.let { sess ->
-            val timeStr = LocalTime.now(ScheduleHelper.KOLKATA_ZONE).format(timeFormatter)
-            val hb = DiagnosticHeartbeat(
-                timestampMs = now,
-                timeFormatted = timeStr,
-                serviceAlive = isServiceAlive,
-                locationCallbacksCount = locationCallbackCount,
-                lastLocationAgeSeconds = if (timeSinceFixSec >= 0) timeSinceFixSec else 0L,
-                rtdbWritesCount = rtdbWriteCount,
-                lastRtdbLatencyMs = lastRtdbWriteLatencyMs
-            )
-            sess.heartbeats.add(hb)
-            val rep = sess.toReport()
-            _currentReport.value = rep
-            getStorage(context).saveReport(rep)
+        synchronized(this) {
+            activeSession?.let { sess ->
+                val timeStr = LocalTime.now(ScheduleHelper.KOLKATA_ZONE).format(timeFormatter)
+                val hb = DiagnosticHeartbeat(
+                    timestampMs = now,
+                    timeFormatted = timeStr,
+                    serviceAlive = isServiceAlive,
+                    locationCallbacksCount = locationCallbackCount,
+                    lastLocationAgeSeconds = if (timeSinceFixSec >= 0) timeSinceFixSec else 0L,
+                    rtdbWritesCount = rtdbWriteCount,
+                    lastRtdbLatencyMs = lastRtdbWriteLatencyMs
+                )
+                sess.heartbeats.add(hb)
+                val rep = sess.toReport()
+                _currentReport.value = rep
+                getStorage(context).saveReport(rep)
+            }
         }
     }
 
@@ -1281,6 +1320,7 @@ object GpsDiagnosticManager {
         var deviceState: DeviceStateSnapshot? = null
         var summaryMessage: String = "Diagnostic session in progress"
         var completedAtMs: Long? = null
+        var totalEventsLogged: Long = 0L
 
         fun toReport(): GpsDiagnosticReport {
             return GpsDiagnosticReport(
@@ -1302,6 +1342,32 @@ object GpsDiagnosticManager {
                 createdAtMs = createdAtMs,
                 completedAtMs = completedAtMs
             )
+        }
+
+        companion object {
+            fun fromReport(report: GpsDiagnosticReport): MutableSessionState {
+                val state = MutableSessionState(
+                    sessionId = report.sessionId,
+                    date = report.date,
+                    windowName = report.windowName,
+                    windowStart = report.windowStart,
+                    windowEnd = report.windowEnd,
+                    busId = report.busId,
+                    driverIdMasked = report.driverIdMasked,
+                    createdAtMs = report.createdAtMs
+                )
+                state.sessionStatus = report.sessionStatus
+                state.primaryFailure = report.primaryFailure
+                state.secondaryFailures.addAll(report.secondaryFailures)
+                state.pipeline = report.pipeline
+                state.events.addAll(report.events)
+                state.heartbeats.addAll(report.heartbeats)
+                state.deviceState = report.deviceState
+                state.summaryMessage = report.summaryMessage
+                state.completedAtMs = report.completedAtMs
+                state.totalEventsLogged = report.events.size.toLong()
+                return state
+            }
         }
     }
 }

@@ -55,6 +55,7 @@ class StudentViewModel : ViewModel() {
 
     private val allFleetBuses = MutableStateFlow<List<Bus>>(emptyList())
     private var currentListeningBusId: String? = null
+    private var currentListeningRouteId: String? = null
 
     private val _buses = MutableStateFlow<List<Bus>>(emptyList())
     val buses: StateFlow<List<Bus>> = _buses.asStateFlow()
@@ -378,13 +379,25 @@ class StudentViewModel : ViewModel() {
 
     private fun updateCurrentRouteForSelectedBus(preferredStopId: String? = null) {
         val bus = _selectedBus.value ?: return
+        val activeSwap = _activeSwapForStudent.value
+        val effectiveBusId = if (activeSwap != null && activeSwap.originalBusId == bus.busId && activeSwap.replacementBusId.isNotBlank()) {
+            activeSwap.replacementBusId
+        } else {
+            bus.busId
+        }
         val routes = allRoutes.value
         val r = routes.find { it.active && it.routeId == bus.routeId }
         val sanitizedRoute = r?.copy(
             stops = r.stops.filter { it.active }.sortedBy { it.order }
         )
+        val oldRouteId = _currentRoute.value?.routeId
         _currentRoute.value = sanitizedRoute
-        fetchRouteRoadPolyline(sanitizedRoute?.stops ?: emptyList())
+        fetchRouteRoadPolyline(sanitizedRoute?.stops ?: emptyList(), effectiveBusId)
+
+        // Rebind live bus listeners if route ID changed, ensuring travel-path observer tracks the new route
+        if (sanitizedRoute?.routeId != oldRouteId && effectiveBusId.isNotBlank()) {
+            startListeningToLiveBus(effectiveBusId)
+        }
 
         val currentSelected = _selectedStop.value
         val savedStopId = StudentPreferences.getSavedStopId(app.applicationContext)
@@ -402,14 +415,32 @@ class StudentViewModel : ViewModel() {
         updateDriverDisplayInfo()
     }
 
-    private fun fetchRouteRoadPolyline(stops: List<BusStop>) {
+    private var routeRoadJob: Job? = null
+
+    private fun fetchRouteRoadPolyline(stops: List<BusStop>, busId: String? = null) {
+        routeRoadJob?.cancel()
         if (stops.isEmpty()) {
             _routeRoadPolyline.value = emptyList()
             return
         }
-        viewModelScope.launch {
+        val targetBusId = busId ?: _selectedBus.value?.busId ?: ""
+        val targetRouteId = _currentRoute.value?.routeId ?: ""
+
+        routeRoadJob = viewModelScope.launch {
+            // 1. Check for real optimized travel route recorded from how the bus actually travels
+            val cachedTravelPath = if (targetBusId.isNotBlank()) {
+                trackingRepo.getCachedTravelPath(targetBusId, targetRouteId)
+            } else null
+
+            if (!cachedTravelPath.isNullOrEmpty() && cachedTravelPath.size >= 5) {
+                _routeRoadPolyline.value = cachedTravelPath
+                return@launch
+            }
+
+            // 2. Fallback to road-snapped stop baseline if no travel history is available yet
             val result = RoadRoutingEngine.getRouteRoadPath(stops)
             _routeRoadPolyline.value = result.points
+            updateEtaCalculation(_liveLocation.value, force = true)
         }
     }
 
@@ -448,67 +479,97 @@ class StudentViewModel : ViewModel() {
     }
 
     private var studentSourcesJob: Job? = null
+    private var travelPathJob: Job? = null
 
     fun startListeningToLiveBus(busId: String) {
         if (busId.isBlank()) return
-        if (currentListeningBusId == busId && liveTrackingJob?.isActive == true) {
+        val targetRouteId = _currentRoute.value?.routeId ?: ""
+        val isSameBus = currentListeningBusId == busId
+        val isSameRoute = currentListeningRouteId == targetRouteId
+
+        if (isSameBus && isSameRoute && liveTrackingJob?.isActive == true && travelPathJob?.isActive == true) {
             return
         }
         currentListeningBusId = busId
-        liveTrackingJob?.cancel()
-        studentSourcesJob?.cancel()
+        currentListeningRouteId = targetRouteId
 
-        liveTrackingJob = viewModelScope.launch {
-            trackingRepo.getLiveLocationFlow(busId).collect { loc ->
-                val current = _liveLocation.value
-                if (current == null || current.busId != loc.busId || loc.lastUpdated >= current.lastUpdated || (loc.lastUpdated == 0L && current.lastUpdated == 0L)) {
-                    _liveLocation.value = loc
-                    _trackingState.value = loc.getDisplayState()
-                    _lastUpdateText.value = if (loc.lastUpdated > 0L) {
-                        ScheduleHelper.formatRelativeTime(loc.lastUpdated)
-                    } else {
-                        "Inactive"
+        if (!isSameBus || liveTrackingJob?.isActive != true) {
+            liveTrackingJob?.cancel()
+            liveTrackingJob = viewModelScope.launch {
+                trackingRepo.getLiveLocationFlow(busId).collect { loc ->
+                    val current = _liveLocation.value
+                    if (current == null || current.busId != loc.busId || loc.lastUpdated >= current.lastUpdated || (loc.lastUpdated == 0L && current.lastUpdated == 0L)) {
+                        _liveLocation.value = loc
+                        _trackingState.value = loc.getDisplayState()
+                        _lastUpdateText.value = if (loc.lastUpdated > 0L) {
+                            ScheduleHelper.formatRelativeTime(loc.lastUpdated)
+                        } else {
+                            "Inactive"
+                        }
+                        updateEtaCalculation(loc, force = false)
+                        android.util.Log.i(
+                            "BusTrackerGPS",
+                            "LIVE_LOCATION_STATE_UPDATED: busId=${loc.busId}, lat=${loc.latitude}, lon=${loc.longitude}, lastUpdated=${loc.lastUpdated}"
+                        )
                     }
-                    updateEtaCalculation(loc, force = false)
-                    android.util.Log.i(
-                        "BusTrackerGPS",
-                        "LIVE_LOCATION_STATE_UPDATED: busId=${loc.busId}, lat=${loc.latitude}, lon=${loc.longitude}, lastUpdated=${loc.lastUpdated}"
-                    )
                 }
             }
         }
 
-        // Crowdsourced Student Contributor Failover:
-        // If driver GPS drops or is inactive, seamlessly listen to student fixes for this bus
-        studentSourcesJob = viewModelScope.launch {
-            trackingRepo.getLocationSourcesFlow(busId).collect { sources ->
-                val activeDriverLoc = _liveLocation.value
-                val isDriverFresh = activeDriverLoc != null &&
-                        !activeDriverLoc.isStale() &&
-                        activeDriverLoc.trackingStatus == "ACTIVE" &&
-                        activeDriverLoc.sourceType != "STUDENT_ASSISTED"
+        if (!isSameBus || studentSourcesJob?.isActive != true) {
+            studentSourcesJob?.cancel()
+            studentSourcesJob = viewModelScope.launch {
+                trackingRepo.getLocationSourcesFlow(busId).collect { sources ->
+                    val activeDriverLoc = _liveLocation.value
+                    val isDriverFresh = activeDriverLoc != null &&
+                            !activeDriverLoc.isStale() &&
+                            activeDriverLoc.trackingStatus == "ACTIVE" &&
+                            activeDriverLoc.sourceType != "STUDENT_ASSISTED"
 
-                if (!isDriverFresh && sources.isNotEmpty()) {
-                    val validStudents = sources.filter { it.sourceType == "SECONDARY_STUDENT" && it.active }
-                    if (validStudents.isNotEmpty()) {
-                        val bus = _selectedBus.value
-                        val fusion = MultiSourceLocationEngine.selectBestLocation(
-                            busId = busId,
-                            routeId = bus?.routeId ?: "",
-                            driverId = "",
-                            mode = "STUDENT_ASSISTED",
-                            previousLocation = activeDriverLoc,
-                            driverSource = null,
-                            studentSources = validStudents
-                        )
-                        if (fusion.selectedSourceType == SelectedSourceType.STUDENT_ASSISTED) {
-                            val candidate = fusion.liveLocation.copy(sourceType = "STUDENT_ASSISTED")
-                            _liveLocation.value = candidate
-                            _trackingState.value = TrackingDisplayState.ACTIVE
-                            _lastUpdateText.value = ScheduleHelper.formatRelativeTime(candidate.lastUpdated) + " (Student GPS)"
-                            updateEtaCalculation(candidate, force = false)
-                            android.util.Log.i("BusTrackerGPS", "STUDENT_VIEWMODEL_FAILOVER: Using ${fusion.usedSourcesCount} student source(s) for bus $busId")
+                    if (!isDriverFresh && sources.isNotEmpty()) {
+                        val validStudents = sources.filter { it.sourceType == "SECONDARY_STUDENT" && it.active }
+                        if (validStudents.isNotEmpty()) {
+                            val bus = _selectedBus.value
+                            val fusion = MultiSourceLocationEngine.selectBestLocation(
+                                busId = busId,
+                                routeId = bus?.routeId ?: "",
+                                driverId = "",
+                                mode = "STUDENT_ASSISTED",
+                                previousLocation = activeDriverLoc,
+                                driverSource = null,
+                                studentSources = validStudents
+                            )
+                            if (fusion.selectedSourceType == SelectedSourceType.STUDENT_ASSISTED) {
+                                val candidate = fusion.liveLocation.copy(sourceType = "STUDENT_ASSISTED")
+                                _liveLocation.value = candidate
+                                _trackingState.value = TrackingDisplayState.ACTIVE
+                                _lastUpdateText.value = ScheduleHelper.formatRelativeTime(candidate.lastUpdated) + " (Student GPS)"
+                                updateEtaCalculation(candidate, force = false)
+                                android.util.Log.i("BusTrackerGPS", "STUDENT_VIEWMODEL_FAILOVER: Using ${fusion.usedSourcesCount} student source(s) for bus $busId")
+                            }
                         }
+                    }
+                }
+            }
+        }
+
+        // Always observe the active travel path for (busId, targetRouteId)
+        travelPathJob?.cancel()
+        travelPathJob = viewModelScope.launch {
+            trackingRepo.getTravelPathFlow(busId, targetRouteId).collect { travelPath ->
+                // Complete travel path representing a real route traversal (>= 5 points).
+                // Avoid replacing the planned baseline polyline with a partial or incomplete breadcrumb stub.
+                if (travelPath.size >= 5) {
+                    routeRoadJob?.cancel()
+                    _routeRoadPolyline.value = travelPath
+                    updateEtaCalculation(_liveLocation.value, force = true)
+                } else {
+                    // Node removed, cleared, or path has fewer than 5 points: restore stop-based baseline
+                    val stops = _currentRoute.value?.stops ?: emptyList()
+                    if (stops.isNotEmpty()) {
+                        fetchRouteRoadPolyline(stops, busId)
+                    } else {
+                        _routeRoadPolyline.value = emptyList()
                     }
                 }
             }
@@ -544,7 +605,10 @@ class StudentViewModel : ViewModel() {
         liveTrackingJob = null
         studentSourcesJob?.cancel()
         studentSourcesJob = null
+        travelPathJob?.cancel()
+        travelPathJob = null
         currentListeningBusId = null
+        currentListeningRouteId = null
     }
 
     private var lastCalculatedDirection: com.college.bustracker.util.RouteDirection? = null
@@ -714,6 +778,8 @@ class StudentViewModel : ViewModel() {
             StudentLocationAssistant.stopSharing()
         }
         stopListeningToLiveBus()
+        routeRoadJob?.cancel()
+        routeRoadJob = null
         super.onCleared()
     }
 }
