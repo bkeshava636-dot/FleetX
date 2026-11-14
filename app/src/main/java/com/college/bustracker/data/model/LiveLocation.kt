@@ -22,9 +22,10 @@ data class LiveLocation(
     /**
      * Considers the coordinate stale if no update has arrived in over 90 seconds.
      */
-    fun isStale(timeoutMillis: Long = 90_000L): Boolean {
+    fun isStale(timeoutMillis: Long = 90_000L, nowMillis: Long = System.currentTimeMillis()): Boolean {
         if (lastUpdated <= 0L) return true
-        return (System.currentTimeMillis() - lastUpdated) > timeoutMillis
+        val diff = (nowMillis - lastUpdated).coerceAtLeast(0L)
+        return diff > timeoutMillis
     }
 
     @get:Exclude
@@ -46,13 +47,19 @@ fun LiveLocation?.getDisplayState(nowMillis: Long = System.currentTimeMillis()):
     if (this == null) return TrackingDisplayState.INACTIVE
     return when (trackingStatus) {
         "WAITING_FOR_GPS" -> TrackingDisplayState.WAITING_FOR_GPS
+        "STALE" -> TrackingDisplayState.STALE
         "ACTIVE" -> {
             if (latitude == 0.0 && longitude == 0.0) {
                 TrackingDisplayState.WAITING_FOR_GPS
-            } else if (lastUpdated <= 0L || (nowMillis - lastUpdated) > 90_000L) {
+            } else if (lastUpdated <= 0L) {
                 TrackingDisplayState.STALE
             } else {
-                TrackingDisplayState.ACTIVE
+                val elapsed = (nowMillis - lastUpdated).coerceAtLeast(0L)
+                if (elapsed > 90_000L) {
+                    TrackingDisplayState.STALE
+                } else {
+                    TrackingDisplayState.ACTIVE
+                }
             }
         }
         else -> TrackingDisplayState.INACTIVE

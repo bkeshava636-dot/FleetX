@@ -6,7 +6,6 @@ import com.college.bustracker.data.model.TrackingDisplayState
 import com.college.bustracker.data.model.getDisplayState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -67,8 +66,18 @@ class StudentLiveLocationRefreshTest {
 
         fun onNewLocation(newLoc: LiveLocation) {
             val curr = currentLocation
-            // Monotonic replacement rule matching StudentViewModel
-            if (curr == null || curr.busId != newLoc.busId || newLoc.lastUpdated >= curr.lastUpdated || (newLoc.lastUpdated == 0L && curr.lastUpdated == 0L)) {
+            val serverNow = 1790950000000L + 10_000L
+            val isDriverRecovery = curr?.sourceType == "STUDENT_ASSISTED" &&
+                    newLoc.sourceType != "STUDENT_ASSISTED" &&
+                    !newLoc.isStale(nowMillis = serverNow) &&
+                    newLoc.trackingStatus == "ACTIVE"
+
+            val isNewData = curr == null ||
+                    curr.busId != newLoc.busId ||
+                    newLoc.lastUpdated >= curr.lastUpdated ||
+                    isDriverRecovery
+
+            if (isNewData) {
                 currentLocation = newLoc
             }
         }
@@ -154,6 +163,100 @@ class StudentLiveLocationRefreshTest {
             lastUpdated = now - 10_000L
         )
         assertEquals("Explicit INACTIVE status must show INACTIVE state regardless of age", TrackingDisplayState.INACTIVE, inactiveLocation.getDisplayState(now))
+
+        // Negative elapsed time (due to device clock skew where driver is ahead)
+        val aheadLocation = LiveLocation(
+            busId = "TEST-BUS-01",
+            latitude = 15.1500,
+            longitude = 76.9000,
+            trackingStatus = "ACTIVE",
+            lastUpdated = now + 5000L
+        )
+        assertEquals("Location timestamp slightly ahead must be ACTIVE, never STALE", TrackingDisplayState.ACTIVE, aheadLocation.getDisplayState(now))
+        assertFalse("Location ahead of local clock must not be stale", aheadLocation.isStale(nowMillis = now))
+    }
+
+    @Test
+    fun testLiveLocationPipeline_statusChangeAndDriverRecoveryAccepted() = runTest {
+        var currentLocation: LiveLocation? = null
+        val serverNow = 2500L
+
+        fun onNewLocation(newLoc: LiveLocation) {
+            val curr = currentLocation
+            val isDriverRecovery = curr?.sourceType == "STUDENT_ASSISTED" &&
+                    newLoc.sourceType != "STUDENT_ASSISTED" &&
+                    !newLoc.isStale(nowMillis = serverNow) &&
+                    newLoc.trackingStatus == "ACTIVE"
+
+            val isNewData = curr == null ||
+                    curr.busId != newLoc.busId ||
+                    newLoc.lastUpdated >= curr.lastUpdated ||
+                    isDriverRecovery
+
+            if (isNewData) {
+                currentLocation = newLoc
+            }
+        }
+
+        // 1. Initial waiting for GPS
+        val initialWait = LiveLocation(
+            busId = "TEST-BUS-01",
+            latitude = 0.0,
+            longitude = 0.0,
+            trackingStatus = "WAITING_FOR_GPS",
+            lastUpdated = 1000L
+        )
+        onNewLocation(initialWait)
+        assertEquals("WAITING_FOR_GPS", currentLocation!!.trackingStatus)
+
+        // 2. Active fix arrives with newer timestamp
+        val activeFix = LiveLocation(
+            busId = "TEST-BUS-01",
+            latitude = 15.1500,
+            longitude = 76.9000,
+            trackingStatus = "ACTIVE",
+            lastUpdated = 1500L
+        )
+        onNewLocation(activeFix)
+        assertEquals("ACTIVE", currentLocation!!.trackingStatus)
+
+        // 3. Student assisted fix takes over
+        val studentAssisted = LiveLocation(
+            busId = "TEST-BUS-01",
+            latitude = 15.1505,
+            longitude = 76.9005,
+            trackingStatus = "ACTIVE",
+            sourceType = "STUDENT_ASSISTED",
+            lastUpdated = 2000L
+        )
+        onNewLocation(studentAssisted)
+        assertEquals("STUDENT_ASSISTED", currentLocation!!.sourceType)
+
+        // 4. Stale driver packet (120s old > 90s stale) arrives -> must NOT overwrite live student fix
+        val staleDriver = LiveLocation(
+            busId = "TEST-BUS-01",
+            latitude = 15.1400,
+            longitude = 76.8900,
+            trackingStatus = "ACTIVE",
+            sourceType = "PRIMARY_DRIVER",
+            lastUpdated = serverNow - 120_000L
+        )
+        onNewLocation(staleDriver)
+        assertEquals("Stale driver packet must NOT overwrite active student assisted fix", "STUDENT_ASSISTED", currentLocation!!.sourceType)
+        assertEquals(15.1505, currentLocation!!.latitude, 0.0001)
+
+        // 5. Fresh driver recovers with timestamp that is active
+        val driverRecovered = LiveLocation(
+            busId = "TEST-BUS-01",
+            latitude = 15.1510,
+            longitude = 76.9010,
+            trackingStatus = "ACTIVE",
+            sourceType = "PRIMARY_DRIVER",
+            lastUpdated = 2400L
+        )
+        onNewLocation(driverRecovered)
+        assertEquals("Fresh driver recovery must replace STUDENT_ASSISTED", "PRIMARY_DRIVER", currentLocation!!.sourceType)
+        assertEquals(15.1510, currentLocation!!.latitude, 0.0001)
     }
 
     @Test
@@ -177,9 +280,14 @@ class StudentLiveLocationRefreshTest {
         assertEquals(3, activeWithSelection.size)
         assertTrue(activeWithSelection.any { it.busId == "TEST-BUS-01" })
 
-        // Selection must not be ejected
+        // Selection must not be ejected while active in fleet
         val currentSelected = Bus(busId = "TEST-BUS-01", busNumber = "TEST-BUS-01", active = true)
-        val shouldEject = !currentSelected.busId.startsWith("TEST-", ignoreCase = true) && fleetList.none { it.busId == currentSelected.busId }
-        assertFalse("Explicitly selected test bus must NOT be ejected from selection", shouldEject)
+        val shouldEjectWhileActive = activeWithSelection.none { it.busId.equals(currentSelected.busId, ignoreCase = true) }
+        assertFalse("Explicitly selected test bus must NOT be ejected from selection when active", shouldEjectWhileActive)
+
+        // If bus is removed or deactivated, it should be ejected
+        val fleetWithoutTestBus = fleetList.filter { !it.busId.startsWith("TEST-") }
+        val shouldEjectWhenRemoved = fleetWithoutTestBus.none { it.busId.equals(currentSelected.busId, ignoreCase = true) }
+        assertTrue("Test bus must be ejected if deleted/deactivated from fleet", shouldEjectWhenRemoved)
     }
 }

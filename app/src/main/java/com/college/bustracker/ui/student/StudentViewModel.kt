@@ -221,7 +221,7 @@ class StudentViewModel : ViewModel() {
                     } else {
                         selectBus(studentBuses.firstOrNull() ?: activeBuses.first())
                     }
-                } else if (currentSelected != null && !currentSelected.busId.startsWith("TEST-", ignoreCase = true) && activeBuses.none { it.busId.equals(currentSelected.busId, ignoreCase = true) }) {
+                } else if (currentSelected != null && activeBuses.none { it.busId.equals(currentSelected.busId, ignoreCase = true) }) {
                     if (studentBuses.isNotEmpty()) {
                         selectBus(studentBuses.first())
                     } else {
@@ -305,7 +305,8 @@ class StudentViewModel : ViewModel() {
             var previousText = ""
             while (true) {
                 val loc = _liveLocation.value
-                val displayState = loc.getDisplayState()
+                val serverNow = trackingRepo.getEstimatedServerTime()
+                val displayState = loc.getDisplayState(serverNow)
                 if (_trackingState.value != displayState) {
                     _trackingState.value = displayState
                 }
@@ -354,6 +355,10 @@ class StudentViewModel : ViewModel() {
         }
 
         _selectedBus.value = bus
+        _liveLocation.value = null
+        _trackingState.value = TrackingDisplayState.INACTIVE
+        lastCalcLat = 0.0
+        lastCalcLon = 0.0
         previousPassedStopIndex = -1
         lastCalculatedSpeedMs = -1.0f
         lastNextStopEtaMinutes = null
@@ -498,9 +503,20 @@ class StudentViewModel : ViewModel() {
             liveTrackingJob = viewModelScope.launch {
                 trackingRepo.getLiveLocationFlow(busId).collect { loc ->
                     val current = _liveLocation.value
-                    if (current == null || current.busId != loc.busId || loc.lastUpdated >= current.lastUpdated || (loc.lastUpdated == 0L && current.lastUpdated == 0L)) {
+                    val serverNow = trackingRepo.getEstimatedServerTime()
+                    val isDriverRecovery = current?.sourceType == "STUDENT_ASSISTED" &&
+                            loc.sourceType != "STUDENT_ASSISTED" &&
+                            !loc.isStale(nowMillis = serverNow) &&
+                            loc.trackingStatus == "ACTIVE"
+
+                    val isNewData = current == null ||
+                            current.busId != loc.busId ||
+                            loc.lastUpdated >= current.lastUpdated ||
+                            isDriverRecovery
+
+                    if (isNewData) {
                         _liveLocation.value = loc
-                        _trackingState.value = loc.getDisplayState()
+                        _trackingState.value = loc.getDisplayState(serverNow)
                         _lastUpdateText.value = if (loc.lastUpdated > 0L) {
                             ScheduleHelper.formatRelativeTime(loc.lastUpdated)
                         } else {
@@ -520,9 +536,10 @@ class StudentViewModel : ViewModel() {
             studentSourcesJob?.cancel()
             studentSourcesJob = viewModelScope.launch {
                 trackingRepo.getLocationSourcesFlow(busId).collect { sources ->
+                    val serverNow = trackingRepo.getEstimatedServerTime()
                     val activeDriverLoc = _liveLocation.value
                     val isDriverFresh = activeDriverLoc != null &&
-                            !activeDriverLoc.isStale() &&
+                            !activeDriverLoc.isStale(nowMillis = serverNow) &&
                             activeDriverLoc.trackingStatus == "ACTIVE" &&
                             activeDriverLoc.sourceType != "STUDENT_ASSISTED"
 
@@ -537,7 +554,8 @@ class StudentViewModel : ViewModel() {
                                 mode = "STUDENT_ASSISTED",
                                 previousLocation = activeDriverLoc,
                                 driverSource = null,
-                                studentSources = validStudents
+                                studentSources = validStudents,
+                                now = serverNow
                             )
                             if (fusion.selectedSourceType == SelectedSourceType.STUDENT_ASSISTED) {
                                 val candidate = fusion.liveLocation.copy(sourceType = "STUDENT_ASSISTED")
@@ -616,7 +634,8 @@ class StudentViewModel : ViewModel() {
     private fun updateEtaCalculation(loc: LiveLocation?, force: Boolean = false) {
         val route = _currentRoute.value
         val rawStops = route?.stops ?: emptyList()
-        val trackingState = loc.getDisplayState()
+        val serverNow = trackingRepo.getEstimatedServerTime()
+        val trackingState = loc.getDisplayState(serverNow)
 
         if (rawStops.isEmpty()) {
             _routeEtaResult.value = RouteEtaResult(
