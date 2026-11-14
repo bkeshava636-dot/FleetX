@@ -96,6 +96,7 @@ class LocationTrackingService : Service() {
     private var lastSentTimestamp = 0L
     private var stationaryStartTime = 0L
     private var campusGeofenceStationaryStartTime = 0L
+    private var hasObservedOutsideCampus = false
     private lateinit var offlineQueue: OfflineLocationQueue
 
     // Real-time bus travel path recording: collects the actual road coordinates the bus travels
@@ -452,15 +453,20 @@ class LocationTrackingService : Service() {
         } else null
 
         if (isCampusArrival) {
-            // Check proximity to any supported campus location / route destination
+            // Check proximity to any supported BITM campus location
             val campusLocations = mutableListOf(
                 LatLng(BITM_CAMPUS_LAT, BITM_CAMPUS_LNG),
-                LatLng(15.1680, 76.8505),
-                LatLng(15.1425, 76.8925)
+                LatLng(15.1680, 76.8505)
             )
             val destStop = route?.stops?.lastOrNull()
             if (destStop != null && destStop.latitude != 0.0 && destStop.longitude != 0.0) {
-                campusLocations.add(LatLng(destStop.latitude, destStop.longitude))
+                val distToBitm = LocationThrottler.calculateDistanceMeters(
+                    destStop.latitude, destStop.longitude,
+                    BITM_CAMPUS_LAT, BITM_CAMPUS_LNG
+                )
+                if (distToBitm <= 1000.0) {
+                    campusLocations.add(LatLng(destStop.latitude, destStop.longitude))
+                }
             }
 
             val minStartToCampus = campusLocations.minOfOrNull { loc ->
@@ -476,7 +482,7 @@ class LocationTrackingService : Service() {
             if (!campusGeofencePassed) return false
 
             // When qualifying cached route endpoints exist, also verify bus started near route's initial stop (within 1000m)
-            val validStops = route?.stops?.filter { it.latitude != 0.0 && it.longitude != 0.0 } ?: emptyList()
+            val validStops = route?.stops?.filter { it.latitude != 0.0 && it.longitude != 0.0 }?.sortedBy { it.order } ?: emptyList()
             if (validStops.size >= 2) {
                 val startStop = if (direction == RouteDirection.COLLEGE_TO_STOPS.name) validStops.last() else validStops.first()
                 val distToStartStop = LocationThrottler.calculateDistanceMeters(
@@ -492,7 +498,7 @@ class LocationTrackingService : Service() {
         }
 
         // Check against route endpoints if cached route stops are available
-        val validStops = route?.stops?.filter { it.latitude != 0.0 && it.longitude != 0.0 } ?: emptyList()
+        val validStops = route?.stops?.filter { it.latitude != 0.0 && it.longitude != 0.0 }?.sortedBy { it.order } ?: emptyList()
         if (validStops.size >= 2) {
             val firstStop = validStops.first()
             val lastStop = validStops.last()
@@ -518,8 +524,7 @@ class LocationTrackingService : Service() {
         // Fallback when qualifying route stops aren't cached: require verified campus endpoint evidence
         val campusLocations = listOf(
             LatLng(BITM_CAMPUS_LAT, BITM_CAMPUS_LNG),
-            LatLng(15.1680, 76.8505),
-            LatLng(15.1425, 76.8925)
+            LatLng(15.1680, 76.8505)
         )
         val minStartToCampus = campusLocations.minOfOrNull { loc ->
             LocationThrottler.calculateDistanceMeters(firstPoint.latitude, firstPoint.longitude, loc.latitude, loc.longitude)
@@ -743,7 +748,7 @@ class LocationTrackingService : Service() {
                 val isWithinWindow = ScheduleHelper.isWithinOperatingWindow()
                 val isWorkingDay = com.college.bustracker.util.CollegeCalendarService.isWorkingDay()
                 val isHoliday = com.college.bustracker.util.CollegeCalendarService.evaluateDay().isHoliday
-                val allowForce = com.college.bustracker.BuildConfig.DEBUG && forceWindow
+                val allowForce = (com.college.bustracker.BuildConfig.DEBUG && forceWindow) || activeMode == "MANUAL"
 
                 if (!allowForce && (!isWithinWindow || isHoliday || !isWorkingDay)) {
                     val stopReason = if (isHoliday || !isWorkingDay) "COLLEGE_HOLIDAY" else "OPERATING_WINDOW_ENDED"
@@ -909,7 +914,7 @@ class LocationTrackingService : Service() {
                 val isWithinWindow = ScheduleHelper.isWithinOperatingWindow()
                 val isWorkingDay = com.college.bustracker.util.CollegeCalendarService.isWorkingDay()
                 val isHoliday = com.college.bustracker.util.CollegeCalendarService.evaluateDay().isHoliday
-                val allowForce = com.college.bustracker.BuildConfig.DEBUG && forceWindow
+                val allowForce = (com.college.bustracker.BuildConfig.DEBUG && forceWindow) || activeMode == "MANUAL"
 
                 // 1. Operating Window Expiry Watchdog (Auto-shutdown after window ends / 9:00 AM)
                 if (!allowForce && (!isWithinWindow || isHoliday || !isWorkingDay)) {
@@ -947,21 +952,21 @@ class LocationTrackingService : Service() {
                     if (distToBitm <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS) {
                         isInsideCampus = true
                     }
-                    if (!isInsideCampus && activeRouteId.isNotBlank()) {
-                        val route = CollegeBusApp.instance.routeRepository.getCachedRoute(activeRouteId)
-                        val destinationStop = route?.stops?.lastOrNull()
-                        if (destinationStop != null && destinationStop.latitude != 0.0 && destinationStop.longitude != 0.0) {
-                            val distToDest = LocationThrottler.calculateDistanceMeters(
-                                curLat, curLng,
-                                destinationStop.latitude, destinationStop.longitude
-                            )
-                            if (distToDest <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS) {
-                                isInsideCampus = true
-                            }
+                    if (!isInsideCampus) {
+                        val distToGrounds = LocationThrottler.calculateDistanceMeters(
+                            curLat, curLng,
+                            15.1680, 76.8505
+                        )
+                        if (distToGrounds <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS) {
+                            isInsideCampus = true
                         }
                     }
 
-                    if (isInsideCampus) {
+                    if (!isInsideCampus) {
+                        hasObservedOutsideCampus = true
+                    }
+
+                    if (hasObservedOutsideCampus && isInsideCampus) {
                         if (campusGeofenceStationaryStartTime == 0L) {
                             campusGeofenceStationaryStartTime = now
                             Log.i(TAG, "[AUTO-WATCHDOG] Bus detected inside BITM campus (${distToBitm.toInt()}m). Started arrival confirmation timer.")
@@ -1231,7 +1236,7 @@ class LocationTrackingService : Service() {
         val isWithinWindow = ScheduleHelper.isWithinOperatingWindow()
         val isHoliday = CollegeCalendarService.evaluateDay().isHoliday
         val isWorkingDay = CollegeCalendarService.isWorkingDay()
-        val allowForce = com.college.bustracker.BuildConfig.DEBUG && forceWindow
+        val allowForce = (com.college.bustracker.BuildConfig.DEBUG && forceWindow) || activeMode == "MANUAL"
         if (!allowForce && (!isWithinWindow || isHoliday || !isWorkingDay)) {
             val stopReason = if (isHoliday || !isWorkingDay) "COLLEGE_HOLIDAY" else "OPERATING_WINDOW_ENDED"
             Log.w(TAG, "[AUTO-TRACK] Operating window has ended while service is running ($stopReason). Automatically shutting down tracking.")
@@ -1258,23 +1263,7 @@ class LocationTrackingService : Service() {
             minCampusDist = distToBitm
         }
 
-        // 3b. Active Route Destination Stop (e.g. final stop or campus stop on the assigned route)
-        if (!isInsideCampus && activeRouteId.isNotBlank()) {
-            val route = CollegeBusApp.instance.routeRepository.getCachedRoute(activeRouteId)
-            val destinationStop = route?.stops?.lastOrNull()
-            if (destinationStop != null && destinationStop.latitude != 0.0 && destinationStop.longitude != 0.0) {
-                val distToDest = LocationThrottler.calculateDistanceMeters(
-                    location.latitude, location.longitude,
-                    destinationStop.latitude, destinationStop.longitude
-                )
-                if (distToDest <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS) {
-                    isInsideCampus = true
-                    minCampusDist = distToDest
-                }
-            }
-        }
-
-        // 3c. Campus grounds and legacy coordinates fallback
+        // 3b. Campus grounds fallback
         if (!isInsideCampus) {
             val distToGrounds = LocationThrottler.calculateDistanceMeters(
                 location.latitude, location.longitude,
@@ -1285,18 +1274,12 @@ class LocationTrackingService : Service() {
                 minCampusDist = distToGrounds
             }
         }
+
         if (!isInsideCampus) {
-            val distToLegacy = LocationThrottler.calculateDistanceMeters(
-                location.latitude, location.longitude,
-                15.1425, 76.8925
-            )
-            if (distToLegacy <= BITM_CAMPUS_GEOFENCE_RADIUS_METERS) {
-                isInsideCampus = true
-                minCampusDist = distToLegacy
-            }
+            hasObservedOutsideCampus = true
         }
 
-        if (isInsideCampus && isHeadingToCampus) {
+        if (hasObservedOutsideCampus && isInsideCampus && isHeadingToCampus) {
             if (campusGeofenceStationaryStartTime == 0L) {
                 campusGeofenceStationaryStartTime = now
                 Log.i(TAG, "[CAMPUS_GEOFENCE] Bus entered Campus geofence (dist=${minCampusDist.toInt()}m). Started arrival confirmation timer.")
@@ -1351,6 +1334,9 @@ class LocationTrackingService : Service() {
 
         val hasInternet = CollegeBusApp.instance.networkMonitor.isConnected.value
 
+        val serverTime = CollegeBusApp.instance.trackingRepository.getEstimatedServerTime()
+        val effectiveTimestamp = if (serverTime > 0L) serverTime else now
+
         val driverSource = LocationSource(
             busId = activeBusId,
             sourceId = activeDriverId.ifBlank { "PRIMARY_DRIVER" },
@@ -1360,7 +1346,7 @@ class LocationTrackingService : Service() {
             accuracy = location.accuracy,
             speed = if (throttlerDecision.overrideSpeedZero) 0.0f else location.speed,
             bearing = location.bearing,
-            timestamp = now,
+            timestamp = effectiveTimestamp,
             active = true
         )
         lastDriverSource = driverSource
@@ -1377,7 +1363,7 @@ class LocationTrackingService : Service() {
             previousLocation = lastFusedLocation,
             driverSource = driverSource,
             studentSources = currentStudentSources,
-            now = now
+            now = effectiveTimestamp
         )
 
         if (!fusionResult.isDuplicate && activeBusId.isNotBlank()) {
@@ -1584,30 +1570,6 @@ class LocationTrackingService : Service() {
 
     private fun performScheduledWindowEndShutdown(location: Location, stopReason: String, recordEndpoint: Boolean = true) {
         val now = System.currentTimeMillis()
-        val finalLocation = LiveLocation(
-            busId = activeBusId,
-            latitude = location.latitude,
-            longitude = location.longitude,
-            speed = 0f,
-            bearing = location.bearing,
-            trackingStatus = "WAITING_FOR_GPS",
-            mode = activeMode,
-            routeId = activeRouteId,
-            driverId = activeDriverId,
-            sourceType = "PRIMARY_DRIVER",
-            lastUpdated = now
-        )
-
-        try {
-            com.google.firebase.database.FirebaseDatabase.getInstance()
-                .getReference("live_locations")
-                .child(activeBusId)
-                .setValue(finalLocation)
-            Log.i(TAG, "[AUTO-TRACK] Final status on window end ($stopReason) written to RTDB for $activeBusId")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to push final status on window end: ${e.message}")
-        }
-
         serviceStopReason = stopReason
         serviceStopCaller = "ScheduledWindowEndWatchdog"
         isExplicitStop = true
@@ -1723,7 +1685,9 @@ class LocationTrackingService : Service() {
                 )
             }
             CollegeBusApp.instance.trackingRepository.removeStudentLocation(activeBusId, activeDriverId)
-            CollegeBusApp.instance.trackingRepository.stopTracking(activeBusId, activeDriverId)
+            if (serviceStopReason != "CAMPUS_GEOFENCE_AUTO_SHUTDOWN") {
+                CollegeBusApp.instance.trackingRepository.stopTracking(activeBusId, activeDriverId)
+            }
         }
 
         if (isExplicitUserStop) {

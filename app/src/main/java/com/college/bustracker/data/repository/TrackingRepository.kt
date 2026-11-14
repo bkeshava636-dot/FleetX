@@ -46,7 +46,26 @@ class TrackingRepository(
     private val _localLocations = MutableStateFlow<Map<String, LiveLocation>>(emptyMap())
 
     // Offline buffer for unsent coordinates during connectivity dropouts
-    private val offlineBuffer = mutableMapOf<String, LiveLocation>()
+    private val offlineBuffer = java.util.concurrent.ConcurrentHashMap<String, LiveLocation>()
+
+    // Server time offset tracking from RTDB /.info/serverTimeOffset
+    private var serverTimeOffsetMillis: Long = 0L
+
+    init {
+        try {
+            database.getReference(".info/serverTimeOffset").addValueEventListener(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    serverTimeOffsetMillis = (snapshot.value as? Number)?.toLong() ?: 0L
+                    Log.d("BusTrackerGPS", "RTDB serverTimeOffset updated: ${serverTimeOffsetMillis}ms")
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    Log.w("BusTrackerGPS", "Failed to listen to serverTimeOffset: ${error.message}")
+                }
+            })
+        } catch (ignored: Exception) {}
+    }
+
+    fun getEstimatedServerTime(): Long = System.currentTimeMillis() + serverTimeOffsetMillis
 
     fun getCachedLiveLocation(busId: String): LiveLocation? = _localLocations.value[busId]
 
@@ -205,11 +224,11 @@ class TrackingRepository(
             "ACTIVE", "INACTIVE", "WAITING_FOR_GPS", "STALE", "ARRIVED_AT_CAMPUS" -> baseLoc.trackingStatus
             else -> "WAITING_FOR_GPS"
         }
-        val locationToUse = if (baseLoc.trackingStatus != sanitizedStatus) {
-            baseLoc.copy(trackingStatus = sanitizedStatus)
-        } else {
-            baseLoc
-        }
+        val effectiveTimestamp = if (baseLoc.lastUpdated <= 0L) getEstimatedServerTime() else baseLoc.lastUpdated
+        val locationToUse = baseLoc.copy(
+            trackingStatus = sanitizedStatus,
+            lastUpdated = effectiveTimestamp
+        )
 
         // 3. Duplicate prevention: avoid writing identical coordinate if dispatched within 3 seconds
         val lastLoc = _localLocations.value[busId]
@@ -319,10 +338,12 @@ class TrackingRepository(
     fun flushOfflineBuffer() {
         if (offlineBuffer.isEmpty()) return
         val count = offlineBuffer.size
-        val now = System.currentTimeMillis()
-        val iterator = offlineBuffer.iterator()
+        val now = getEstimatedServerTime()
+        val iterator = offlineBuffer.entries.iterator()
         while (iterator.hasNext()) {
-            val (busId, loc) = iterator.next()
+            val entry = iterator.next()
+            val busId = entry.key
+            val loc = entry.value
             val current = _localLocations.value[busId]
             // Monotonicity check: don't overwrite if cache already has a newer fix
             if (current != null && current.lastUpdated > loc.lastUpdated) {
@@ -356,6 +377,8 @@ class TrackingRepository(
     }
 
     fun stopTracking(busId: String, driverId: String = "") {
+        pendingRetries.remove(busId)?.cancel()
+        offlineBuffer.remove(busId)
         val cached = _localLocations.value[busId]
         val inactive = LiveLocation(
             busId = busId,
@@ -363,7 +386,7 @@ class TrackingRepository(
             longitude = cached?.longitude ?: 0.0,
             trackingStatus = "INACTIVE",
             driverId = driverId,
-            lastUpdated = System.currentTimeMillis()
+            lastUpdated = getEstimatedServerTime()
         )
         val current = _localLocations.value.toMutableMap()
         current[busId] = inactive
