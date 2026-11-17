@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Download, Compass, Smartphone, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { ReleaseInfo } from '../types/github';
-import heroMapScreenshot from '../assets/screenshots/screen-map-view.jpg';
+import logoUrl from '../assets/logo/fleetx-logo.png';
+import heroTrackScreenshot from '../assets/screenshots/hero-track-screen.jpg';
 
 interface HeroProps {
   latestRelease: ReleaseInfo | null;
@@ -9,6 +10,8 @@ interface HeroProps {
 }
 
 export const Hero: React.FC<HeroProps> = ({ latestRelease, onDownloadClick }) => {
+  const [phoneView, setPhoneView] = useState<'splash' | 'app'>('splash');
+
   return (
     <section id="home" className="relative pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden">
       {/* Subtle background glow matching CollegePrimaryContainer */}
@@ -87,8 +90,35 @@ export const Hero: React.FC<HeroProps> = ({ latestRelease, onDownloadClick }) =>
             </div>
           </div>
 
-          {/* Right Column: Realistic Android Mockup with Real App Screenshot */}
-          <div className="lg:col-span-5 flex justify-center lg:justify-end">
+          {/* Right Column: Realistic Android Mockup */}
+          <div className="lg:col-span-5 flex flex-col items-center lg:items-end">
+            
+            {/* View Switcher Toggle */}
+            <div className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-full border border-slate-200/80 mb-3 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setPhoneView('splash')}
+                className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${
+                  phoneView === 'splash'
+                    ? 'bg-college-primary text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                App Opening Logo
+              </button>
+              <button
+                type="button"
+                onClick={() => setPhoneView('app')}
+                className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${
+                  phoneView === 'app'
+                    ? 'bg-college-primary text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Live Student View
+              </button>
+            </div>
+
             <div className="relative mx-auto w-full max-w-[320px] sm:max-w-[340px]">
               {/* Outer Phone Shell */}
               <div className="relative rounded-[44px] p-3 bg-slate-900 shadow-phone border-4 border-slate-800">
@@ -100,30 +130,84 @@ export const Hero: React.FC<HeroProps> = ({ latestRelease, onDownloadClick }) =>
                 </div>
 
                 {/* Screen Content Wrapper */}
-                <div className="relative rounded-[34px] overflow-hidden bg-white border border-slate-900/10">
-                  {/* Real Map Screen Image */}
-                  <img
-                    src={heroMapScreenshot}
-                    alt="FleetX Real-time Map Screen on Android"
-                    className="w-full h-auto object-cover select-none pointer-events-none"
-                    loading="eager"
-                  />
+                <div
+                  onClick={() => setPhoneView(phoneView === 'splash' ? 'app' : 'splash')}
+                  className="relative rounded-[34px] overflow-hidden bg-white border border-slate-900/10 cursor-pointer aspect-[9/19.5] select-none"
+                  title="Click to toggle between App Opening Logo and Live Student View"
+                >
+                  {phoneView === 'splash' ? (
+                    /* App Opening Splash Screen with Official Logo */
+                    <div className="w-full h-full bg-gradient-to-b from-[#F8F9FA] via-white to-[#EEF2F6] flex flex-col justify-between p-6">
+                      {/* Top Android Status Bar */}
+                      <div className="w-full flex items-center justify-between text-[11px] text-slate-400 font-medium pt-3 px-1">
+                        <span>19:20</span>
+                        <div className="flex items-center gap-1.5 text-[10px]">
+                          <span>VoLTE</span>
+                          <span>100%</span>
+                        </div>
+                      </div>
+
+                      {/* Center App Opening Logo */}
+                      <div className="flex-1 flex flex-col items-center justify-center text-center -mt-4">
+                        <div className="relative mb-5 group">
+                          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-white shadow-xl border border-slate-100 flex items-center justify-center p-4">
+                            <img
+                              src={logoUrl}
+                              alt="FleetX Opening Logo"
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
+                          <div className="absolute inset-0 rounded-3xl bg-college-primary/10 animate-ping pointer-events-none" />
+                        </div>
+
+                        <h2 className="text-3xl font-extrabold text-college-on-surface tracking-tight">
+                          FleetX
+                        </h2>
+                        <p className="text-xs font-bold text-college-primary uppercase tracking-widest mt-1">
+                          Campus Transit Portal
+                        </p>
+                        <div className="mt-4 px-3.5 py-1 rounded-full bg-college-primary-container text-college-primary-dark text-xs font-semibold">
+                          BITM Ballari
+                        </div>
+                      </div>
+
+                      {/* Bottom Loading / Sync Indicator */}
+                      <div className="w-full flex flex-col items-center pb-4 text-center">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-college-primary animate-bounce [animation-delay:-0.3s]"></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-college-primary animate-bounce [animation-delay:-0.15s]"></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-college-primary animate-bounce"></span>
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-medium">
+                          {latestRelease ? `v${latestRelease.version}` : 'v1.0.43'} • Tap screen to view app
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Real Live Student View Screenshot */
+                    <img
+                      src={heroTrackScreenshot}
+                      alt="FleetX Real Student Transit Portal on Android"
+                      className="w-full h-full object-cover select-none pointer-events-none"
+                      loading="eager"
+                    />
+                  )}
                 </div>
 
                 {/* Floating ETA Live Card Overlay */}
-                <div className="absolute -bottom-4 -left-6 sm:-left-8 bg-white/95 backdrop-blur-md p-3.5 rounded-2xl border border-slate-200/90 shadow-xl flex items-center gap-3 z-30 max-w-[240px]">
-                  <div className="w-10 h-10 rounded-xl bg-status-green-bg flex items-center justify-center text-status-green flex-shrink-0">
+                <div className="absolute -bottom-4 -left-6 sm:-left-8 bg-white/95 backdrop-blur-md p-3.5 rounded-2xl border border-slate-200/90 shadow-xl flex items-center gap-3 z-30 max-w-[250px]">
+                  <div className="w-10 h-10 rounded-xl bg-college-primary-container flex items-center justify-center text-college-primary flex-shrink-0">
                     <span className="text-xl">🚌</span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-college-on-surface">
-                      Bus 01 • En Route
+                      {phoneView === 'splash' ? 'FleetX Transit Active' : 'Bus 01 • En Route'}
                     </span>
                     <span className="text-[11px] font-semibold text-status-green">
-                      Arriving in ~8 mins
+                      {phoneView === 'splash' ? 'Campus Service Online' : 'Assigned Driver: Ramesh'}
                     </span>
                     <span className="text-[9px] text-slate-400">
-                      Live GPS Sync Active
+                      BITM • Ballari Transit Network
                     </span>
                   </div>
                 </div>
