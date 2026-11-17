@@ -73,6 +73,15 @@ object BusTopicManager {
     }
 
     /**
+     * Formats an FCM topic target for bus start alerts.
+     * Example: bus_start_BUS-25
+     */
+    fun formatBusStartTopic(busId: String): String {
+        val cleanBus = sanitizeForTopic(busId)
+        return "bus_start_${cleanBus}"
+    }
+
+    /**
      * Pure targeting evaluator:
      * Returns true ONLY if:
      * 1. The student's assigned bus matches the swap's original bus (NOT replacement bus).
@@ -133,31 +142,56 @@ object BusTopicManager {
 
         StudentPreferences.saveSelection(context, newBusId, newStopId)
 
-        if (currentTopic == newTopic) {
-            // Already in sync
-            return
-        }
-
-        // Unsubscribe from old topic if one existed
-        if (!currentTopic.isNullOrBlank()) {
-            try {
-                subscriber.unsubscribe(currentTopic)
-                Log.d(TAG, "Unsubscribed from previous topic: $currentTopic")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error unsubscribing from $currentTopic", e)
+        if (currentTopic != newTopic) {
+            // Unsubscribe from old topic if one existed
+            if (!currentTopic.isNullOrBlank()) {
+                try {
+                    subscriber.unsubscribe(currentTopic)
+                    Log.d(TAG, "Unsubscribed from previous topic: $currentTopic")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error unsubscribing from $currentTopic", e)
+                }
             }
-        }
 
-        // Subscribe to new topic if valid
-        if (!newTopic.isNullOrBlank()) {
-            try {
-                subscriber.subscribe(newTopic)
-                Log.d(TAG, "Subscribed to new topic: $newTopic")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error subscribing to $newTopic", e)
+            // Subscribe to new topic if valid
+            if (!newTopic.isNullOrBlank()) {
+                try {
+                    subscriber.subscribe(newTopic)
+                    Log.d(TAG, "Subscribed to new topic: $newTopic")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error subscribing to $newTopic", e)
+                }
             }
+
+            StudentPreferences.saveSubscribedTopic(context, newTopic)
         }
 
-        StudentPreferences.saveSubscribedTopic(context, newTopic)
+        // Manage Bus Start / Online notifications topic (bus_start_{busId})
+        val currentStartTopic = StudentPreferences.getSubscribedBusStartTopic(context)
+        val newStartTopic = if (!newBusId.isNullOrBlank()) {
+            formatBusStartTopic(newBusId)
+        } else {
+            null
+        }
+
+        if (currentStartTopic != newStartTopic) {
+            if (!currentStartTopic.isNullOrBlank()) {
+                try {
+                    subscriber.unsubscribe(currentStartTopic)
+                    Log.d(TAG, "Unsubscribed from previous bus start topic: $currentStartTopic")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error unsubscribing from $currentStartTopic", e)
+                }
+            }
+            if (!newStartTopic.isNullOrBlank()) {
+                try {
+                    subscriber.subscribe(newStartTopic)
+                    Log.d(TAG, "Subscribed to new bus start topic: $newStartTopic")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error subscribing to $newStartTopic", e)
+                }
+            }
+            StudentPreferences.saveSubscribedBusStartTopic(context, newStartTopic)
+        }
     }
 }
