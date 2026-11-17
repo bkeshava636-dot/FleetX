@@ -1590,11 +1590,107 @@ exports.onAnnouncementWritten = regionalFunctions.firestore
     return processAnnouncementWrite(change, context, admin.firestore(), admin.messaging());
   });
 
+/**
+ * Core business logic for processing and dispatching Bus Started / Online notifications.
+ * Triggered when a bus node in RTDB /live_locations/{busId} transitions to ACTIVE.
+ */
+async function processBusStartNotification(change, context, db = admin.database(), messaging = admin.messaging(), cooldownMs = 30 * 60 * 1000) {
+  const busId = context && context.params ? context.params.busId : "unknown";
+
+  if (!change.after || !change.after.exists()) {
+    return { skipped: true, reason: "DELETED" };
+  }
+
+  const after = change.after.val() || {};
+  const before = change.before && change.before.exists() ? change.before.val() : null;
+
+  const isNowActive = after.trackingStatus === "ACTIVE";
+  const wasActive = before && before.trackingStatus === "ACTIVE";
+
+  if (!isNowActive) {
+    return { skipped: true, reason: "NOT_ACTIVE" };
+  }
+
+  // If was already ACTIVE, this is just a regular coordinate/timestamp update; do not spam
+  if (wasActive) {
+    return { skipped: true, reason: "ALREADY_ACTIVE" };
+  }
+
+  // Must have valid non-zero coordinates
+  const lat = Number(after.latitude || 0);
+  const lon = Number(after.longitude || 0);
+  if (lat === 0 && lon === 0) {
+    return { skipped: true, reason: "INVALID_COORDINATES" };
+  }
+
+  const cleanBusId = sanitizeTopic(busId);
+  const now = Date.now();
+
+  // Check cooldown in RTDB /bus_notifications/{cleanBusId}/lastStartedAt
+  const notifRef = db.ref(`/bus_notifications/${cleanBusId}/lastStartedAt`);
+  const snap = await notifRef.once("value");
+  const lastStartedAt = Number(snap.val() || 0);
+
+  if (now - lastStartedAt < cooldownMs) {
+    console.log(`[onLiveLocationWritten] Cooldown active for ${cleanBusId}. Last notified ${Math.round((now - lastStartedAt) / 1000)}s ago.`);
+    return { skipped: true, reason: "COOLDOWN_ACTIVE" };
+  }
+
+  // Update lastStartedAt timestamp
+  await notifRef.set(now);
+
+  const topic = `bus_start_${cleanBusId}`;
+  const busDisplayName = after.busNumber || busId;
+
+  const message = {
+    topic: topic,
+    notification: {
+      title: "🚌 Bus Started",
+      body: `${busDisplayName} is now en route and tracking live.`
+    },
+    data: {
+      notificationType: "BUS_STARTED",
+      busId: String(busId),
+      busNumber: String(busDisplayName),
+      timestamp: String(now)
+    },
+    android: {
+      priority: "high",
+      notification: {
+        channelId: "bus_alerts_channel",
+        priority: "high",
+        defaultSound: true,
+        defaultVibrateTimings: true
+      }
+    }
+  };
+
+  try {
+    await messaging.send(message);
+    console.log(`[onLiveLocationWritten] Sent bus start notification to topic ${topic} for ${busId}`);
+    return { success: true, topic, busId };
+  } catch (err) {
+    console.error(`[onLiveLocationWritten] Error sending start notification to topic ${topic}:`, err.message);
+    return { error: err.message, topic, busId };
+  }
+}
+
+/**
+ * RTDB Trigger on /live_locations/{busId}
+ * Reacts whenever a bus transitions to ACTIVE status with valid coordinates.
+ */
+exports.onLiveLocationWritten = regionalFunctions.database
+  .ref("/live_locations/{busId}")
+  .onWrite(async (change, context) => {
+    return processBusStartNotification(change, context, admin.database(), admin.messaging());
+  });
+
 // Exports for unit testing
 exports.sanitizeTopic = sanitizeTopic;
 exports.buildBusStopTopic = buildBusStopTopic;
 exports.processBusSwapWrite = processBusSwapWrite;
 exports.processAnnouncementWrite = processAnnouncementWrite;
+exports.processBusStartNotification = processBusStartNotification;
 exports.sendPasswordResetEmailViaRest = sendPasswordResetEmailViaRest;
 exports.calculateDistanceMeters = calculateDistanceMeters;
 exports.isKinematicallyPlausible = isKinematicallyPlausible;

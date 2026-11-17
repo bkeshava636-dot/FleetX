@@ -40,10 +40,58 @@ class PushNotificationService : FirebaseMessagingService() {
             notificationType.equals("DRIVER_REPLACEMENT", ignoreCase = true) -> {
                 handleDriverReplacementMessage(remoteMessage, data)
             }
+            notificationType.equals("BUS_STARTED", ignoreCase = true) || notificationType.equals("BUS_ONLINE", ignoreCase = true) -> {
+                handleBusStartedMessage(remoteMessage, data)
+            }
             else -> {
                 handleBusSwapMessage(remoteMessage, data)
             }
         }
+    }
+
+    private fun handleBusStartedMessage(remoteMessage: RemoteMessage, data: Map<String, String>) {
+        val busId = data["busId"] ?: ""
+        val busNumber = data["busNumber"] ?: busId
+        val isKn = LocaleHelper.isKannada(applicationContext)
+
+        val defaultTitle = if (isKn) "🚌 ಬಸ್ ಹೊರಟಿದೆ" else "🚌 Bus Started"
+        val defaultBody = if (isKn) {
+            "${busNumber} ಸಂಚಾರ ಆರಂಭಿಸಿದೆ, ಈಗ ಲೈವ್ ಲೊಕೇಶನ್ ಲಭ್ಯವಿದೆ."
+        } else {
+            "${busNumber} is now on the move and tracking live."
+        }
+
+        val title = remoteMessage.notification?.title ?: data["title"] ?: defaultTitle
+        val body = remoteMessage.notification?.body ?: data["body"] ?: defaultBody
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_ROUTE, "student_home")
+            putExtra(EXTRA_BUS_ID, busId)
+        }
+
+        val requestCode = if (busId.isNotBlank()) (busId.hashCode() + 500) else 501
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CollegeBusApp.ALERTS_CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationId = if (busId.isNotBlank()) (busId.hashCode() + 500) else System.currentTimeMillis().toInt()
+        manager.notify(notificationId, notification)
+        Log.i(TAG, "Bus started notification displayed: busId=$busId, title=$title")
     }
 
     private fun handleDriverReplacementMessage(remoteMessage: RemoteMessage, data: Map<String, String>) {

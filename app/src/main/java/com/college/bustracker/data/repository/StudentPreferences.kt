@@ -13,6 +13,7 @@ object StudentPreferences {
     private const val KEY_SELECTED_BUS_ID = "pref_selected_bus_id"
     private const val KEY_SELECTED_STOP_ID = "pref_selected_stop_id"
     private const val KEY_SUBSCRIBED_TOPIC = "pref_subscribed_topic"
+    private const val KEY_SUBSCRIBED_BUS_START_TOPIC = "pref_subscribed_bus_start_topic"
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -28,6 +29,10 @@ object StudentPreferences {
 
     fun getSubscribedTopic(context: Context): String? {
         return getPrefs(context).getString(KEY_SUBSCRIBED_TOPIC, null)
+    }
+
+    fun getSubscribedBusStartTopic(context: Context): String? {
+        return getPrefs(context).getString(KEY_SUBSCRIBED_BUS_START_TOPIC, null)
     }
 
     fun saveSelection(context: Context, busId: String?, stopId: String?) {
@@ -52,6 +57,17 @@ object StudentPreferences {
                 putString(KEY_SUBSCRIBED_TOPIC, topic)
             } else {
                 remove(KEY_SUBSCRIBED_TOPIC)
+            }
+            apply()
+        }
+    }
+
+    fun saveSubscribedBusStartTopic(context: Context, topic: String?) {
+        getPrefs(context).edit().apply {
+            if (topic != null) {
+                putString(KEY_SUBSCRIBED_BUS_START_TOPIC, topic)
+            } else {
+                remove(KEY_SUBSCRIBED_BUS_START_TOPIC)
             }
             apply()
         }

@@ -53,6 +53,21 @@ class BusTopicManagerTest {
         assertTrue("Topic must match FCM topic regex", fcmRegex.matches(topicSpecial))
     }
 
+    @Test
+    fun testBusStartTopicFormatting_standardAndSpecialIds() {
+        val topic1 = BusTopicManager.formatBusStartTopic("BUS-25")
+        assertEquals("bus_start_BUS-25", topic1)
+
+        val topic2 = BusTopicManager.formatBusStartTopic("BUS 01")
+        assertEquals("bus_start_BUS_01", topic2)
+
+        val topicSpecial = BusTopicManager.formatBusStartTopic("BUS#25!")
+        assertEquals("bus_start_BUS_25_", topicSpecial)
+
+        val fcmRegex = Regex("^[a-zA-Z0-9-_.~%]+$")
+        assertTrue("Topic must match FCM topic regex", fcmRegex.matches(topicSpecial))
+    }
+
     // =========================================================================
     // 2. STOP-SPECIFIC STUDENT TARGETING EVALUATION
     // =========================================================================
