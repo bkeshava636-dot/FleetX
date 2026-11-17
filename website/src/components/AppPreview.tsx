@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import liveMapImg from '../assets/screenshots/screen-live-map.png';
+import mapScreenImg from '../assets/screenshots/screen-map-view.jpg';
 import studentHomeImg from '../assets/screenshots/screen-student-home.jpg';
-import diagnosticsImg from '../assets/screenshots/screen-diagnostics.png';
-import routeDetailImg from '../assets/screenshots/screen-route-detail.jpg';
+import scheduleStopsImg from '../assets/screenshots/screen-schedule-stops.jpg';
+import busPassImg from '../assets/screenshots/screen-bus-pass.jpg';
 
 interface ScreenItem {
   id: string;
@@ -22,34 +22,34 @@ export const AppPreview: React.FC = () => {
       description:
         'Students watch the bus moving smoothly in real time across calibrated college route paths with live orientation and current road location.',
       badge: 'Live Map View',
-      image: liveMapImg
+      image: mapScreenImg
     },
     {
       id: 'screen-student',
-      title: 'Student Dashboard & ETA',
+      title: 'Student Dashboard & Driver Info',
       subtitle: 'Selected Bus & Dynamic Stop Countdowns',
       description:
-        'Instant status badges (🟢 Active, 🟠 Waiting for GPS, ⚪ Inactive), next stop countdowns, and upcoming stops list tailored to your daily route.',
-      badge: 'Student View',
+        'Instant status badges, estimated arrival times, assigned bus details, and one-tap direct calling for your verified college driver.',
+      badge: 'Track Tab',
       image: studentHomeImg
     },
     {
-      id: 'screen-route',
-      title: 'Route Path & Stop Directory',
-      subtitle: 'Turn-by-Turn Waypoints & Stop Sequences',
+      id: 'screen-schedule',
+      title: 'Operating Windows & Stops',
+      subtitle: 'Morning & Evening Transit Hours',
       description:
-        'Comprehensive breakdown of every pickup and dropoff point between origin stops and the BITM college campus.',
-      badge: 'Route Details',
-      image: routeDetailImg
+        'Complete view of daily operating shifts (07:00–09:00 & 16:20–17:45) and sequence of all 8 route stops from M.G. Point to BITM.',
+      badge: 'Schedule Tab',
+      image: scheduleStopsImg
     },
     {
-      id: 'screen-diag',
-      title: 'GPS Diagnostics & Sensor Engine',
-      subtitle: 'Battery, Hardware & Satellite Health',
+      id: 'screen-pass',
+      title: 'My Bus Pass Wallet',
+      subtitle: 'Digital Card Scanning & Storage',
       description:
-        'High-precision hardware telemetry, RTDB synchronization status, and shift watchdog monitoring ensuring zero dropped coordinates.',
-      badge: 'Driver & Tech Engine',
-      image: diagnosticsImg
+        'Scan both sides of your official college pass to show the driver whenever boarding without carrying physical cards.',
+      badge: 'Bus Pass Tab',
+      image: busPassImg
     }
   ];
 

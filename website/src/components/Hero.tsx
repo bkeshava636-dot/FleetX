@@ -1,7 +1,7 @@
 import React from 'react';
 import { Download, Compass, Smartphone, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { ReleaseInfo } from '../types/github';
-import heroMapScreenshot from '../assets/screenshots/screen-live-map.png';
+import heroMapScreenshot from '../assets/screenshots/screen-map-view.jpg';
 
 interface HeroProps {
   latestRelease: ReleaseInfo | null;
@@ -101,15 +101,6 @@ export const Hero: React.FC<HeroProps> = ({ latestRelease, onDownloadClick }) =>
 
                 {/* Screen Content Wrapper */}
                 <div className="relative rounded-[34px] overflow-hidden bg-white border border-slate-900/10">
-                  {/* Status Bar Overlay */}
-                  <div className="h-7 w-full bg-slate-950/20 backdrop-blur-sm absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-6 text-[10px] text-slate-800 font-semibold select-none">
-                    <span>9:41</span>
-                    <div className="flex items-center gap-1 text-[9px]">
-                      <span>5G</span>
-                      <span>100%</span>
-                    </div>
-                  </div>
-
                   {/* Real Map Screen Image */}
                   <img
                     src={heroMapScreenshot}
