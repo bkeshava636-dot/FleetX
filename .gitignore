@@ -49,6 +49,8 @@ local.properties
 # Node modules & Backend temp
 node_modules/
 backend/functions/node_modules/
+website/node_modules/
+website/dist/
 
 # =============================================================================
 # Test Runners, Diagnostics & Scratch Artifacts
