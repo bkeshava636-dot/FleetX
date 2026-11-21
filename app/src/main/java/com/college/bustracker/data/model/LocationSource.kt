@@ -17,7 +17,9 @@ data class LocationSource(
     val speed: Float = 0.0f,
     val bearing: Float = 0.0f,
     val timestamp: Long = 0L,
-    val active: Boolean = true
+    val active: Boolean = true,
+    val stopId: String = "",
+    val stopOrder: Int = 999
 ) {
     /**
      * Validates whether a contributor fix is fresh, accurate, and within physical bounds.

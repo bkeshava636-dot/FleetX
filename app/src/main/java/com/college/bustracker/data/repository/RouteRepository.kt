@@ -39,6 +39,17 @@ class RouteRepository(
         }
 
         val context = try { com.college.bustracker.CollegeBusApp.instance } catch (_: Exception) { null }
+
+        // Fast cold launch: if in-memory routes is empty, seed from bundled assets immediately (<0.1s)
+        if (_localRoutes.value.isEmpty()) {
+            val fallbackRoutes = BundledFleetSeed.getFallbackRoutes(context)
+            if (fallbackRoutes.isNotEmpty()) {
+                _localRoutes.value = fallbackRoutes
+                trySend(fallbackRoutes)
+                Log.d(TAG, "BUNDLED_FLEET_SEED: Emitted ${fallbackRoutes.size} fallback routes for instant UI readiness")
+            }
+        }
+
         val prefs = context?.getSharedPreferences(PREFS_CACHE, Context.MODE_PRIVATE)
         val lastSyncMs = prefs?.getLong(KEY_LAST_ROUTE_SYNC_MS, 0L) ?: 0L
         val now = System.currentTimeMillis()
@@ -78,24 +89,35 @@ class RouteRepository(
         val shouldFetchServer = forceRefresh || !loadedFromCache || cachedHasEmptyStops || (now - lastSyncMs >= CACHE_TTL_MS)
         if (shouldFetchServer) {
             try {
-                val serverSnap = firestore.collection("routes").get(Source.SERVER).await()
-                val list = serverSnap.documents.mapNotNull { doc ->
-                    try {
-                        val r = doc.toObject(Route::class.java)
-                        if (r != null) {
-                            val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
-                            val finalName = if (r.name.isNotBlank()) r.name else doc.id
-                            r.copy(routeId = finalId, name = finalName)
-                        } else null
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed deserializing server route ${doc.id}: ${e.message}")
-                        null
+                val serverSnap = kotlinx.coroutines.withTimeoutOrNull(3000L) {
+                    firestore.collection("routes").get(Source.SERVER).await()
+                }
+                if (serverSnap != null) {
+                    val list = serverSnap.documents.mapNotNull { doc ->
+                        try {
+                            val r = doc.toObject(Route::class.java)
+                            if (r != null) {
+                                val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
+                                val finalName = if (r.name.isNotBlank()) r.name else doc.id
+                                r.copy(routeId = finalId, name = finalName)
+                            } else null
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed deserializing server route ${doc.id}: ${e.message}")
+                            null
+                        }
+                    }
+                    if (list.isNotEmpty()) {
+                        _localRoutes.value = list
+                        prefs?.edit()?.putLong(KEY_LAST_ROUTE_SYNC_MS, now)?.apply()
+                        trySend(list)
+                        Log.d(TAG, "FIRESTORE_SERVER_SYNC: Synced ${list.size} routes from Source.SERVER")
+                    }
+                } else {
+                    Log.w(TAG, "FIRESTORE_SERVER_TIMEOUT: 3s timeout reached for routes SERVER fetch; using cached/bundled fleet")
+                    if (_localRoutes.value.isNotEmpty()) {
+                        trySend(_localRoutes.value)
                     }
                 }
-                _localRoutes.value = list
-                prefs?.edit()?.putLong(KEY_LAST_ROUTE_SYNC_MS, now)?.apply()
-                trySend(list)
-                Log.d(TAG, "FIRESTORE_SERVER_SYNC: Synced ${list.size} routes from Source.SERVER")
             } catch (e: Exception) {
                 Log.e(TAG, "FIRESTORE_SERVER_ERROR: Failed to fetch routes from SERVER: ${e.message}")
                 if (_localRoutes.value.isNotEmpty()) {

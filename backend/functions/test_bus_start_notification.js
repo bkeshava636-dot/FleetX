@@ -150,6 +150,70 @@ async function runTests() {
     assert.strictEqual(mockMessaging.sentMessages.length, 0);
   });
 
+  // 4b. Zero-coordinate initial packet followed by valid GPS fix sends notification
+  await it("sends notification when initial write had (0,0) and subsequent write acquires valid GPS fix", async () => {
+    const mockDb = createMockDb();
+    const mockMessaging = createMockMessaging();
+
+    // Step 1: Initial write with (0,0)
+    const initialChange = {
+      before: {
+        exists: () => true,
+        val: () => ({ trackingStatus: "INACTIVE" })
+      },
+      after: {
+        exists: () => true,
+        val: () => ({ trackingStatus: "ACTIVE", latitude: 0.0, longitude: 0.0 })
+      }
+    };
+    const context = { params: { busId: "BUS-25" } };
+    const initialResult = await processBusStartNotification(initialChange, context, mockDb, mockMessaging);
+    assert.strictEqual(initialResult.skipped, true);
+    assert.strictEqual(initialResult.reason, "INVALID_COORDINATES");
+    assert.strictEqual(mockMessaging.sentMessages.length, 0);
+
+    // Step 2: Fix acquired, second write with valid coordinates
+    const fixAcquiredChange = {
+      before: {
+        exists: () => true,
+        val: () => ({ trackingStatus: "ACTIVE", latitude: 0.0, longitude: 0.0 })
+      },
+      after: {
+        exists: () => true,
+        val: () => ({ trackingStatus: "ACTIVE", latitude: 15.15, longitude: 76.90, busNumber: "Bus 25" })
+      }
+    };
+    const fixResult = await processBusStartNotification(fixAcquiredChange, context, mockDb, mockMessaging);
+    assert.strictEqual(fixResult.success, true);
+    assert.strictEqual(fixResult.topic, "bus_start_BUS-25");
+    assert.strictEqual(mockMessaging.sentMessages.length, 1);
+  });
+
+  // 4c. Stale previous session (> 15 min old) allows bus-start notification
+  await it("sends notification when previous ACTIVE session was stale (>15 min ago)", async () => {
+    const now = Date.now();
+    const mockDb = createMockDb({
+      "/bus_notifications/BUS-25/lastStartedAt": now - 40 * 60 * 1000 // Last notified 40 min ago (> 30 min cooldown)
+    });
+    const mockMessaging = createMockMessaging();
+
+    const change = {
+      before: {
+        exists: () => true,
+        val: () => ({ trackingStatus: "ACTIVE", latitude: 15.15, longitude: 76.90, lastUpdated: now - 35 * 60 * 1000 })
+      },
+      after: {
+        exists: () => true,
+        val: () => ({ trackingStatus: "ACTIVE", latitude: 15.15, longitude: 76.90, busNumber: "Bus 25", lastUpdated: now })
+      }
+    };
+    const context = { params: { busId: "BUS-25" } };
+
+    const result = await processBusStartNotification(change, context, mockDb, mockMessaging);
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(mockMessaging.sentMessages.length, 1);
+  });
+
   // 5. Non-ACTIVE status is skipped
   await it("skips notification if status is not ACTIVE", async () => {
     const mockDb = createMockDb();

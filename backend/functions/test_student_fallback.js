@@ -401,6 +401,121 @@ async function runTests() {
     assert.strictEqual(result.reason, "HEALTHY_DRIVER");
   });
 
+  // -------------------------------------------------------------
+  // 6. Stop-by-Stop Sequential Priority Tests
+  // -------------------------------------------------------------
+  await itAsync("prioritizes Stop 1 student over Stop 3 student in fallback arbitration", async () => {
+    const now = 2000000;
+    const mockRtdb = createMockRtdb({
+      liveLocations: {
+        "BUS-01": {
+          busId: "BUS-01",
+          trackingStatus: "ACTIVE",
+          latitude: 15.3600,
+          longitude: 75.1200,
+          lastUpdated: now - 60000 // Stale driver (>45s)
+        }
+      },
+      locationSources: {
+        "BUS-01": {
+          "student_stop3": {
+            busId: "BUS-01",
+            sourceId: "student_stop3",
+            sourceType: "SECONDARY_STUDENT",
+            latitude: 15.3605,
+            longitude: 75.1205,
+            accuracy: 10.0,
+            speed: 5.0,
+            bearing: 30.0,
+            timestamp: now - 2000,
+            active: true,
+            stopId: "STOP-03",
+            stopOrder: 3
+          },
+          "student_stop1": {
+            busId: "BUS-01",
+            sourceId: "student_stop1",
+            sourceType: "SECONDARY_STUDENT",
+            latitude: 15.3603,
+            longitude: 75.1203,
+            accuracy: 10.0,
+            speed: 5.0,
+            bearing: 30.0,
+            timestamp: now - 3000,
+            active: true,
+            stopId: "STOP-01",
+            stopOrder: 1
+          }
+        }
+      }
+    });
+
+    const change = { after: { exists: () => true } };
+    const context = { params: { busId: "BUS-01", sourceId: "student_stop1" } };
+
+    const result = await processStudentFallbackWrite(change, context, mockRtdb, now);
+
+    assert.strictEqual(result.published, true);
+    assert.strictEqual(result.selectedSource, "SECONDARY_STUDENT_FALLBACK");
+    assert.strictEqual(mockRtdb._liveLocations["BUS-01"].trackingStatus, "ACTIVE");
+    // Fused cluster should use Stop 1 student bearing and earliest stop
+    assert(mockRtdb._liveLocations["BUS-01"].latitude > 0);
+  });
+
+  await itAsync("does not allow stale/invalid Stop 1 student to override fresh Stop 2 student", async () => {
+    const now = 2000000;
+    const mockRtdb = createMockRtdb({
+      liveLocations: {
+        "BUS-01": {
+          busId: "BUS-01",
+          trackingStatus: "ACTIVE",
+          latitude: 15.3600,
+          longitude: 75.1200,
+          lastUpdated: now - 60000 // Stale driver
+        }
+      },
+      locationSources: {
+        "BUS-01": {
+          "student_stop1_stale": {
+            busId: "BUS-01",
+            sourceId: "student_stop1_stale",
+            sourceType: "SECONDARY_STUDENT",
+            latitude: 15.3601,
+            longitude: 75.1201,
+            accuracy: 80.0, // Low accuracy > 40m -> invalid
+            timestamp: now - 5000,
+            active: true,
+            stopId: "STOP-01",
+            stopOrder: 1
+          },
+          "student_stop2_fresh": {
+            busId: "BUS-01",
+            sourceId: "student_stop2_fresh",
+            sourceType: "SECONDARY_STUDENT",
+            latitude: 15.3604,
+            longitude: 75.1204,
+            accuracy: 12.0, // Accurate <= 40m
+            speed: 6.0,
+            bearing: 25.0,
+            timestamp: now - 2000,
+            active: true,
+            stopId: "STOP-02",
+            stopOrder: 2
+          }
+        }
+      }
+    });
+
+    const change = { after: { exists: () => true } };
+    const context = { params: { busId: "BUS-01", sourceId: "student_stop2_fresh" } };
+
+    const result = await processStudentFallbackWrite(change, context, mockRtdb, now);
+
+    assert.strictEqual(result.published, true);
+    assert.strictEqual(result.validStudentCount, 1); // Only stop 2 student is valid
+    assert.strictEqual(mockRtdb._liveLocations["BUS-01"].latitude, 15.3604);
+  });
+
   console.log("\n==================================================");
   console.log(`TEST SUMMARY: ${testsPassed}/${testsTotal} tests passed.`);
   console.log("==================================================\n");

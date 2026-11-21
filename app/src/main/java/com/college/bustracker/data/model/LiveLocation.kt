@@ -43,8 +43,11 @@ enum class TrackingDisplayState {
     INACTIVE         // Driver stopped or tracking idle (Gray)
 }
 
-fun LiveLocation?.getDisplayState(nowMillis: Long = System.currentTimeMillis()): TrackingDisplayState {
-    if (this == null) return TrackingDisplayState.INACTIVE
+fun LiveLocation?.getDisplayState(
+    nowMillis: Long = System.currentTimeMillis(),
+    isWithinOperatingWindow: Boolean = true
+): TrackingDisplayState {
+    if (this == null || !isWithinOperatingWindow) return TrackingDisplayState.INACTIVE
     return when (trackingStatus) {
         "WAITING_FOR_GPS" -> TrackingDisplayState.WAITING_FOR_GPS
         "STALE" -> TrackingDisplayState.STALE

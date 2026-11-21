@@ -147,7 +147,20 @@ object StudentLocationAssistant {
             return
         }
 
-        StudentBeaconArbitrator.tryAcquireOrRenewLease(activeBusId, studentSourceId) { isLeaseHolder ->
+        val ctx = appContext ?: try { CollegeBusApp.instance } catch (_: Exception) { null }
+        val savedStopId = ctx?.let { com.college.bustracker.data.repository.StudentPreferences.getSavedStopId(it) } ?: ""
+        var savedStopOrder = ctx?.let { com.college.bustracker.data.repository.StudentPreferences.getSavedStopOrder(it) } ?: 999
+        if (savedStopOrder == 999 && savedStopId.isNotBlank()) {
+            val route = try { CollegeBusApp.instance.routeRepository.getCachedRoutes().find { it.busId == activeBusId } } catch (_: Exception) { null }
+            savedStopOrder = route?.stops?.find { it.stopId == savedStopId }?.order ?: 999
+        }
+
+        StudentBeaconArbitrator.tryAcquireOrRenewLease(
+            busId = activeBusId,
+            studentSourceId = studentSourceId,
+            stopOrder = savedStopOrder,
+            accuracy = location.accuracy
+        ) { isLeaseHolder ->
             if (isLeaseHolder) {
                 hasContributedFix = true
                 val source = LocationSource(
@@ -160,7 +173,9 @@ object StudentLocationAssistant {
                     speed = location.speed,
                     bearing = location.bearing,
                     timestamp = System.currentTimeMillis(),
-                    active = true
+                    active = true,
+                    stopId = savedStopId,
+                    stopOrder = savedStopOrder
                 )
                 CollegeBusApp.instance.trackingRepository.contributeStudentLocation(source)
             } else {

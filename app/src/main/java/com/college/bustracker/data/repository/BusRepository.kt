@@ -158,6 +158,17 @@ class BusRepository(
         }
 
         val context = try { com.college.bustracker.CollegeBusApp.instance } catch (_: Exception) { null }
+
+        // Fast cold launch: if in-memory buses is empty, seed from bundled assets immediately (<0.1s)
+        if (_localBuses.value.isEmpty()) {
+            val fallbackBuses = BundledFleetSeed.getFallbackBuses(context)
+            if (fallbackBuses.isNotEmpty()) {
+                _localBuses.value = fallbackBuses
+                trySend(fallbackBuses)
+                Log.d(TAG, "BUNDLED_FLEET_SEED: Emitted ${fallbackBuses.size} fallback buses for instant UI readiness")
+            }
+        }
+
         val prefs = context?.getSharedPreferences(PREFS_CACHE, Context.MODE_PRIVATE)
         val lastSyncMs = prefs?.getLong(KEY_LAST_BUS_SYNC_MS, 0L) ?: 0L
         val now = System.currentTimeMillis()
@@ -193,21 +204,32 @@ class BusRepository(
         val shouldFetchServer = forceRefresh || !cacheLoaded || (now - lastSyncMs >= CACHE_TTL_MS)
         if (shouldFetchServer) {
             try {
-                val serverSnap = firestore.collection("buses").get(Source.SERVER).await()
-                val list = serverSnap.documents.mapNotNull { doc ->
-                    try {
-                        doc.toObject(Bus::class.java)?.let { bus ->
-                            bus.copy(busId = bus.busId.ifBlank { doc.id })
+                val serverSnap = kotlinx.coroutines.withTimeoutOrNull(3000L) {
+                    firestore.collection("buses").get(Source.SERVER).await()
+                }
+                if (serverSnap != null) {
+                    val list = serverSnap.documents.mapNotNull { doc ->
+                        try {
+                            doc.toObject(Bus::class.java)?.let { bus ->
+                                bus.copy(busId = bus.busId.ifBlank { doc.id })
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed deserializing server bus ${doc.id}: ${e.message}")
+                            null
                         }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed deserializing server bus ${doc.id}: ${e.message}")
-                        null
+                    }.sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
+                    if (list.isNotEmpty()) {
+                        _localBuses.value = list
+                        prefs?.edit()?.putLong(KEY_LAST_BUS_SYNC_MS, now)?.apply()
+                        trySend(list)
+                        Log.d(TAG, "FIRESTORE_SERVER_SYNC: Synced ${list.size} buses from Source.SERVER")
                     }
-                }.sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
-                _localBuses.value = list
-                prefs?.edit()?.putLong(KEY_LAST_BUS_SYNC_MS, now)?.apply()
-                trySend(list)
-                Log.d(TAG, "FIRESTORE_SERVER_SYNC: Synced ${list.size} buses from Source.SERVER")
+                } else {
+                    Log.w(TAG, "FIRESTORE_SERVER_TIMEOUT: 3s timeout reached for buses SERVER fetch; using cached/bundled fleet")
+                    if (_localBuses.value.isNotEmpty()) {
+                        trySend(_localBuses.value)
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "FIRESTORE_SERVER_ERROR: Failed to fetch buses from SERVER: ${e.message}")
                 if (_localBuses.value.isNotEmpty()) {

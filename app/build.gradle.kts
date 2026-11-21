@@ -16,8 +16,8 @@ android {
         applicationId = "com.college.bustracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10043
-        versionName = "1.0.43"
+        versionCode = 10044
+        versionName = "1.0.44"
 
         val mapsApiKey = run {
             val gsFile = file("google-services.json")
