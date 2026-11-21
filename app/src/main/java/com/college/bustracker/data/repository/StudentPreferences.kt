@@ -12,6 +12,7 @@ object StudentPreferences {
     private const val PREFS_NAME = "student_bus_preferences"
     private const val KEY_SELECTED_BUS_ID = "pref_selected_bus_id"
     private const val KEY_SELECTED_STOP_ID = "pref_selected_stop_id"
+    private const val KEY_SELECTED_STOP_ORDER = "pref_selected_stop_order"
     private const val KEY_SUBSCRIBED_TOPIC = "pref_subscribed_topic"
     private const val KEY_SUBSCRIBED_BUS_START_TOPIC = "pref_subscribed_bus_start_topic"
 
@@ -27,6 +28,10 @@ object StudentPreferences {
         return getPrefs(context).getString(KEY_SELECTED_STOP_ID, null)
     }
 
+    fun getSavedStopOrder(context: Context): Int {
+        return getPrefs(context).getInt(KEY_SELECTED_STOP_ORDER, 999)
+    }
+
     fun getSubscribedTopic(context: Context): String? {
         return getPrefs(context).getString(KEY_SUBSCRIBED_TOPIC, null)
     }
@@ -35,7 +40,7 @@ object StudentPreferences {
         return getPrefs(context).getString(KEY_SUBSCRIBED_BUS_START_TOPIC, null)
     }
 
-    fun saveSelection(context: Context, busId: String?, stopId: String?) {
+    fun saveSelection(context: Context, busId: String?, stopId: String?, stopOrder: Int = 999) {
         getPrefs(context).edit().apply {
             if (busId != null) {
                 putString(KEY_SELECTED_BUS_ID, busId)
@@ -46,6 +51,11 @@ object StudentPreferences {
                 putString(KEY_SELECTED_STOP_ID, stopId)
             } else {
                 remove(KEY_SELECTED_STOP_ID)
+            }
+            if (stopOrder in 0..998) {
+                putInt(KEY_SELECTED_STOP_ORDER, stopOrder)
+            } else {
+                remove(KEY_SELECTED_STOP_ORDER)
             }
             apply()
         }

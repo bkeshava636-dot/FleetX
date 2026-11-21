@@ -843,7 +843,11 @@ function fuseCluster(cluster) {
 
   let representative = cluster[0];
   for (const s of cluster) {
-    if ((s.timestamp || 0) >= (representative.timestamp || 0)) {
+    const repOrder = (typeof representative.stopOrder === "number" && !isNaN(representative.stopOrder) && representative.stopOrder >= 0) ? representative.stopOrder : 999;
+    const sOrder = (typeof s.stopOrder === "number" && !isNaN(s.stopOrder) && s.stopOrder >= 0) ? s.stopOrder : 999;
+    if (sOrder < repOrder) {
+      representative = s;
+    } else if (sOrder === repOrder && (s.timestamp || 0) >= (representative.timestamp || 0)) {
       representative = s;
     }
   }
@@ -971,6 +975,24 @@ async function processStudentFallbackWrite(change, context, rtdb = admin.databas
 
   // Deduplicate student sources
   const deduplicatedStudents = deduplicateStudentSources(validStudents);
+
+  // Stop-by-stop sequential priority:
+  // Sort candidate students by stopOrder ASC (Stop 1 -> Stop 2 -> Stop 3 -> Stop 4...)
+  // Tie-breaker 1: GPS accuracy (lower/more precise is better)
+  // Tie-breaker 2: Freshness (newer timestamp is better)
+  deduplicatedStudents.sort((a, b) => {
+    const orderA = (typeof a.stopOrder === "number" && !isNaN(a.stopOrder) && a.stopOrder >= 0) ? a.stopOrder : 999;
+    const orderB = (typeof b.stopOrder === "number" && !isNaN(b.stopOrder) && b.stopOrder >= 0) ? b.stopOrder : 999;
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+    const accA = a.accuracy || 999.0;
+    const accB = b.accuracy || 999.0;
+    if (accA !== accB) {
+      return accA - accB;
+    }
+    return (b.timestamp || 0) - (a.timestamp || 0);
+  });
 
   // If driver is healthy, preserve driver primary authority
   if (isDriverHealthy) {
@@ -1605,26 +1627,46 @@ async function processBusStartNotification(change, context, db = admin.database(
   const before = change.before && change.before.exists() ? change.before.val() : null;
 
   const isNowActive = after.trackingStatus === "ACTIVE";
-  const wasActive = before && before.trackingStatus === "ACTIVE";
-
   if (!isNowActive) {
     return { skipped: true, reason: "NOT_ACTIVE" };
   }
 
-  // If was already ACTIVE, this is just a regular coordinate/timestamp update; do not spam
-  if (wasActive) {
-    return { skipped: true, reason: "ALREADY_ACTIVE" };
-  }
-
-  // Must have valid non-zero coordinates
+  // Validate latitude and longitude coordinates
   const lat = Number(after.latitude || 0);
   const lon = Number(after.longitude || 0);
-  if (lat === 0 && lon === 0) {
+  if (isNaN(lat) || isNaN(lon) || (lat === 0 && lon === 0) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
     return { skipped: true, reason: "INVALID_COORDINATES" };
   }
 
-  const cleanBusId = sanitizeTopic(busId);
   const now = Date.now();
+
+  // Determine if the bus was actively streaming valid coordinates before.
+  // A bus was actively streaming if:
+  // 1. `before` exists and had trackingStatus === "ACTIVE"
+  // 2. `before` coordinates were valid (not 0,0 and in physical range)
+  // 3. `before` was not stale (e.g. updated within 15 minutes)
+  let wasActivelyStreaming = false;
+  if (before && before.trackingStatus === "ACTIVE") {
+    const beforeLat = Number(before.latitude || 0);
+    const beforeLon = Number(before.longitude || 0);
+    const hasBeforeValidCoords = !isNaN(beforeLat) && !isNaN(beforeLon) &&
+      (beforeLat !== 0 || beforeLon !== 0) &&
+      Math.abs(beforeLat) <= 90 && Math.abs(beforeLon) <= 180;
+
+    const beforeTime = Number(before.lastUpdated || before.timestamp || 0);
+    const isBeforeStale = beforeTime > 0 && (now - beforeTime) > 15 * 60 * 1000;
+
+    if (hasBeforeValidCoords && !isBeforeStale) {
+      wasActivelyStreaming = true;
+    }
+  }
+
+  // If the bus was already actively streaming valid coordinates, this is an ongoing stream update; do not spam
+  if (wasActivelyStreaming) {
+    return { skipped: true, reason: "ALREADY_ACTIVE" };
+  }
+
+  const cleanBusId = sanitizeTopic(busId);
 
   // Check cooldown in RTDB /bus_notifications/{cleanBusId}/lastStartedAt
   const notifRef = db.ref(`/bus_notifications/${cleanBusId}/lastStartedAt`);

@@ -1,0 +1,1893 @@
+{
+  "buses": [
+    {
+      "busId": "BUS-01",
+      "busNumber": "BUS 01",
+      "routeId": "ROUTE-01",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-02",
+      "busNumber": "BUS 02",
+      "routeId": "ROUTE-02",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-03",
+      "busNumber": "BUS 03",
+      "routeId": "ROUTE-03",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-04",
+      "busNumber": "BUS 04",
+      "routeId": "ROUTE-04",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-05",
+      "busNumber": "BUS 05",
+      "routeId": "ROUTE-05",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-06",
+      "busNumber": "BUS 06",
+      "routeId": "ROUTE-06",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-07",
+      "busNumber": "BUS 07",
+      "routeId": "ROUTE-07",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-08",
+      "busNumber": "BUS 08",
+      "routeId": "ROUTE-08",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-09",
+      "busNumber": "BUS 09",
+      "routeId": "ROUTE-09",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-10",
+      "busNumber": "BUS 10",
+      "routeId": "ROUTE-10",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-11",
+      "busNumber": "BUS 11",
+      "routeId": "ROUTE-11",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-12",
+      "busNumber": "BUS 12",
+      "routeId": "ROUTE-12",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-13",
+      "busNumber": "BUS 13",
+      "routeId": "ROUTE-13",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-14",
+      "busNumber": "BUS 14",
+      "routeId": "ROUTE-14",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-15",
+      "busNumber": "BUS 15",
+      "routeId": "ROUTE-15",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-16",
+      "busNumber": "BUS 16",
+      "routeId": "ROUTE-16",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-17",
+      "busNumber": "BUS 17",
+      "routeId": "ROUTE-17",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-18",
+      "busNumber": "BUS 18",
+      "routeId": "ROUTE-18",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-19",
+      "busNumber": "BUS 19",
+      "routeId": "ROUTE-19",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-20",
+      "busNumber": "BUS 20",
+      "routeId": "ROUTE-20",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-21",
+      "busNumber": "BUS 21",
+      "routeId": "ROUTE-21",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-22",
+      "busNumber": "BUS 22",
+      "routeId": "ROUTE-22",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-23",
+      "busNumber": "BUS 23",
+      "routeId": "ROUTE-23",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-24",
+      "busNumber": "BUS 24",
+      "routeId": "ROUTE-24",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    },
+    {
+      "busId": "BUS-25",
+      "busNumber": "BUS 25",
+      "routeId": "ROUTE-25",
+      "capacity": 50,
+      "active": true,
+      "model": "Standard Campus Bus",
+      "notes": "Bundled Fleet Seed"
+    }
+  ],
+  "routes": [
+    {
+      "routeId": "ROUTE-01",
+      "name": "M.G. Point -> BITM",
+      "description": "Campus route connecting M.G. Point to BITM College",
+      "active": true,
+      "busId": "BUS-01",
+      "stops": [
+        {
+          "stopId": "STOP-01-1",
+          "name": "M.G. Point",
+          "latitude": 15.1432,
+          "longitude": 76.9385,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-01-2",
+          "name": "S. N. PET SBI BANK",
+          "latitude": 15.1448,
+          "longitude": 76.9392,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-01-3",
+          "name": "Patel Nagar",
+          "latitude": 15.1454,
+          "longitude": 76.9415,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-01-4",
+          "name": "Punjab National Bank",
+          "latitude": 15.1472,
+          "longitude": 76.936,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-01-5",
+          "name": "Raghavendra Swamy Temple",
+          "latitude": 15.1485,
+          "longitude": 76.934,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-01-6",
+          "name": "Cool Corner",
+          "latitude": 15.1492,
+          "longitude": 76.931,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-01-7",
+          "name": "KEB 1st Gate",
+          "latitude": 15.151,
+          "longitude": 76.922,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-01-8",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 8,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:30",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-02",
+      "name": "Satyanarayana Temple (Bandihatti) -> BITM",
+      "description": "Campus route connecting Satyanarayana Temple - Bandihatti to BITM College",
+      "active": true,
+      "busId": "BUS-02",
+      "stops": [
+        {
+          "stopId": "STOP-02-1",
+          "name": "Satyanarayana Temple - Bandihatti",
+          "latitude": 15.122,
+          "longitude": 76.928,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-02-2",
+          "name": "Kendriya Vidyalaya",
+          "latitude": 15.1265,
+          "longitude": 76.924,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-02-3",
+          "name": "Azad Nagar Ground",
+          "latitude": 15.1305,
+          "longitude": 76.921,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-02-4",
+          "name": "Near Canal (Belagal Road)",
+          "latitude": 15.136,
+          "longitude": 76.915,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-02-5",
+          "name": "G-Square",
+          "latitude": 15.141,
+          "longitude": 76.91,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-02-6",
+          "name": "Kuvempu Nagar 5th Cross",
+          "latitude": 15.1445,
+          "longitude": 76.903,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-02-7",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:30",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-03",
+      "name": "Teachers Colony -> BITM",
+      "description": "Campus route connecting Teachers Colony to BITM College",
+      "active": true,
+      "busId": "BUS-03",
+      "stops": [
+        {
+          "stopId": "STOP-03-1",
+          "name": "Teachers Colony",
+          "latitude": 15.128,
+          "longitude": 76.941,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-03-2",
+          "name": "Mohammadia School",
+          "latitude": 15.1315,
+          "longitude": 76.937,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-03-3",
+          "name": "Select Talkies",
+          "latitude": 15.134,
+          "longitude": 76.9345,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-03-4",
+          "name": "SBI ATM",
+          "latitude": 15.136,
+          "longitude": 76.932,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-03-5",
+          "name": "Cowl Bazaar Police Station",
+          "latitude": 15.1385,
+          "longitude": 76.93,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-03-6",
+          "name": "Babu Chowk",
+          "latitude": 15.1405,
+          "longitude": 76.928,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-03-7",
+          "name": "Kunitana Masjid",
+          "latitude": 15.142,
+          "longitude": 76.925,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-03-8",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 8,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:30",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-04",
+      "name": "APMC Govt. School -> BITM",
+      "description": "Campus route connecting APMC Govt. School to BITM College",
+      "active": true,
+      "busId": "BUS-04",
+      "stops": [
+        {
+          "stopId": "STOP-04-1",
+          "name": "APMC Govt. School",
+          "latitude": 15.139,
+          "longitude": 76.946,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-04-2",
+          "name": "Masjid",
+          "latitude": 15.1415,
+          "longitude": 76.941,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-04-3",
+          "name": "Benki Maremma Temple",
+          "latitude": 15.1438,
+          "longitude": 76.9375,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-04-4",
+          "name": "Brucepet Police Station",
+          "latitude": 15.1455,
+          "longitude": 76.9325,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-04-5",
+          "name": "Maruthi Colony",
+          "latitude": 15.147,
+          "longitude": 76.926,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-04-6",
+          "name": "Mothi",
+          "latitude": 15.149,
+          "longitude": 76.9215,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-04-7",
+          "name": "Belagal Cross",
+          "latitude": 15.152,
+          "longitude": 76.91,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-04-8",
+          "name": "BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 8,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:25",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-05",
+      "name": "Water Booster (Basaveswara Nagar) -> BITM",
+      "description": "Campus route connecting Water Booster (Basaveswara Nagar) to BITM College",
+      "active": true,
+      "busId": "BUS-05",
+      "stops": [
+        {
+          "stopId": "STOP-05-1",
+          "name": "Water Booster (Basaveswara Nagar)",
+          "latitude": 15.141,
+          "longitude": 76.952,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-05-2",
+          "name": "Kumaraswamy Temple",
+          "latitude": 15.1435,
+          "longitude": 76.948,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-05-3",
+          "name": "KMF Milk Dairy",
+          "latitude": 15.146,
+          "longitude": 76.944,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-05-4",
+          "name": "M. K. Nagar",
+          "latitude": 15.148,
+          "longitude": 76.939,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-05-5",
+          "name": "Ambedkar School",
+          "latitude": 15.1495,
+          "longitude": 76.935,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-05-6",
+          "name": "Huligamma Temple",
+          "latitude": 15.151,
+          "longitude": 76.931,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-05-7",
+          "name": "Satyavani Nagar 3rd Cross",
+          "latitude": 15.153,
+          "longitude": 76.924,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-05-8",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 8,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:20",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-06",
+      "name": "Canal (Talur Road) -> BITM",
+      "description": "Campus route connecting Canal (Talur Road) to BITM College",
+      "active": true,
+      "busId": "BUS-06",
+      "stops": [
+        {
+          "stopId": "STOP-06-1",
+          "name": "Canal (Talur Road)",
+          "latitude": 15.125,
+          "longitude": 76.953,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-06-2",
+          "name": "Sai Travels",
+          "latitude": 15.129,
+          "longitude": 76.948,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-06-3",
+          "name": "Shanthi Niketan School",
+          "latitude": 15.133,
+          "longitude": 76.943,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-06-4",
+          "name": "Basava Bhavan",
+          "latitude": 15.137,
+          "longitude": 76.938,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-06-5",
+          "name": "Police Gymkhana",
+          "latitude": 15.141,
+          "longitude": 76.933,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-06-6",
+          "name": "BJP Office",
+          "latitude": 15.144,
+          "longitude": 76.928,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-06-7",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:25",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-07",
+      "name": "Sirwar -> BITM",
+      "description": "Campus route connecting SIRWAR to BITM College",
+      "active": true,
+      "busId": "BUS-07",
+      "stops": [
+        {
+          "stopId": "STOP-07-1",
+          "name": "SIRWAR",
+          "latitude": 15.195,
+          "longitude": 76.975,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-07-2",
+          "name": "Kappagal",
+          "latitude": 15.178,
+          "longitude": 76.955,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-07-3",
+          "name": "Sanganakal",
+          "latitude": 15.165,
+          "longitude": 76.942,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-07-4",
+          "name": "Sukrutha Nursing Home",
+          "latitude": 15.155,
+          "longitude": 76.928,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-07-5",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "07:40",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:50",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-08",
+      "name": "J. K. Layout (Talur Road) -> BITM",
+      "description": "Campus route connecting J. K. LAYOUT, TALUR ROAD to BITM College",
+      "active": true,
+      "busId": "BUS-08",
+      "stops": [
+        {
+          "stopId": "STOP-08-1",
+          "name": "J. K. LAYOUT, TALUR ROAD",
+          "latitude": 15.121,
+          "longitude": 76.958,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-08-2",
+          "name": "Bala Bharathi School",
+          "latitude": 15.1255,
+          "longitude": 76.951,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-08-3",
+          "name": "Petrol Bunk",
+          "latitude": 15.1295,
+          "longitude": 76.945,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-08-4",
+          "name": "Sneha Colony",
+          "latitude": 15.1335,
+          "longitude": 76.939,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-08-5",
+          "name": "Govindappa Kalyana Mantapa",
+          "latitude": 15.1375,
+          "longitude": 76.933,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-08-6",
+          "name": "Reddy Hotel",
+          "latitude": 15.142,
+          "longitude": 76.926,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-08-7",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:30",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-09",
+      "name": "Gangappa Gin -> BITM",
+      "description": "Campus route connecting Gangappa Gin to BITM College",
+      "active": true,
+      "busId": "BUS-09",
+      "stops": [
+        {
+          "stopId": "STOP-09-1",
+          "name": "Gangappa Gin",
+          "latitude": 15.134,
+          "longitude": 76.948,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-09-2",
+          "name": "Sharada Medical Store",
+          "latitude": 15.138,
+          "longitude": 76.939,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-09-3",
+          "name": "Union Bank",
+          "latitude": 15.1425,
+          "longitude": 76.931,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-09-4",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:30",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-10",
+      "name": "Kanekal Bus Stand -> BITM",
+      "description": "Campus route connecting Kanekal Bus Stand to BITM College",
+      "active": true,
+      "busId": "BUS-10",
+      "stops": [
+        {
+          "stopId": "STOP-10-1",
+          "name": "Kanekal Bus Stand",
+          "latitude": 15.132,
+          "longitude": 76.936,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-10-2",
+          "name": "Dr. Vali Basha",
+          "latitude": 15.1355,
+          "longitude": 76.931,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-10-3",
+          "name": "Vinayaka Temple",
+          "latitude": 15.1385,
+          "longitude": 76.926,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-10-4",
+          "name": "Raghavendra Theatre",
+          "latitude": 15.142,
+          "longitude": 76.92,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-10-5",
+          "name": "Karnataka Function Hall",
+          "latitude": 15.146,
+          "longitude": 76.912,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-10-6",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:20",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-11",
+      "name": "Vidya Nagar Mary Matha Church -> BITM",
+      "description": "Campus route connecting Vidya Nagar Mary Matha Church to BITM College",
+      "active": true,
+      "busId": "BUS-11",
+      "stops": [
+        {
+          "stopId": "STOP-11-1",
+          "name": "Vidya Nagar Mary Matha Church",
+          "latitude": 15.151,
+          "longitude": 76.946,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-11-2",
+          "name": "Heera Hardware",
+          "latitude": 15.1525,
+          "longitude": 76.941,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-11-3",
+          "name": "Vidyanagar Water Tank",
+          "latitude": 15.154,
+          "longitude": 76.937,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-11-4",
+          "name": "Surya Apartment",
+          "latitude": 15.155,
+          "longitude": 76.933,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-11-5",
+          "name": "Batri Circle",
+          "latitude": 15.156,
+          "longitude": 76.928,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-11-6",
+          "name": "Vidyanagar 5th cross",
+          "latitude": 15.155,
+          "longitude": 76.923,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-11-7",
+          "name": "Vidyanagar Circle",
+          "latitude": 15.154,
+          "longitude": 76.918,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-11-8",
+          "name": "OPD",
+          "latitude": 15.1525,
+          "longitude": 76.912,
+          "order": 8,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-11-9",
+          "name": "BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 9,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:05",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:20",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-14",
+      "name": "Dream World School -> BITM",
+      "description": "Campus route connecting Dream World School to BITM College",
+      "active": true,
+      "busId": "BUS-14",
+      "stops": [
+        {
+          "stopId": "STOP-14-1",
+          "name": "Dream World School",
+          "latitude": 15.161,
+          "longitude": 76.945,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-14-2",
+          "name": "Sadashivanagar",
+          "latitude": 15.159,
+          "longitude": 76.94,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-14-3",
+          "name": "Kappagal Road - Brahmaiah Temple",
+          "latitude": 15.1575,
+          "longitude": 76.936,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-14-4",
+          "name": "Kappagal Road, 7th cross",
+          "latitude": 15.1565,
+          "longitude": 76.932,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-14-5",
+          "name": "Kappagal Road, 5th cross",
+          "latitude": 15.1555,
+          "longitude": 76.928,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-14-6",
+          "name": "Kappagal Road, 3rd cross",
+          "latitude": 15.1545,
+          "longitude": 76.924,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-14-7",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:05",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:15",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-16",
+      "name": "Taranath Hospital -> BITM",
+      "description": "Campus route connecting Taranath Hospital to BITM College",
+      "active": true,
+      "busId": "BUS-16",
+      "stops": [
+        {
+          "stopId": "STOP-16-1",
+          "name": "Taranath Hospital",
+          "latitude": 15.146,
+          "longitude": 76.938,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-16-2",
+          "name": "BPSC School",
+          "latitude": 15.1475,
+          "longitude": 76.934,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-16-3",
+          "name": "R. R. Theatre",
+          "latitude": 15.1485,
+          "longitude": 76.93,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-16-4",
+          "name": "Pavan Hotel",
+          "latitude": 15.1495,
+          "longitude": 76.926,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-16-5",
+          "name": "Royal Circle",
+          "latitude": 15.1505,
+          "longitude": 76.921,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-16-6",
+          "name": "Mothi",
+          "latitude": 15.149,
+          "longitude": 76.9215,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-16-7",
+          "name": "Radio Park - Ayyappa Swamy Temple",
+          "latitude": 15.152,
+          "longitude": 76.915,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-16-8",
+          "name": "BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 8,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:20",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-17",
+      "name": "Kakarla Thota -> BITM",
+      "description": "Campus route connecting KAKARLA THOTA to BITM College",
+      "active": true,
+      "busId": "BUS-17",
+      "stops": [
+        {
+          "stopId": "STOP-17-1",
+          "name": "KAKARLA THOTA",
+          "latitude": 15.132,
+          "longitude": 76.955,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-17-2",
+          "name": "Guggarahatti Gate",
+          "latitude": 15.136,
+          "longitude": 76.949,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-17-3",
+          "name": "Check Post",
+          "latitude": 15.1395,
+          "longitude": 76.944,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-17-4",
+          "name": "APMC Gate",
+          "latitude": 15.143,
+          "longitude": 76.938,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-17-5",
+          "name": "St. Joseph School Backside Circle",
+          "latitude": 15.147,
+          "longitude": 76.931,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-17-6",
+          "name": "Nalanda College",
+          "latitude": 15.15,
+          "longitude": 76.925,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-17-7",
+          "name": "Nandi School",
+          "latitude": 15.152,
+          "longitude": 76.92,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-17-8",
+          "name": "Tilak Nagar",
+          "latitude": 15.154,
+          "longitude": 76.914,
+          "order": 8,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-17-9",
+          "name": "BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 9,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:30",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-19",
+      "name": "Andral Petrol Bunk -> BITM",
+      "description": "Campus route connecting ANDRAL - Petrol Bunk to BITM College",
+      "active": true,
+      "busId": "BUS-19",
+      "stops": [
+        {
+          "stopId": "STOP-19-1",
+          "name": "ANDRAL - Petrol Bunk",
+          "latitude": 15.115,
+          "longitude": 76.942,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-19-2",
+          "name": "Bapujinagar Circle",
+          "latitude": 15.122,
+          "longitude": 76.936,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-19-3",
+          "name": "Beerappa Temple",
+          "latitude": 15.129,
+          "longitude": 76.929,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-19-4",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:05",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:20",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-20",
+      "name": "HP Petrol Bunk (Havambhavi) -> BITM",
+      "description": "Campus route connecting HP Petrol Bunk (Havambhavi) to BITM College",
+      "active": true,
+      "busId": "BUS-20",
+      "stops": [
+        {
+          "stopId": "STOP-20-1",
+          "name": "HP Petrol Bunk (Havambhavi)",
+          "latitude": 15.163,
+          "longitude": 76.925,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-20-2",
+          "name": "Classic Function Hall",
+          "latitude": 15.161,
+          "longitude": 76.921,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-20-3",
+          "name": "Canal (Havambhavi)",
+          "latitude": 15.159,
+          "longitude": 76.917,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-20-4",
+          "name": "Chaitanya Girls College",
+          "latitude": 15.157,
+          "longitude": 76.912,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-20-5",
+          "name": "Shivagiri Nagar",
+          "latitude": 15.155,
+          "longitude": 76.908,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-20-6",
+          "name": "Sriramulu Office",
+          "latitude": 15.153,
+          "longitude": 76.904,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-20-7",
+          "name": "BBC College",
+          "latitude": 15.151,
+          "longitude": 76.899,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-20-8",
+          "name": "S. P. Circle",
+          "latitude": 15.149,
+          "longitude": 76.894,
+          "order": 8,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-20-9",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 9,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:05",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:25",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-21",
+      "name": "Basaveswara Nagar Kids School -> BITM",
+      "description": "Campus route connecting Basaveswara Nagar Kids School to BITM College",
+      "active": true,
+      "busId": "BUS-21",
+      "stops": [
+        {
+          "stopId": "STOP-21-1",
+          "name": "Basaveswara Nagar Kids School",
+          "latitude": 15.142,
+          "longitude": 76.949,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-21-2",
+          "name": "Basaveswara Temple",
+          "latitude": 15.145,
+          "longitude": 76.942,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-21-3",
+          "name": "R. K. Hospital / MMTC",
+          "latitude": 15.148,
+          "longitude": 76.934,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-21-4",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:20",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-22",
+      "name": "Kutty Hotel -> BITM",
+      "description": "Campus route connecting Kutty Hotel to BITM College",
+      "active": true,
+      "busId": "BUS-22",
+      "stops": [
+        {
+          "stopId": "STOP-22-1",
+          "name": "Kutty Hotel",
+          "latitude": 15.139,
+          "longitude": 76.927,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-22-2",
+          "name": "Fort Sai Baba Temple",
+          "latitude": 15.142,
+          "longitude": 76.923,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-22-3",
+          "name": "Fort Masjid",
+          "latitude": 15.144,
+          "longitude": 76.919,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-22-4",
+          "name": "Radio Park 2nd Gate",
+          "latitude": 15.147,
+          "longitude": 76.914,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-22-5",
+          "name": "Yerrithatha Bakery",
+          "latitude": 15.1495,
+          "longitude": 76.909,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-22-6",
+          "name": "Kuvempu Nagar 4th cross",
+          "latitude": 15.1515,
+          "longitude": 76.904,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-22-7",
+          "name": "Kuvempu Nagar 3rd cross",
+          "latitude": 15.1535,
+          "longitude": 76.898,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-22-8",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 8,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:05",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:30",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-23",
+      "name": "Vajpayee Layout -> BITM",
+      "description": "Campus route connecting Vajpayee Layout to BITM College",
+      "active": true,
+      "busId": "BUS-23",
+      "stops": [
+        {
+          "stopId": "STOP-23-1",
+          "name": "Vajpayee Layout",
+          "latitude": 15.156,
+          "longitude": 76.939,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-23-2",
+          "name": "Bharath Milk Dairy",
+          "latitude": 15.154,
+          "longitude": 76.934,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-23-3",
+          "name": "Maremma Temple",
+          "latitude": 15.152,
+          "longitude": 76.929,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-23-4",
+          "name": "KEB",
+          "latitude": 15.15,
+          "longitude": 76.924,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-23-5",
+          "name": "Suryanarayana Office",
+          "latitude": 15.148,
+          "longitude": 76.918,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-23-6",
+          "name": "Gandhinagar 3rd cross",
+          "latitude": 15.146,
+          "longitude": 76.912,
+          "order": 6,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-23-7",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 7,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:20",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-24",
+      "name": "Royal Enfield Showroom -> BITM",
+      "description": "Campus route connecting Royal Enfield (Bullet) Showroom to BITM College",
+      "active": true,
+      "busId": "BUS-24",
+      "stops": [
+        {
+          "stopId": "STOP-24-1",
+          "name": "Royal Enfield (Bullet) Showroom",
+          "latitude": 15.158,
+          "longitude": 76.922,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-24-2",
+          "name": "Water Tank - Raghavendra Colony",
+          "latitude": 15.156,
+          "longitude": 76.917,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-24-3",
+          "name": "Uma Maheswara Kalyana Mantapa",
+          "latitude": 15.154,
+          "longitude": 76.912,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-24-4",
+          "name": "Sanna Durgamma Temple",
+          "latitude": 15.152,
+          "longitude": 76.906,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-24-5",
+          "name": "BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 5,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:05",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:20",
+          "enabled": true
+        }
+      }
+    }
+  ]
+}

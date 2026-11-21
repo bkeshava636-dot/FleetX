@@ -24,6 +24,8 @@ import com.college.bustracker.util.LocationThrottler
 import com.college.bustracker.util.RouteEtaResult
 import com.college.bustracker.util.RoadRoutingEngine
 import com.college.bustracker.util.ScheduleHelper
+import com.college.bustracker.util.OperatingScheduleService
+import com.college.bustracker.util.CollegeCalendarService
 import com.college.bustracker.util.StopEta
 import com.college.bustracker.util.StudentLocationAssistant
 import com.college.bustracker.util.MultiSourceLocationEngine
@@ -304,17 +306,25 @@ class StudentViewModel : ViewModel() {
             var previousState = TrackingDisplayState.INACTIVE
             var previousText = ""
             while (true) {
+                val isOperating = ScheduleHelper.isWithinOperatingWindow(OperatingScheduleService.getSchedule()) && CollegeCalendarService.isWorkingDay()
                 val loc = _liveLocation.value
                 val serverNow = trackingRepo.getEstimatedServerTime()
-                val displayState = loc.getDisplayState(serverNow)
+                val displayState = if (!isOperating) {
+                    TrackingDisplayState.INACTIVE
+                } else {
+                    loc.getDisplayState(serverNow, isWithinOperatingWindow = true)
+                }
+
                 if (_trackingState.value != displayState) {
                     _trackingState.value = displayState
                 }
 
-                val newText = if (loc != null && loc.lastUpdated > 0L) {
+                val newText = if (!isOperating || displayState == TrackingDisplayState.INACTIVE) {
+                    ""
+                } else if (loc != null && loc.lastUpdated > 0L) {
                     ScheduleHelper.formatRelativeTime(loc.lastUpdated)
                 } else {
-                    "Inactive"
+                    ""
                 }
                 if (newText != previousText) {
                     previousText = newText
@@ -323,7 +333,13 @@ class StudentViewModel : ViewModel() {
 
                 if (displayState != previousState) {
                     previousState = displayState
-                    updateEtaCalculation(loc, force = true)
+                    if (isOperating) {
+                        updateEtaCalculation(loc, force = true)
+                    } else {
+                        _routeEtaResult.value = null
+                        _nextStopEta.value = null
+                        _upcomingStopsEta.value = emptyList()
+                    }
                 }
 
                 delay(5000L)
@@ -476,7 +492,8 @@ class StudentViewModel : ViewModel() {
     private fun syncTopicSubscription() {
         val busId = _selectedBus.value?.busId
         val stopId = _selectedStop.value?.stopId
-        BusTopicManager.updateSubscription(app.applicationContext, busId, stopId)
+        val stopOrder = _selectedStop.value?.order ?: 999
+        BusTopicManager.updateSubscription(app.applicationContext, busId, stopId, stopOrder)
         if (busId != lastSubscribedBusId) {
             AnnouncementTopicManager.updateBusSubscription(lastSubscribedBusId, busId)
             lastSubscribedBusId = busId
@@ -516,13 +533,27 @@ class StudentViewModel : ViewModel() {
 
                     if (isNewData) {
                         _liveLocation.value = loc
-                        _trackingState.value = loc.getDisplayState(serverNow)
-                        _lastUpdateText.value = if (loc.lastUpdated > 0L) {
+                        val isOperating = ScheduleHelper.isWithinOperatingWindow(OperatingScheduleService.getSchedule()) && CollegeCalendarService.isWorkingDay()
+                        val displayState = if (!isOperating) {
+                            TrackingDisplayState.INACTIVE
+                        } else {
+                            loc.getDisplayState(serverNow, isWithinOperatingWindow = true)
+                        }
+                        _trackingState.value = displayState
+                        _lastUpdateText.value = if (!isOperating || displayState == TrackingDisplayState.INACTIVE) {
+                            ""
+                        } else if (loc.lastUpdated > 0L) {
                             ScheduleHelper.formatRelativeTime(loc.lastUpdated)
                         } else {
-                            "Inactive"
+                            ""
                         }
-                        updateEtaCalculation(loc, force = false)
+                        if (isOperating) {
+                            updateEtaCalculation(loc, force = false)
+                        } else {
+                            _routeEtaResult.value = null
+                            _nextStopEta.value = null
+                            _upcomingStopsEta.value = emptyList()
+                        }
                         android.util.Log.i(
                             "BusTrackerGPS",
                             "LIVE_LOCATION_STATE_UPDATED: busId=${loc.busId}, lat=${loc.latitude}, lon=${loc.longitude}, lastUpdated=${loc.lastUpdated}"
@@ -536,6 +567,10 @@ class StudentViewModel : ViewModel() {
             studentSourcesJob?.cancel()
             studentSourcesJob = viewModelScope.launch {
                 trackingRepo.getLocationSourcesFlow(busId).collect { sources ->
+                    val isOperating = ScheduleHelper.isWithinOperatingWindow(OperatingScheduleService.getSchedule()) && CollegeCalendarService.isWorkingDay()
+                    if (!isOperating) {
+                        return@collect
+                    }
                     val serverNow = trackingRepo.getEstimatedServerTime()
                     val activeDriverLoc = _liveLocation.value
                     val isDriverFresh = activeDriverLoc != null &&

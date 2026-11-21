@@ -273,24 +273,26 @@ fun StudentMapScreen(
                 )
             }
 
-            // Live Bus Marker
+            // Live Bus Marker (only show when tracking is active/stale/waiting, not when inactive after operating window)
             val lat = liveLoc?.latitude ?: 0.0
             val lng = liveLoc?.longitude ?: 0.0
             val speedMps = liveLoc?.speed ?: 0.0f
             val bearing = liveLoc?.bearing ?: 0.0f
-            val canShowMarker = lat != 0.0 && lng != 0.0
+            val canShowMarker = lat != 0.0 && lng != 0.0 && trackingState != TrackingDisplayState.INACTIVE
 
             if (canShowMarker) {
                 val statusText = when (trackingState) {
                     TrackingDisplayState.ACTIVE -> context.getString(R.string.tracking_live)
                     TrackingDisplayState.WAITING_FOR_GPS -> context.getString(R.string.awaiting_gps_signal)
                     TrackingDisplayState.STALE -> context.getString(R.string.gps_signal_stale)
-                    TrackingDisplayState.INACTIVE -> context.getString(R.string.bus_inactive)
+                    TrackingDisplayState.INACTIVE -> context.getString(R.string.bus_not_started)
                 }
                 val busLabel = bus?.busNumber ?: "BUS-25"
                 val snippetText = if (trackingState == TrackingDisplayState.ACTIVE) {
                     val speedKmH = (speedMps * 3.6).toInt()
                     context.getString(R.string.speed_format, speedKmH, lastUpdateText)
+                } else if (trackingState == TrackingDisplayState.INACTIVE) {
+                    context.getString(R.string.bus_not_started)
                 } else {
                     lastUpdateText
                 }
@@ -562,7 +564,7 @@ fun StudentMapScreen(
                                 }
                                 TrackingDisplayState.WAITING_FOR_GPS -> stringResource(R.string.connecting_gps_pending)
                                 TrackingDisplayState.STALE -> stringResource(R.string.signal_outdated, lastUpdateText)
-                                TrackingDisplayState.INACTIVE -> stringResource(R.string.bus_not_in_service)
+                                TrackingDisplayState.INACTIVE -> stringResource(R.string.bus_not_started)
                             }
                             Text(
                                 text = detailSubtext,

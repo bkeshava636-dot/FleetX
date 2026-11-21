@@ -125,12 +125,18 @@ object MultiSourceLocationEngine {
         // Deduplicate cloned or multi-reporting contributors
         val deduplicatedStudents = deduplicateStudentSources(validStudents)
 
+        // Stop-by-stop sequential priority:
+        // Rank students by stopOrder ASC (Stop 1 -> Stop 2 -> Stop 3...), then accuracy ASC, then timestamp DESC
+        val prioritizedStudents = deduplicatedStudents.sortedWith(
+            compareBy({ it.stopOrder }, { it.accuracy }, { -it.timestamp })
+        )
+
         // 3. Evaluate Student Contributors via Cluster Consensus
-        if (deduplicatedStudents.isNotEmpty()) {
-            val consensusCluster = if (deduplicatedStudents.size == 1) {
-                deduplicatedStudents
+        if (prioritizedStudents.isNotEmpty()) {
+            val consensusCluster = if (prioritizedStudents.size == 1) {
+                prioritizedStudents
             } else {
-                findConsensusCluster(deduplicatedStudents, previousLocation, CLUSTER_RADIUS_METERS)
+                findConsensusCluster(prioritizedStudents, previousLocation, CLUSTER_RADIUS_METERS)
             }
 
             val fusedFix = if (consensusCluster.size == 1) {
@@ -322,7 +328,9 @@ object MultiSourceLocationEngine {
         val fusedLng = weightedLng / totalWeight
         val fusedSpeed = (weightedSpeed / totalWeight).toFloat()
         val fusedAccuracy = (sqrt(1.0 / totalWeight).toFloat()).coerceAtLeast(3.0f)
-        val representative = cluster.maxByOrNull { it.timestamp } ?: cluster.first()
+        val representative = cluster.minWithOrNull(
+            compareBy({ it.stopOrder }, { -it.timestamp })
+        ) ?: cluster.first()
 
         return LocationSource(
             busId = representative.busId,

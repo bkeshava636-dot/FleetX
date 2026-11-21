@@ -26,6 +26,8 @@ object StudentBeaconArbitrator {
     fun tryAcquireOrRenewLease(
         busId: String,
         studentSourceId: String,
+        stopOrder: Int = 999,
+        accuracy: Float = 40.0f,
         onResult: (isLeaseHolder: Boolean) -> Unit
     ) {
         if (busId.isBlank() || studentSourceId.isBlank()) {
@@ -40,18 +42,28 @@ object StudentBeaconArbitrator {
             override fun doTransaction(mutableData: MutableData): Transaction.Result {
                 val currentHolder = mutableData.child("sourceId").getValue(String::class.java)
                 val expiresAt = mutableData.child("leaseExpiresAt").getValue(Long::class.java) ?: 0L
+                val currentStopOrder = mutableData.child("stopOrder").getValue(Int::class.java) ?: 999
 
                 val isExpired = now >= expiresAt
                 val isCurrentHolder = currentHolder == studentSourceId
 
-                return if (currentHolder == null || isExpired || isCurrentHolder) {
-                    // Acquire or renew lease
+                // Stop-based priority preemption:
+                // Earlier boarding stops have strictly higher priority (Stop 1 -> Stop 2 -> Stop 3...)
+                // An accurate (<= 40m) candidate with an earlier stop can preempt a later stop holder.
+                val canPreempt = !isCurrentHolder &&
+                        stopOrder < currentStopOrder &&
+                        accuracy in 0.1f..40.0f
+
+                return if (currentHolder == null || isExpired || isCurrentHolder || canPreempt) {
+                    // Acquire, renew, or preempt lease
                     mutableData.child("sourceId").value = studentSourceId
+                    mutableData.child("stopOrder").value = stopOrder
+                    mutableData.child("accuracy").value = accuracy
                     mutableData.child("leaseExpiresAt").value = now + LEASE_DURATION_MS
                     mutableData.child("updatedAt").value = now
                     Transaction.success(mutableData)
                 } else {
-                    // Another student holds an active, unexpired lease; abort write
+                    // Another student holds an active, unexpired lease with equal or earlier stop priority
                     Transaction.abort()
                 }
             }
