@@ -66,7 +66,9 @@ class RouteRepository(
                         if (r != null) {
                             val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
                             val finalName = if (r.name.isNotBlank()) r.name else doc.id
-                            r.copy(routeId = finalId, name = finalName)
+                            val fallbackStops = _localRoutes.value.find { it.routeId == finalId }?.stops ?: emptyList()
+                            val mergedStops = if (r.stops.isNotEmpty()) r.stops else fallbackStops
+                            r.copy(routeId = finalId, name = finalName, stops = mergedStops)
                         } else null
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed deserializing cached route ${doc.id}: ${e.message}")
@@ -99,7 +101,9 @@ class RouteRepository(
                             if (r != null) {
                                 val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
                                 val finalName = if (r.name.isNotBlank()) r.name else doc.id
-                                r.copy(routeId = finalId, name = finalName)
+                                val fallbackStops = _localRoutes.value.find { it.routeId == finalId }?.stops ?: emptyList()
+                                val mergedStops = if (r.stops.isNotEmpty()) r.stops else fallbackStops
+                                r.copy(routeId = finalId, name = finalName, stops = mergedStops)
                             } else null
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed deserializing server route ${doc.id}: ${e.message}")
@@ -136,7 +140,9 @@ class RouteRepository(
                             if (r != null) {
                                 val finalId = if (r.routeId.isNotBlank()) r.routeId else doc.id
                                 val finalName = if (r.name.isNotBlank()) r.name else doc.id
-                                r.copy(routeId = finalId, name = finalName)
+                                val fallbackStops = _localRoutes.value.find { it.routeId == finalId }?.stops ?: emptyList()
+                                val mergedStops = if (r.stops.isNotEmpty()) r.stops else fallbackStops
+                                r.copy(routeId = finalId, name = finalName, stops = mergedStops)
                             } else null
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed deserializing real-time route ${doc.id}: ${e.message}")

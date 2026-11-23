@@ -124,7 +124,7 @@ export const AppPreview: React.FC = () => {
         {/* Caption Banner */}
         <div className="mt-8 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
           <span>📱</span>
-          <span>Actual screenshots captured on Android devices running FleetX v1.0.44</span>
+          <span>Actual screenshots captured on Android devices running FleetX v1.0.45</span>
         </div>
 
       </div>

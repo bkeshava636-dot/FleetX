@@ -52,7 +52,7 @@ object StudentPreferences {
             } else {
                 remove(KEY_SELECTED_STOP_ID)
             }
-            if (stopOrder in 0..998) {
+            if (stopOrder in 1..998) {
                 putInt(KEY_SELECTED_STOP_ORDER, stopOrder)
             } else {
                 remove(KEY_SELECTED_STOP_ORDER)

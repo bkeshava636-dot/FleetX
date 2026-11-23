@@ -380,6 +380,10 @@ class StudentViewModel : ViewModel() {
         lastNextStopEtaMinutes = null
         lastCalcTimeMs = 0L
 
+        val targetStopId = preferredStopId ?: _selectedStop.value?.stopId ?: StudentPreferences.getSavedStopId(app.applicationContext)
+        val targetStopOrder = _selectedStop.value?.order ?: StudentPreferences.getSavedStopOrder(app.applicationContext)
+        StudentPreferences.saveSelection(app.applicationContext, bus.busId, targetStopId, targetStopOrder)
+
         updateCurrentRouteForSelectedBus(preferredStopId)
 
         val activeSwap = _activeSwapForStudent.value
@@ -422,16 +426,37 @@ class StudentViewModel : ViewModel() {
 
         val currentSelected = _selectedStop.value
         val savedStopId = StudentPreferences.getSavedStopId(app.applicationContext)
+        val savedStopOrder = StudentPreferences.getSavedStopOrder(app.applicationContext)
         val targetStopId = preferredStopId ?: currentSelected?.stopId ?: savedStopId
         if (sanitizedRoute?.stops?.isNotEmpty() == true) {
             val matchingStop = if (!targetStopId.isNullOrBlank()) {
                 sanitizedRoute.stops.find { it.stopId.equals(targetStopId, ignoreCase = true) }
             } else null
-            _selectedStop.value = matchingStop ?: sanitizedRoute.stops.first()
+
+            // Fallback 1: match by saved stop order (e.g. Stop 2) if stop ID did not match (seed vs Firestore)
+            val matchingByOrder = if (matchingStop == null && savedStopOrder in 1..998) {
+                sanitizedRoute.stops.find { it.order == savedStopOrder }
+            } else null
+
+            // Fallback 2: match by stop name if previously selected
+            val matchingByName = if (matchingStop == null && matchingByOrder == null && currentSelected != null) {
+                sanitizedRoute.stops.find { it.name.equals(currentSelected.name, ignoreCase = true) }
+            } else null
+
+            val chosenStop = matchingStop ?: matchingByOrder ?: matchingByName ?: sanitizedRoute.stops.first()
+            _selectedStop.value = chosenStop
+
+            // If matched using order or name fallback, ensure preferences reflect the active stop ID & order
+            if (matchingByOrder != null || matchingByName != null) {
+                StudentPreferences.saveSelection(app.applicationContext, bus.busId, chosenStop.stopId, chosenStop.order)
+            }
         } else {
-            _selectedStop.value = null
+            // When route or stops are temporarily unavailable (e.g. cold launch seed), do NOT wipe StudentPreferences!
+            if (sanitizedRoute == null) {
+                _selectedStop.value = null
+            }
         }
-        syncTopicSubscription()
+        syncTopicSubscription(persistSelection = false)
         updateEtaCalculation(_liveLocation.value, force = true)
         updateDriverDisplayInfo()
     }
@@ -486,14 +511,16 @@ class StudentViewModel : ViewModel() {
 
     fun selectStop(stop: BusStop) {
         _selectedStop.value = stop
-        syncTopicSubscription()
+        val busId = _selectedBus.value?.busId
+        StudentPreferences.saveSelection(app.applicationContext, busId, stop.stopId, stop.order)
+        syncTopicSubscription(persistSelection = false)
     }
 
-    private fun syncTopicSubscription() {
+    private fun syncTopicSubscription(persistSelection: Boolean = false) {
         val busId = _selectedBus.value?.busId
         val stopId = _selectedStop.value?.stopId
         val stopOrder = _selectedStop.value?.order ?: 999
-        BusTopicManager.updateSubscription(app.applicationContext, busId, stopId, stopOrder)
+        BusTopicManager.updateSubscription(app.applicationContext, busId, stopId, stopOrder, persistSelection = persistSelection)
         if (busId != lastSubscribedBusId) {
             AnnouncementTopicManager.updateBusSubscription(lastSubscribedBusId, busId)
             lastSubscribedBusId = busId

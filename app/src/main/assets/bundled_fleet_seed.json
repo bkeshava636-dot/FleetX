@@ -1152,6 +1152,120 @@
       }
     },
     {
+      "routeId": "ROUTE-12",
+      "name": "Cantonment -> BITM",
+      "description": "Campus route connecting M.G. Point to BITM College",
+      "active": true,
+      "busId": "BUS-12",
+      "stops": [
+        {
+          "stopId": "STOP-12-1",
+          "name": "M.G. Point",
+          "latitude": 15.1432,
+          "longitude": 76.9385,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-12-2",
+          "name": "Cowl Bazaar Police Station",
+          "latitude": 15.1385,
+          "longitude": 76.93,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-12-3",
+          "name": "Select Talkies",
+          "latitude": 15.134,
+          "longitude": 76.9345,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-12-4",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:30",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-13",
+      "name": "Siruguppa Road -> BITM",
+      "description": "Campus route connecting Kendriya Vidyalaya to BITM College",
+      "active": true,
+      "busId": "BUS-13",
+      "stops": [
+        {
+          "stopId": "STOP-13-1",
+          "name": "Kendriya Vidyalaya",
+          "latitude": 15.1265,
+          "longitude": 76.924,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-13-2",
+          "name": "Azad Nagar Ground",
+          "latitude": 15.1305,
+          "longitude": 76.921,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-13-3",
+          "name": "Near Canal (Belagal Road)",
+          "latitude": 15.136,
+          "longitude": 76.915,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-13-4",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:30",
+          "enabled": true
+        }
+      }
+    },
+    {
       "routeId": "ROUTE-14",
       "name": "Dream World School -> BITM",
       "description": "Campus route connecting Dream World School to BITM College",
@@ -1231,6 +1345,63 @@
         "evening": {
           "startTime": "16:45",
           "endTime": "17:15",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-15",
+      "name": "Kappagal Road -> BITM",
+      "description": "Campus route connecting Dream World School to BITM College",
+      "active": true,
+      "busId": "BUS-15",
+      "stops": [
+        {
+          "stopId": "STOP-15-1",
+          "name": "Dream World School",
+          "latitude": 15.161,
+          "longitude": 76.945,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-15-2",
+          "name": "Sadashivanagar",
+          "latitude": 15.159,
+          "longitude": 76.94,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-15-3",
+          "name": "Sanganakal",
+          "latitude": 15.165,
+          "longitude": 76.942,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-15-4",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:30",
           "enabled": true
         }
       }
@@ -1413,6 +1584,63 @@
           "latitude": 15.168731,
           "longitude": 76.850518,
           "order": 9,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:30",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-18",
+      "name": "Infantry Road -> BITM",
+      "description": "Campus route connecting Teachers Colony to BITM College",
+      "active": true,
+      "busId": "BUS-18",
+      "stops": [
+        {
+          "stopId": "STOP-18-1",
+          "name": "Teachers Colony",
+          "latitude": 15.128,
+          "longitude": 76.941,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-18-2",
+          "name": "Mohammadia School",
+          "latitude": 15.1315,
+          "longitude": 76.937,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-18-3",
+          "name": "G-Square",
+          "latitude": 15.141,
+          "longitude": 76.91,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-18-4",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 4,
           "active": true,
           "visibleOnMap": true
         }
@@ -1885,6 +2113,63 @@
         "evening": {
           "startTime": "16:45",
           "endTime": "17:20",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "routeId": "ROUTE-25",
+      "name": "Ballari Central -> BITM",
+      "description": "Campus route connecting Central Bus Stand to BITM College",
+      "active": true,
+      "busId": "BUS-25",
+      "stops": [
+        {
+          "stopId": "STOP-25-1",
+          "name": "Central Bus Stand",
+          "latitude": 15.145,
+          "longitude": 76.92,
+          "order": 1,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-25-2",
+          "name": "Gavi Math Circle",
+          "latitude": 15.147,
+          "longitude": 76.915,
+          "order": 2,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-25-3",
+          "name": "Radio Park",
+          "latitude": 15.149,
+          "longitude": 76.91,
+          "order": 3,
+          "active": true,
+          "visibleOnMap": true
+        },
+        {
+          "stopId": "STOP-25-4",
+          "name": "Arrival to BITM",
+          "latitude": 15.168731,
+          "longitude": 76.850518,
+          "order": 4,
+          "active": true,
+          "visibleOnMap": true
+        }
+      ],
+      "schedules": {
+        "morning": {
+          "startTime": "08:10",
+          "endTime": "08:45",
+          "enabled": true
+        },
+        "evening": {
+          "startTime": "16:45",
+          "endTime": "17:30",
           "enabled": true
         }
       }

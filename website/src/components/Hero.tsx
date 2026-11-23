@@ -179,7 +179,7 @@ export const Hero: React.FC<HeroProps> = ({ latestRelease, onDownloadClick }) =>
                           <span className="w-1.5 h-1.5 rounded-full bg-college-primary animate-bounce"></span>
                         </div>
                         <span className="text-[11px] text-slate-400 font-medium">
-                          {latestRelease ? `v${latestRelease.version}` : 'v1.0.44'} • Tap screen to view app
+                          {latestRelease ? `v${latestRelease.version}` : 'v1.0.45'} • Tap screen to view app
                         </span>
                       </div>
                     </div>

@@ -132,7 +132,8 @@ object BusTopicManager {
         newBusId: String?,
         newStopId: String?,
         newStopOrder: Int = 999,
-        subscriber: TopicSubscriber = FirebaseTopicSubscriber()
+        subscriber: TopicSubscriber = FirebaseTopicSubscriber(),
+        persistSelection: Boolean = true
     ) {
         val currentTopic = StudentPreferences.getSubscribedTopic(context)
         val newTopic = if (!newBusId.isNullOrBlank() && !newStopId.isNullOrBlank()) {
@@ -141,7 +142,9 @@ object BusTopicManager {
             null
         }
 
-        StudentPreferences.saveSelection(context, newBusId, newStopId, newStopOrder)
+        if (persistSelection) {
+            StudentPreferences.saveSelection(context, newBusId, newStopId, newStopOrder)
+        }
 
         if (currentTopic != newTopic) {
             // Unsubscribe from old topic if one existed

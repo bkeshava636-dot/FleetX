@@ -76,11 +76,35 @@ for (const r of ROUTES_DATA) {
   });
 }
 
-// Ensure 25 buses are present
+// Fallback stop sequences for buses not in ROUTES_DATA (BUS-12, 13, 15, 18, 25)
+const SUPPLEMENTAL_ROUTES = {
+  "ROUTE-12": {
+    name: "Cantonment -> BITM",
+    stopNames: ["M.G. Point", "Cowl Bazaar Police Station", "Select Talkies", "Arrival to BITM"]
+  },
+  "ROUTE-13": {
+    name: "Siruguppa Road -> BITM",
+    stopNames: ["Kendriya Vidyalaya", "Azad Nagar Ground", "Near Canal (Belagal Road)", "Arrival to BITM"]
+  },
+  "ROUTE-15": {
+    name: "Kappagal Road -> BITM",
+    stopNames: ["Dream World School", "Sadashivanagar", "Sanganakal", "Arrival to BITM"]
+  },
+  "ROUTE-18": {
+    name: "Infantry Road -> BITM",
+    stopNames: ["Teachers Colony", "Mohammadia School", "G-Square", "Arrival to BITM"]
+  },
+  "ROUTE-25": {
+    name: "Ballari Central -> BITM",
+    stopNames: ["Central Bus Stand", "Gavi Math Circle", "Radio Park", "Arrival to BITM"]
+  }
+};
+
+// Ensure 25 buses and 25 routes are present
 for (let i = 1; i <= 25; i++) {
   const bId = `BUS-${String(i).padStart(2, '0')}`;
+  const rId = `ROUTE-${String(i).padStart(2, '0')}`;
   if (!buses.some(b => b.busId === bId)) {
-    const rId = `ROUTE-${String(i).padStart(2, '0')}`;
     buses.push({
       busId: bId,
       busNumber: `BUS ${String(i).padStart(2, '0')}`,
@@ -91,9 +115,54 @@ for (let i = 1; i <= 25; i++) {
       notes: "Bundled Fleet Seed"
     });
   }
+
+  if (!routes.some(r => r.routeId === rId)) {
+    const supp = SUPPLEMENTAL_ROUTES[rId] || {
+      name: `Route ${String(i).padStart(2, '0')} -> BITM`,
+      stopNames: ["M.G. Point", "Patel Nagar", "Radio Park", "Arrival to BITM"]
+    };
+    const suppStops = supp.stopNames.map((name, idx) => {
+      const coords = KNOWN_LANDMARKS[name] || {
+        lat: 15.1450 + (idx * 0.002),
+        lng: 76.9200 - (idx * 0.005)
+      };
+      const cleanStopId = `STOP-${String(i).padStart(2, '0')}-${idx + 1}`;
+      return {
+        stopId: cleanStopId,
+        name: name,
+        latitude: coords.lat,
+        longitude: coords.lng,
+        order: idx + 1,
+        active: true,
+        visibleOnMap: true
+      };
+    });
+
+    routes.push({
+      routeId: rId,
+      name: supp.name,
+      description: `Campus route connecting ${supp.stopNames[0]} to BITM College`,
+      active: true,
+      busId: bId,
+      stops: suppStops,
+      schedules: {
+        morning: {
+          startTime: "08:10",
+          endTime: "08:45",
+          enabled: true
+        },
+        evening: {
+          startTime: "16:45",
+          endTime: "17:30",
+          enabled: true
+        }
+      }
+    });
+  }
 }
 
 buses.sort((a, b) => a.busId.localeCompare(b.busId));
+routes.sort((a, b) => a.routeId.localeCompare(b.routeId));
 
 const assetsDir = path.join(__dirname, '..', 'app', 'src', 'main', 'assets');
 if (!fs.existsSync(assetsDir)) {
