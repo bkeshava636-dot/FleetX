@@ -295,36 +295,58 @@ fun UpdateDialog(
                     val cleanedNotes = remember(releaseInfo.releaseNotes) {
                         val raw = releaseInfo.releaseNotes
                         if (raw.isBlank()) {
-                            "• Performance improvements and bug fixes."
+                            "• Performance improvements and stability enhancements."
                         } else {
                             val lines = raw.lines().map { it.trim() }
                             val filtered = mutableListOf<String>()
-                            var skipSection = false
+                            var hasSeenWhatsNewHeader = false
+
                             for (line in lines) {
-                                if (line.startsWith("### Release Information")) {
-                                    skipSection = true
+                                val lower = line.lowercase()
+                                // Stop parsing if we hit technical/metadata sections
+                                if (lower.startsWith("### recent commits") ||
+                                    lower.startsWith("## recent commits") ||
+                                    lower.startsWith("### release information") ||
+                                    lower.startsWith("## release information") ||
+                                    lower.startsWith("### verification") ||
+                                    lower.startsWith("## verification") ||
+                                    lower.startsWith("**full changelog**") ||
+                                    lower.startsWith("full changelog:")
+                                ) {
+                                    break
+                                }
+
+                                // Detect What's New header
+                                if (lower.startsWith("### what's new") || lower.startsWith("## what's new") || lower.startsWith("what's new")) {
+                                    hasSeenWhatsNewHeader = true
                                     continue
                                 }
-                                if (skipSection) {
-                                    if (line.startsWith("### ") || line.startsWith("## ")) {
-                                        skipSection = false
-                                    } else {
-                                        continue
-                                    }
+
+                                // If we haven't hit What's New yet, skip intro titles
+                                if (!hasSeenWhatsNewHeader && (line.startsWith("## ") || line.startsWith("### "))) {
+                                    continue
                                 }
-                                if (line.startsWith("versionCode:") || line.startsWith("SHA-256:")) continue
-                                if (line.startsWith("```")) continue
+
+                                // Skip technical artifacts, code blocks, hashes
+                                if (line.startsWith("```") || line.startsWith("versionCode:") || line.startsWith("SHA-256:")) continue
+                                if (line.matches(Regex("^[0-9a-fA-F]{7,40}\\s+.*"))) continue // Git commit hashes e.g. "4feef4b feat: ..."
+                                if (line.matches(Regex("^[0-9a-fA-F]{64}$"))) continue // Raw sha256 checksum
                                 if (line.isBlank()) continue
-                                
-                                when {
-                                    line.startsWith("## ") -> filtered.add(line.removePrefix("## ").trim())
-                                    line.startsWith("### ") -> filtered.add(line.removePrefix("### ").trim())
-                                    line.startsWith("- ") -> filtered.add("• " + line.removePrefix("- ").trim())
-                                    line.startsWith("* ") -> filtered.add("• " + line.removePrefix("* ").trim())
-                                    else -> filtered.add(line)
+
+                                val cleanLine = when {
+                                    line.startsWith("- ") -> "• " + line.removePrefix("- ").trim()
+                                    line.startsWith("* ") -> "• " + line.removePrefix("* ").trim()
+                                    line.startsWith("• ") -> line
+                                    else -> "• $line"
                                 }
+                                filtered.add(cleanLine)
                             }
-                            if (filtered.isEmpty()) "• Performance improvements and bug fixes." else filtered.joinToString("\n")
+
+                            if (filtered.isEmpty()) {
+                                "• Performance improvements and stability enhancements."
+                            } else {
+                                filtered.take(4).joinToString("\n")
+                            }
                         }
                     }
 

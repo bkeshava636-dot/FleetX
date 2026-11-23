@@ -1,8 +1,8 @@
 {
-  "versionCode": 10040,
-  "versionName": "1.0.40",
-  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.40/FleetX-v1.0.40.apk",
-  "sha256": "",
-  "releaseNotes": "FleetX v1.0.40: Prevent unintended driver tracking on launch yesterday-swap prompt, robust 450-doc batch clear and audit trail, harden Firestore security rules, and optimize student offline analytics with timeout safety.",
-  "publishedAt": "2026-11-08T13:45:00Z"
+  "versionCode": 10045,
+  "versionName": "1.0.45",
+  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.45/FleetX-v1.0.45.apk",
+  "sha256": "dd9538cce09927e8a6fdf4800eef2a80987040e40a291d73c4b8aff39d2614e0",
+  "releaseNotes": "• Boarding stop selection now stays saved when closing and reopening the app.\n• Full route and stop schedules added for all 25 college buses.\n• Faster app startup and improved offline responsiveness.",
+  "publishedAt": "2026-11-23T18:00:00Z"
 }

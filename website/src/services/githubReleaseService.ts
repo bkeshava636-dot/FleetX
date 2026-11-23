@@ -76,7 +76,7 @@ export function extractWhatsNew(body: string): string {
     const collected: string[] = [];
     for (let i = whatsNewIndex + 1; i < lines.length; i++) {
       const line = lines[i].trim();
-      if (line.startsWith('##') || line.startsWith('### Recent Commits') || line.startsWith('### Release Information')) {
+      if (line.startsWith('##') || line.startsWith('### Recent Commits') || line.startsWith('### Release Information') || line.startsWith('### Verification') || line.startsWith('**Full Changelog**')) {
         break;
       }
       if (line) {
