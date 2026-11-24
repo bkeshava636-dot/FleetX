@@ -121,6 +121,8 @@ export const AdminDashboard: React.FC = () => {
           subtitle="Broadcasting live (<90s)"
           icon={Radio}
           color="purple"
+          linkTo="/admin/live-tracking"
+          linkLabel="View Live Map"
           isLoading={isLoading}
         />
 
@@ -274,6 +276,26 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
               <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-transform" />
+            </Link>
+
+            <Link
+              to="/admin/live-tracking"
+              className="group flex items-center justify-between p-3.5 rounded-xl border border-slate-200/80 hover:border-emerald-400 hover:bg-emerald-50/40 transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 group-hover:scale-105 transition-transform">
+                  <Radio className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-900 group-hover:text-emerald-600 transition-colors">
+                    Live Fleet Tracking Map
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Real-time GPS vehicle positions & heading
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
             </Link>
 
             <Link

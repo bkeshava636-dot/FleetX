@@ -44,7 +44,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
     { name: 'Routes & Stops', href: '/admin/routes', icon: RouteIcon, isImplemented: true },
     { name: 'Fleet Management', href: '/admin/fleet', icon: Bus, isImplemented: false },
     { name: 'Driver Management', href: '/admin/drivers', icon: Users, isImplemented: false },
-    { name: 'Live Fleet Tracking', href: '/admin/live-tracking', icon: Radio, isImplemented: false },
+    { name: 'Live Fleet Tracking', href: '/admin/live-tracking', icon: Radio, isImplemented: true, badge: 'Live' },
     { name: 'Bus Swaps', href: '/admin/bus-swaps', icon: Repeat, isImplemented: false },
     { name: 'Temporary Assignments', href: '/admin/temporary-assignments', icon: UserCheck, isImplemented: false },
     { name: 'College Calendar', href: '/admin/calendar', icon: Calendar, isImplemented: false },
