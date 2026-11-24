@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Menu, X, ArrowUpRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Download, Menu, X, ArrowUpRight, MapPin, Shield } from 'lucide-react';
 import logoUrl from '../assets/logo/fleetx-logo.png';
 import { ReleaseInfo } from '../types/github';
 
@@ -81,8 +82,16 @@ export const Navbar: React.FC<NavbarProps> = ({ latestRelease }) => {
             ))}
           </nav>
 
-          {/* Download CTA Button */}
-          <div className="hidden sm:flex items-center gap-3">
+          {/* Actions & Download CTA */}
+          <div className="hidden sm:flex items-center gap-2 lg:gap-3">
+            <Link
+              to="/submit-stop"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-college-primary hover:text-college-primary-dark hover:bg-blue-50/80 px-3 py-2 rounded-xl border border-blue-200/60 transition-colors"
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              <span>Submit Stop</span>
+            </Link>
+
             <a
               href="#download"
               className="inline-flex items-center gap-2 bg-college-primary hover:bg-college-primary-dark active:bg-blue-800 text-white font-medium text-sm px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-college-primary"
@@ -131,7 +140,26 @@ export const Navbar: React.FC<NavbarProps> = ({ latestRelease }) => {
                   {link.label}
                 </a>
               ))}
-              <div className="mt-3 px-3">
+              <div className="pt-2 border-t border-slate-200/80 flex flex-col gap-1.5">
+                <Link
+                  to="/submit-stop"
+                  onClick={handleNavClick}
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-college-primary hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  <MapPin className="w-4 h-4" />
+                  <span>Submit Stop Location</span>
+                </Link>
+                <Link
+                  to="/admin/login"
+                  onClick={handleNavClick}
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>Admin Console</span>
+                </Link>
+              </div>
+
+              <div className="mt-2 px-3">
                 <a
                   href="#download"
                   onClick={handleNavClick}

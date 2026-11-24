@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ExternalLink, Shield } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ExternalLink, Shield, MapPin } from 'lucide-react';
 import logoUrl from '../assets/logo/fleetx-logo.png';
 import { ReleaseInfo } from '../types/github';
 
@@ -74,6 +75,18 @@ export const Footer: React.FC<FooterProps> = ({ latestRelease }) => {
                   Previous Releases
                 </a>
               </li>
+              <li>
+                <Link to="/submit-stop" className="text-blue-400 hover:text-blue-300 font-medium transition-colors flex items-center gap-1.5">
+                  <MapPin className="w-3 h-3" />
+                  <span>Submit Bus Stop Location</span>
+                </Link>
+              </li>
+              <li>
+                <Link to="/admin/login" className="text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
+                  <Shield className="w-3 h-3 text-slate-500" />
+                  <span>Admin Management Console</span>
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -117,6 +130,18 @@ export const Footer: React.FC<FooterProps> = ({ latestRelease }) => {
               <li className="pt-2 text-[11px] text-slate-500">
                 <span>Support & Transportation Inquiries:</span>
                 <span className="block text-slate-400 mt-0.5">Please contact your college transportation administrator.</span>
+              </li>
+              <li>
+                <Link to="/submit-stop" className="text-blue-400 hover:text-blue-300 font-medium transition-colors flex items-center gap-1.5">
+                  <MapPin className="w-3 h-3" />
+                  <span>Submit Bus Stop Location</span>
+                </Link>
+              </li>
+              <li>
+                <Link to="/admin/login" className="text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
+                  <Shield className="w-3 h-3 text-slate-500" />
+                  <span>Admin Management Console</span>
+                </Link>
               </li>
             </ul>
           </div>
