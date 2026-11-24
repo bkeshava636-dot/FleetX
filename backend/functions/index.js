@@ -304,89 +304,13 @@ exports.onBusSwapWritten = regionalFunctions.firestore
 /**
  * deleteDriverAccount
  * Secure server-side HTTPS Callable Cloud Function for Driver Deletion.
+ * Hardened with App Check and authoritative Firestore / RTDB unassignment cleanup.
  */
-exports.deleteDriverAccount = regionalFunctions.https.onCall(async (data, context) => {
-  // 1. Verify caller authentication
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "Authentication is required to perform this action."
-    );
-  }
-
-  const callerUid = context.auth.uid;
-
-  // 2. Verify caller is an authorized active Administrator in Firestore
-  const callerDoc = await admin.firestore().collection("users").doc(callerUid).get();
-  if (!callerDoc.exists) {
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Caller authorization profile not found."
-    );
-  }
-
-  const callerData = callerDoc.data() || {};
-  if (callerData.role !== "ADMIN" || callerData.active !== true) {
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Only active administrators are authorized to delete staff accounts."
-    );
-  }
-
-  // 3. Validate driverUid parameter
-  const driverUid = data && data.driverUid ? String(data.driverUid).trim() : null;
-  if (!driverUid) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "A valid driverUid must be provided."
-    );
-  }
-
-  // 4. Protection: Cannot delete own administrator account
-  if (driverUid === callerUid) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "Administrators cannot delete their own active account."
-    );
-  }
-
-  // 5. Protection: Cannot delete another administrator account via this endpoint
-  const targetDoc = await admin.firestore().collection("users").doc(driverUid).get();
-  if (targetDoc.exists) {
-    const targetData = targetDoc.data() || {};
-    if (targetData.role === "ADMIN") {
-      throw new functions.https.HttpsError(
-        "permission-denied",
-        "Administrator accounts cannot be deleted via the driver management endpoint."
-      );
-    }
-  }
-
-  // 6. Delete user by UID from Firebase Authentication
-  try {
-    await admin.auth().deleteUser(driverUid);
-    console.log(`[deleteDriverAccount] Successfully deleted user ${driverUid} from Firebase Auth by admin ${callerUid}`);
-    return {
-      success: true,
-      driverUid: driverUid,
-      message: `Driver user ${driverUid} deleted from Firebase Authentication.`
-    };
-  } catch (error) {
-    if (error.code === "auth/user-not-found") {
-      console.log(`[deleteDriverAccount] User ${driverUid} already absent from Firebase Auth. Proceeding.`);
-      return {
-        success: true,
-        driverUid: driverUid,
-        message: "User was already absent from Firebase Authentication."
-      };
-    }
-    console.error(`[deleteDriverAccount] Error deleting user ${driverUid}:`, error);
-    throw new functions.https.HttpsError(
-      "internal",
-      error.message || "Failed to delete user from Firebase Authentication."
-    );
-  }
-});
+exports.deleteDriverAccount = regionalFunctions
+  .runWith({ enforceAppCheck: true })
+  .https.onCall(async (data, context) => {
+    return processDeleteDriverAccount(data, context);
+  });
 
 /**
  * updateDriverEmail
@@ -611,88 +535,13 @@ exports.requestAdminPasswordReset = regionalFunctions.https.onCall(async (data, 
 /**
  * resetDriverPassword
  * Secure server-side HTTPS Callable Cloud Function for Driver Password Reset.
- * Allows an authenticated active Administrator to reset a driver's Firebase Auth password
- * while strictly preserving their UID, Driver ID, name, bus assignment, and profile data.
+ * Hardened with App Check and role verification.
  */
-exports.resetDriverPassword = regionalFunctions.https.onCall(async (data, context) => {
-  // 1. Verify caller authentication
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "Authentication is required to perform this action."
-    );
-  }
-
-  const callerUid = context.auth.uid;
-
-  // 2. Verify caller is an authorized active Administrator in Firestore
-  const callerDoc = await admin.firestore().collection("users").doc(callerUid).get();
-  if (!callerDoc.exists) {
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Caller authorization profile not found."
-    );
-  }
-
-  const callerData = callerDoc.data() || {};
-  if (callerData.role !== "ADMIN" || callerData.active !== true) {
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Only active administrators are authorized to reset driver passwords."
-    );
-  }
-
-  // 3. Validate input parameters
-  const driverUid = data && data.driverUid ? String(data.driverUid).trim() : null;
-  const newPassword = data && data.newPassword ? String(data.newPassword) : null;
-
-  if (!driverUid) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "Target driver UID must be provided."
-    );
-  }
-
-  if (!newPassword || newPassword.length < 6) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "Password must be at least 6 characters long."
-    );
-  }
-
-  // 4. Fetch target driver profile from Firestore and verify role is DRIVER
-  const targetDoc = await admin.firestore().collection("users").doc(driverUid).get();
-  if (!targetDoc.exists) {
-    throw new functions.https.HttpsError(
-      "not-found",
-      "Target driver profile not found."
-    );
-  }
-
-  const targetData = targetDoc.data() || {};
-  if (targetData.role !== "DRIVER") {
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Unauthorized: Target user is not a driver. Password reset can only be performed for driver accounts."
-    );
-  }
-
-  // 5. Update password in Firebase Authentication
-  try {
-    await admin.auth().updateUser(driverUid, { password: newPassword });
-    console.log(`[resetDriverPassword] Successfully reset password for driver ${driverUid} by admin ${callerUid}`);
-    return {
-      success: true,
-      message: "Driver password reset successfully."
-    };
-  } catch (error) {
-    console.error(`[resetDriverPassword] Error resetting password for driver ${driverUid}:`, error.message);
-    throw new functions.https.HttpsError(
-      "internal",
-      error.message || "Failed to reset driver password in Firebase Authentication."
-    );
-  }
-});
+exports.resetDriverPassword = regionalFunctions
+  .runWith({ enforceAppCheck: true })
+  .https.onCall(async (data, context) => {
+    return processResetDriverPassword(data, context);
+  });
 
 // =========================================================================
 // STUDENT GPS SERVER-SIDE FALLBACK & MULTI-SOURCE FUSION ENGINE
@@ -2040,6 +1889,1080 @@ exports.reviewStopCoordinateSubmission = regionalFunctions
 exports.processSubmitStopCoordinates = processSubmitStopCoordinates;
 exports.processReviewStopCoordinateSubmission = processReviewStopCoordinateSubmission;
 
+// =========================================================================
+// MILESTONE 5: FLEET & DRIVER MANAGEMENT BACKEND ENGINE
+// =========================================================================
 
+/**
+ * Validates driver profile inputs strictly conforming to Android DriverProfileValidator.kt:
+ * - Name >= 2 chars, non-blank
+ * - Staff ID (customId) >= 3 chars, lowercase alphanumeric, hyphens, underscores, not containing 'admin'
+ * - Phone number: optional, normalized to 10 digits starting with 6, 7, 8, or 9
+ * - Password: >= 6 chars (when isCreate is true)
+ */
+function validateDriverProfileInputs({ name, customId, phoneNumber, password }, isCreate = true) {
+  const cleanName = String(name || "").trim();
+  if (!cleanName || cleanName.length < 2) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Driver display name must be at least 2 characters long."
+    );
+  }
 
+  const cleanId = String(customId || "").trim().toLowerCase();
+  if (!cleanId || cleanId.length < 3) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Staff ID must be at least 3 characters long."
+    );
+  }
+  if (cleanId.includes("admin")) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Staff ID cannot contain 'admin'."
+    );
+  }
+  if (!/^[a-z0-9_\-]+$/.test(cleanId)) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Staff ID may only contain lowercase letters, numbers, hyphens, and underscores."
+    );
+  }
+
+  let cleanPhone = null;
+  if (phoneNumber != null && String(phoneNumber).trim().length > 0) {
+    const raw = String(phoneNumber).trim();
+    const digitsOnly = raw.replace(/\D/g, "");
+    let normalized = digitsOnly;
+    if (digitsOnly.length === 12 && digitsOnly.startsWith("91")) {
+      normalized = digitsOnly.substring(2);
+    } else if (digitsOnly.length === 11 && digitsOnly.startsWith("0")) {
+      normalized = digitsOnly.substring(1);
+    }
+    if (normalized.length !== 10) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Phone number must be a valid 10-digit mobile number."
+      );
+    }
+    if (!/^[6-9]/.test(normalized)) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Indian mobile numbers must begin with 6, 7, 8, or 9."
+      );
+    }
+    cleanPhone = normalized;
+  }
+
+  let cleanPassword = null;
+  if (isCreate) {
+    cleanPassword = String(password || "");
+    if (cleanPassword.length < 6) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Password must be at least 6 characters long."
+      );
+    }
+  }
+
+  return { cleanName, cleanId, cleanPhone, cleanPassword };
+}
+
+/**
+ * Maps staff ID to internal email: `${cleanCustomId}@collegebus.internal`
+ * Strictly matches Android DriverProfileValidator.mapStaffEmail(customId).
+ */
+function mapStaffEmail(customId) {
+  return `${String(customId).trim().toLowerCase()}@collegebus.internal`;
+}
+
+/**
+ * Verifies caller is authenticated and is an active Administrator in Firestore.
+ */
+async function verifyActiveAdmin(context, db = admin.firestore()) {
+  if (!context || !context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "Authentication is required to perform this action."
+    );
+  }
+
+  const callerUid = context.auth.uid;
+  const callerDoc = await db.collection("users").doc(callerUid).get();
+  if (!callerDoc.exists) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Caller authorization profile not found."
+    );
+  }
+
+  const callerData = callerDoc.data() || {};
+  if (callerData.role !== "ADMIN" || callerData.active !== true) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Only active administrators are authorized to perform this operation."
+    );
+  }
+
+  return { callerUid, callerData };
+}
+
+/**
+ * Idempotent synchronization helper for Realtime Database /users and /bus_operators.
+ * Preserves temporary driver replacements and monotonic version sequences.
+ */
+async function syncAssignmentToRtdb({ busId, driverUid, driverName, previousDriverUid, epoch, version }, rtdb = admin.database()) {
+  if (!rtdb || !busId) return;
+
+  const now = epoch || Date.now();
+  const ver = Number(version) || 1;
+
+  // 1. If previous driver was unassigned, clear assignedBusId in RTDB /users
+  if (previousDriverUid && previousDriverUid !== driverUid) {
+    try {
+      await rtdb.ref(`users/${previousDriverUid}`).update({
+        assignedBusId: null,
+        assignmentVersion: ver
+      });
+    } catch (e) {
+      console.warn(`[syncAssignmentToRtdb] Warning clearing RTDB users/${previousDriverUid}:`, e.message);
+    }
+  }
+
+  // 2. If new driver assigned, update assignedBusId in RTDB /users
+  if (driverUid) {
+    try {
+      await rtdb.ref(`users/${driverUid}`).update({
+        role: "DRIVER",
+        active: true,
+        name: driverName || "",
+        assignedBusId: busId,
+        assignmentVersion: ver
+      });
+    } catch (e) {
+      console.warn(`[syncAssignmentToRtdb] Warning updating RTDB users/${driverUid}:`, e.message);
+    }
+  }
+
+  // 3. Update RTDB /bus_operators/{busId} preserving temporary replacement fields
+  try {
+    const opRef = rtdb.ref(`bus_operators/${busId}`);
+    const snap = await opRef.get();
+    const existing = snap.val() || {};
+
+    const updatePayload = {
+      busId: busId,
+      permanentDriverUid: driverUid || null,
+      assignmentVersion: ver,
+      operatorEpoch: now
+    };
+
+    if (existing.hasTemporary === true) {
+      updatePayload.hasTemporary = true;
+      updatePayload.temporaryDriverUid = existing.temporaryDriverUid || null;
+      updatePayload.startAt = existing.startAt || 0;
+      updatePayload.endAt = existing.endAt || 0;
+      if (existing.temporaryAssignmentId) {
+        updatePayload.temporaryAssignmentId = existing.temporaryAssignmentId;
+      }
+    }
+
+    await opRef.update(updatePayload);
+    console.log(`[syncAssignmentToRtdb] Synced RTDB bus_operators/${busId} (permDriver=${driverUid}, ver=${ver})`);
+  } catch (e) {
+    console.error(`[syncAssignmentToRtdb] Error updating RTDB bus_operators/${busId}:`, e.message);
+    throw e;
+  }
+}
+
+/**
+ * 1. createDriverAccount
+ * Secure server-side driver onboarding using Firebase Admin SDK.
+ * Protects active administrator session from displacement and enforces rollback on DB failure.
+ */
+async function processCreateDriverAccount(data, context, dependencies = {}) {
+  const db = dependencies.db || admin.firestore();
+  const auth = dependencies.auth || admin.auth();
+  const rtdb = dependencies.rtdb || admin.database();
+
+  await verifyActiveAdmin(context, db);
+
+  const { cleanName, cleanId, cleanPhone, cleanPassword } = validateDriverProfileInputs(data, true);
+  const assignedBusId = data && data.assignedBusId ? String(data.assignedBusId).trim() : null;
+
+  // Verify Staff ID uniqueness in Firestore users
+  const existingDocs = await db.collection("users").where("customId", "==", cleanId).get();
+  if (!existingDocs.empty) {
+    throw new functions.https.HttpsError(
+      "already-exists",
+      `Staff ID '${cleanId}' is already registered to another driver or staff member.`
+    );
+  }
+
+  const internalEmail = mapStaffEmail(cleanId);
+  let newUid = null;
+
+  try {
+    // Create Firebase Auth user
+    const authRecord = await auth.createUser({
+      email: internalEmail,
+      password: cleanPassword,
+      displayName: cleanName
+    });
+    newUid = authRecord.uid;
+
+    const now = Date.now();
+
+    // Create Firestore user profile
+    const profilePayload = {
+      uid: newUid,
+      customId: cleanId,
+      name: cleanName,
+      email: internalEmail,
+      role: "DRIVER",
+      active: true,
+      assignedBusId: assignedBusId || null,
+      phoneNumber: cleanPhone,
+      createdAt: now
+    };
+    await db.collection("users").doc(newUid).set(profilePayload);
+
+    // Create RTDB authorization record
+    if (rtdb) {
+      await rtdb.ref(`users/${newUid}`).set({
+        role: "DRIVER",
+        active: true,
+        name: cleanName,
+        customId: cleanId,
+        assignedBusId: assignedBusId || null
+      });
+    }
+
+    // If initial bus assignment was requested, link bus atomically
+    if (assignedBusId) {
+      const busRef = db.collection("buses").doc(assignedBusId);
+      await db.runTransaction(async (transaction) => {
+        const busDoc = await transaction.get(busRef);
+        if (!busDoc.exists) {
+          throw new functions.https.HttpsError("not-found", `Bus '${assignedBusId}' not found.`);
+        }
+        if (busDoc.data().active === false) {
+          throw new functions.https.HttpsError("failed-precondition", `Cannot assign driver to deactivated bus '${assignedBusId}'.`);
+        }
+        const currentDriverId = busDoc.data().driverId;
+        if (currentDriverId && currentDriverId !== newUid) {
+          transaction.update(db.collection("users").doc(currentDriverId), { assignedBusId: null });
+        }
+        const newVersion = (busDoc.data().assignmentVersion || 0) + 1;
+        transaction.update(busRef, {
+          driverId: newUid,
+          driverName: cleanName,
+          assignmentVersion: newVersion,
+          assignmentEpoch: now,
+          rtdbSyncStatus: "SYNCED"
+        });
+      });
+
+      if (rtdb) {
+        await syncAssignmentToRtdb({
+          busId: assignedBusId,
+          driverUid: newUid,
+          driverName: cleanName,
+          epoch: now,
+          version: 1
+        }, rtdb).catch(() => {});
+      }
+    }
+
+    console.log(`[createDriverAccount] Successfully created driver ${newUid} (${cleanId})`);
+    return {
+      success: true,
+      uid: newUid,
+      customId: cleanId,
+      name: cleanName,
+      email: internalEmail,
+      phoneNumber: cleanPhone,
+      assignedBusId: assignedBusId || null
+    };
+
+  } catch (err) {
+    console.error(`[createDriverAccount] Failure creating driver:`, err.message);
+    // Rollback Auth user if created
+    if (newUid) {
+      try {
+        await auth.deleteUser(newUid);
+        console.log(`[createDriverAccount] Rolled back Auth user ${newUid} after database creation failure.`);
+      } catch (rollbackErr) {
+        console.warn(`[createDriverAccount] Failed to rollback Auth user ${newUid}:`, rollbackErr.message);
+      }
+    }
+    if (err instanceof functions.https.HttpsError) throw err;
+    throw new functions.https.HttpsError("internal", err.message || "Failed to create driver account.");
+  }
+}
+
+/**
+ * 2. setBusDriverAssignment
+ * Authoritative bus-driver assignment, replacement, move, and unassignment.
+ * Uses atomic Firestore transactions and deterministic monotonic versioning for RTDB.
+ */
+async function processSetBusDriverAssignment(data, context, dependencies = {}) {
+  const db = dependencies.db || admin.firestore();
+  const rtdb = dependencies.rtdb || admin.database();
+
+  await verifyActiveAdmin(context, db);
+
+  const busId = data && data.busId ? String(data.busId).trim() : null;
+  const driverUid = data && data.driverUid ? String(data.driverUid).trim() : null;
+
+  if (!busId) {
+    throw new functions.https.HttpsError("invalid-argument", "Bus ID is required.");
+  }
+
+  const busRef = db.collection("buses").doc(busId);
+  const now = Date.now();
+  let assignedDriverName = null;
+  let previousDriverId = null;
+  let newBusVersion = 1;
+
+  // Atomic Firestore Transaction
+  await db.runTransaction(async (transaction) => {
+    const busDoc = await transaction.get(busRef);
+    if (!busDoc.exists) {
+      throw new functions.https.HttpsError("not-found", `Bus '${busId}' does not exist.`);
+    }
+    const busData = busDoc.data() || {};
+    if (busData.active === false) {
+      throw new functions.https.HttpsError("failed-precondition", `Cannot assign driver to deactivated bus '${busId}'.`);
+    }
+
+    previousDriverId = busData.driverId || null;
+    newBusVersion = (busData.assignmentVersion || 0) + 1;
+
+    // Case A: Assigning a driver
+    if (driverUid) {
+      const driverRef = db.collection("users").doc(driverUid);
+      const driverDoc = await transaction.get(driverRef);
+      if (!driverDoc.exists) {
+        throw new functions.https.HttpsError("not-found", `Driver '${driverUid}' does not exist.`);
+      }
+      const driverData = driverDoc.data() || {};
+      if (driverData.role !== "DRIVER") {
+        throw new functions.https.HttpsError("invalid-argument", `User '${driverUid}' is not a driver.`);
+      }
+      if (driverData.active === false) {
+        throw new functions.https.HttpsError("failed-precondition", `Cannot assign deactivated driver '${driverData.name}' to a bus.`);
+      }
+
+      assignedDriverName = driverData.name || "";
+
+      // Move scenario: If driver is currently assigned to a different bus, clear old bus
+      if (driverData.assignedBusId && driverData.assignedBusId !== busId) {
+        const oldBusRef = db.collection("buses").doc(driverData.assignedBusId);
+        const oldBusDoc = await transaction.get(oldBusRef);
+        if (oldBusDoc.exists) {
+          const oldBusVer = (oldBusDoc.data().assignmentVersion || 0) + 1;
+          transaction.update(oldBusRef, {
+            driverId: null,
+            driverName: null,
+            assignmentVersion: oldBusVer,
+            assignmentEpoch: now,
+            rtdbSyncStatus: "PENDING"
+          });
+        }
+      }
+
+      // Replace scenario: If this bus already had a different driver, unassign previous driver
+      if (previousDriverId && previousDriverId !== driverUid) {
+        const prevDriverRef = db.collection("users").doc(previousDriverId);
+        transaction.update(prevDriverRef, {
+          assignedBusId: null,
+          assignmentVersion: newBusVersion
+        });
+      }
+
+      // Assign to target bus
+      transaction.update(busRef, {
+        driverId: driverUid,
+        driverName: assignedDriverName,
+        assignmentVersion: newBusVersion,
+        assignmentEpoch: now,
+        rtdbSyncStatus: "PENDING"
+      });
+
+      transaction.update(driverRef, {
+        assignedBusId: busId,
+        assignmentVersion: newBusVersion
+      });
+
+    } else {
+      // Case B: Unassigning driver from bus
+      if (previousDriverId) {
+        const prevDriverRef = db.collection("users").doc(previousDriverId);
+        transaction.update(prevDriverRef, {
+          assignedBusId: null,
+          assignmentVersion: newBusVersion
+        });
+      }
+
+      transaction.update(busRef, {
+        driverId: null,
+        driverName: null,
+        assignmentVersion: newBusVersion,
+        assignmentEpoch: now,
+        rtdbSyncStatus: "PENDING"
+      });
+    }
+  });
+
+  // Post-Transaction RTDB Sync with retry
+  if (rtdb) {
+    try {
+      await syncAssignmentToRtdb({
+        busId,
+        driverUid,
+        driverName: assignedDriverName,
+        previousDriverUid: previousDriverId,
+        epoch: now,
+        version: newBusVersion
+      }, rtdb);
+
+      await busRef.update({
+        rtdbSyncStatus: "SYNCED",
+        rtdbSyncError: null,
+        rtdbSyncLastAttempt: now
+      });
+    } catch (rtdbErr) {
+      console.warn(`[setBusDriverAssignment] RTDB sync delayed for ${busId}:`, rtdbErr.message);
+      await busRef.update({
+        rtdbSyncStatus: "FAILED",
+        rtdbSyncError: rtdbErr.message,
+        rtdbSyncLastAttempt: now
+      }).catch(() => {});
+    }
+  }
+
+  return {
+    success: true,
+    busId,
+    driverUid: driverUid || null,
+    driverName: assignedDriverName,
+    assignmentVersion: newBusVersion
+  };
+}
+
+/**
+ * 3. toggleDriverActiveStatus
+ * Reversible driver deactivation and reactivation.
+ * Protects against deactivating assigned drivers unless explicitly confirmed.
+ */
+async function processToggleDriverActiveStatus(data, context, dependencies = {}) {
+  const db = dependencies.db || admin.firestore();
+  const auth = dependencies.auth || admin.auth();
+  const rtdb = dependencies.rtdb || admin.database();
+
+  await verifyActiveAdmin(context, db);
+
+  const driverUid = data && data.driverUid ? String(data.driverUid).trim() : null;
+  const active = Boolean(data && data.active);
+  const unassignBusIfAssigned = Boolean(data && data.unassignBusIfAssigned);
+
+  if (!driverUid) {
+    throw new functions.https.HttpsError("invalid-argument", "driverUid is required.");
+  }
+
+  const driverRef = db.collection("users").doc(driverUid);
+  const driverDoc = await driverRef.get();
+  if (!driverDoc.exists) {
+    throw new functions.https.HttpsError("not-found", `Driver '${driverUid}' not found.`);
+  }
+  const driverData = driverDoc.data() || {};
+  if (driverData.role !== "DRIVER") {
+    throw new functions.https.HttpsError("invalid-argument", `User '${driverUid}' is not a driver.`);
+  }
+
+  const now = Date.now();
+  let unassignedBusId = null;
+
+  // Deactivation safety check
+  if (!active && driverData.assignedBusId) {
+    if (!unassignBusIfAssigned) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        `Driver '${driverData.name}' cannot be deactivated while assigned to bus '${driverData.assignedBusId}'. Please unassign the bus first.`
+      );
+    }
+    // Admin confirmed unassignment on deactivation
+    unassignedBusId = driverData.assignedBusId;
+    const busRef = db.collection("buses").doc(unassignedBusId);
+    await db.runTransaction(async (transaction) => {
+      const bDoc = await transaction.get(busRef);
+      const bVer = bDoc.exists ? (bDoc.data().assignmentVersion || 0) + 1 : 1;
+      transaction.update(busRef, {
+        driverId: null,
+        driverName: null,
+        assignmentVersion: bVer,
+        assignmentEpoch: now,
+        rtdbSyncStatus: "SYNCED"
+      });
+      transaction.update(driverRef, {
+        active: false,
+        assignedBusId: null
+      });
+    });
+
+    if (rtdb) {
+      await syncAssignmentToRtdb({
+        busId: unassignedBusId,
+        driverUid: null,
+        previousDriverUid: driverUid,
+        epoch: now,
+        version: 1
+      }, rtdb).catch(() => {});
+    }
+  } else {
+    // Normal active toggle without bus conflict
+    await driverRef.update({ active: active });
+  }
+
+  // Synchronize RTDB user authorization
+  if (rtdb) {
+    await rtdb.ref(`users/${driverUid}`).update({
+      active: active,
+      assignedBusId: active ? (driverData.assignedBusId || null) : null
+    }).catch(e => console.warn(`[toggleDriverActiveStatus] RTDB users update warning:`, e.message));
+  }
+
+  // Synchronize Firebase Auth disabled state
+  try {
+    await auth.updateUser(driverUid, { disabled: !active });
+  } catch (authErr) {
+    console.warn(`[toggleDriverActiveStatus] Auth updateUser warning for ${driverUid}:`, authErr.message);
+  }
+
+  console.log(`[toggleDriverActiveStatus] Driver ${driverUid} active status set to ${active}`);
+  return {
+    success: true,
+    driverUid,
+    active,
+    unassignedBusId
+  };
+}
+
+/**
+ * 4. toggleBusActiveStatus
+ * Reversible bus deactivation and reactivation.
+ * Warns and detaches assigned driver if deactivating an active bus.
+ */
+async function processToggleBusActiveStatus(data, context, dependencies = {}) {
+  const db = dependencies.db || admin.firestore();
+  const rtdb = dependencies.rtdb || admin.database();
+
+  await verifyActiveAdmin(context, db);
+
+  const busId = data && data.busId ? String(data.busId).trim() : null;
+  const active = Boolean(data && data.active);
+  const unassignDriverIfAssigned = Boolean(data && data.unassignDriverIfAssigned);
+
+  if (!busId) {
+    throw new functions.https.HttpsError("invalid-argument", "busId is required.");
+  }
+
+  const busRef = db.collection("buses").doc(busId);
+  const busDoc = await busRef.get();
+  if (!busDoc.exists) {
+    throw new functions.https.HttpsError("not-found", `Bus '${busId}' not found.`);
+  }
+  const busData = busDoc.data() || {};
+  const now = Date.now();
+  let detachedDriverId = null;
+
+  // Deactivation safety check
+  if (!active && busData.driverId) {
+    if (!unassignDriverIfAssigned) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        `Bus '${busData.busNumber || busId}' has an active assigned driver. Unassign the driver or confirm detachment before deactivating.`
+      );
+    }
+
+    detachedDriverId = busData.driverId;
+    const driverRef = db.collection("users").doc(detachedDriverId);
+    const newVersion = (busData.assignmentVersion || 0) + 1;
+
+    await db.runTransaction(async (transaction) => {
+      transaction.update(driverRef, { assignedBusId: null });
+      transaction.update(busRef, {
+        active: false,
+        driverId: null,
+        driverName: null,
+        assignmentVersion: newVersion,
+        assignmentEpoch: now,
+        rtdbSyncStatus: "SYNCED"
+      });
+    });
+
+    if (rtdb) {
+      await syncAssignmentToRtdb({
+        busId,
+        driverUid: null,
+        previousDriverUid: detachedDriverId,
+        epoch: now,
+        version: newVersion
+      }, rtdb).catch(() => {});
+    }
+  } else {
+    // Normal active toggle without driver conflict
+    await busRef.update({ active: active });
+  }
+
+  console.log(`[toggleBusActiveStatus] Bus ${busId} active status set to ${active}`);
+  return {
+    success: true,
+    busId,
+    active,
+    detachedDriverId
+  };
+}
+
+/**
+ * 5. updateDriverStaffProfile
+ * Updates driver name, Staff ID (customId), and contact phone number.
+ * If Staff ID changes, updates Auth login email with rollback if DB update fails.
+ */
+async function processUpdateDriverStaffProfile(data, context, dependencies = {}) {
+  const db = dependencies.db || admin.firestore();
+  const auth = dependencies.auth || admin.auth();
+  const rtdb = dependencies.rtdb || admin.database();
+
+  await verifyActiveAdmin(context, db);
+
+  const driverUid = data && data.driverUid ? String(data.driverUid).trim() : null;
+  if (!driverUid) {
+    throw new functions.https.HttpsError("invalid-argument", "driverUid is required.");
+  }
+
+  const { cleanName, cleanId, cleanPhone } = validateDriverProfileInputs(data, false);
+
+  const driverRef = db.collection("users").doc(driverUid);
+  const driverDoc = await driverRef.get();
+  if (!driverDoc.exists) {
+    throw new functions.https.HttpsError("not-found", `Driver '${driverUid}' not found.`);
+  }
+  const driverData = driverDoc.data() || {};
+  if (driverData.role !== "DRIVER") {
+    throw new functions.https.HttpsError("invalid-argument", `User '${driverUid}' is not a driver.`);
+  }
+
+  const originalCustomId = driverData.customId || "";
+  const originalName = driverData.name || "";
+  const originalEmail = driverData.email || mapStaffEmail(originalCustomId);
+  const customIdChanged = cleanId !== originalCustomId.toLowerCase();
+  const newEmail = mapStaffEmail(cleanId);
+
+  // If Staff ID changed, verify uniqueness across other users
+  if (customIdChanged) {
+    const existing = await db.collection("users").where("customId", "==", cleanId).get();
+    if (!existing.empty && existing.docs.some(d => d.id !== driverUid)) {
+      throw new functions.https.HttpsError("already-exists", `Staff ID '${cleanId}' is already in use by another user.`);
+    }
+
+    // Update Auth email first
+    await auth.updateUser(driverUid, {
+      email: newEmail,
+      displayName: cleanName
+    });
+
+    try {
+      // Update Firestore and RTDB
+      await driverRef.update({
+        customId: cleanId,
+        email: newEmail,
+        name: cleanName,
+        phoneNumber: cleanPhone
+      });
+
+      if (rtdb) {
+        await rtdb.ref(`users/${driverUid}`).update({
+          customId: cleanId,
+          name: cleanName
+        });
+      }
+
+      // If assigned to a bus, update cached driverName in buses
+      if (driverData.assignedBusId) {
+        await db.collection("buses").doc(driverData.assignedBusId).update({
+          driverName: cleanName
+        }).catch(() => {});
+      }
+    } catch (dbErr) {
+      console.error(`[updateDriverStaffProfile] Database update failed. Rolling back Auth email to ${originalEmail}`);
+      await auth.updateUser(driverUid, {
+        email: originalEmail,
+        displayName: originalName
+      }).catch(rbErr => console.warn(`[updateDriverStaffProfile] Rollback Auth error:`, rbErr.message));
+      throw new functions.https.HttpsError("internal", dbErr.message || "Failed to update driver profile in database.");
+    }
+  } else {
+    // Only name/phone changed
+    await auth.updateUser(driverUid, { displayName: cleanName });
+    await driverRef.update({
+      name: cleanName,
+      phoneNumber: cleanPhone
+    });
+
+    if (rtdb) {
+      await rtdb.ref(`users/${driverUid}`).update({ name: cleanName });
+    }
+
+    if (driverData.assignedBusId) {
+      await db.collection("buses").doc(driverData.assignedBusId).update({
+        driverName: cleanName
+      }).catch(() => {});
+    }
+  }
+
+  console.log(`[updateDriverStaffProfile] Driver ${driverUid} profile updated (Staff ID: ${cleanId})`);
+  return {
+    success: true,
+    driverUid,
+    customId: cleanId,
+    name: cleanName,
+    email: customIdChanged ? newEmail : originalEmail,
+    phoneNumber: cleanPhone
+  };
+}
+
+/**
+ * 6. reconcileBusRtdb
+ * Idempotent one-click or scheduled reconciliation for a bus's RTDB operational nodes.
+ */
+async function processReconcileBusRtdb(data, context, dependencies = {}) {
+  const db = dependencies.db || admin.firestore();
+  const rtdb = dependencies.rtdb || admin.database();
+
+  await verifyActiveAdmin(context, db);
+
+  const busId = data && data.busId ? String(data.busId).trim() : null;
+  if (!busId) {
+    throw new functions.https.HttpsError("invalid-argument", "busId is required.");
+  }
+
+  const busDoc = await db.collection("buses").doc(busId).get();
+  if (!busDoc.exists) {
+    throw new functions.https.HttpsError("not-found", `Bus '${busId}' not found.`);
+  }
+  const busData = busDoc.data() || {};
+  const effectiveDriverId = busData.active === false ? null : (busData.driverId || null);
+  const now = Date.now();
+  const nextVer = (busData.assignmentVersion || 0) + 1;
+
+  if (rtdb) {
+    await syncAssignmentToRtdb({
+      busId,
+      driverUid: effectiveDriverId,
+      driverName: busData.driverName || "",
+      epoch: now,
+      version: nextVer
+    }, rtdb);
+  }
+
+  await db.collection("buses").doc(busId).update({
+    assignmentVersion: nextVer,
+    rtdbSyncStatus: "SYNCED",
+    rtdbSyncError: null,
+    rtdbSyncLastAttempt: now
+  });
+
+  return { success: true, busId, rtdbSyncStatus: "SYNCED", assignmentVersion: nextVer };
+}
+
+/**
+ * 7. onBusAssignmentWritten
+ * Reactive Firestore Trigger for buses/{busId}.
+ * Provides anti-entropy reconciliation for legacy Android direct writes and out-of-order rejection.
+ */
+async function processOnBusAssignmentWritten(change, context, dependencies = {}) {
+  const db = dependencies.db || admin.firestore();
+  const rtdb = dependencies.rtdb || admin.database();
+
+  const busId = context && context.params ? context.params.busId : null;
+  if (!busId) return null;
+
+  const before = change.before && change.before.exists ? change.before.data() : null;
+  const after = change.after && change.after.exists ? change.after.data() : null;
+
+  // 1. Bus document deletion
+  if (!after) {
+    if (rtdb) {
+      try {
+        const opSnap = await rtdb.ref(`bus_operators/${busId}`).get();
+        const opVal = opSnap.val() || {};
+        if (opVal.hasTemporary !== true) {
+          await rtdb.ref(`bus_operators/${busId}`).remove();
+        } else {
+          await rtdb.ref(`bus_operators/${busId}`).update({ permanentDriverUid: null });
+        }
+      } catch (e) {
+        console.warn(`[onBusAssignmentWritten] Warning on bus delete for ${busId}:`, e.message);
+      }
+    }
+    return null;
+  }
+
+  // 2. Check if assignment-relevant fields changed
+  const driverChanged = !before || before.driverId !== after.driverId;
+  const activeChanged = !before || before.active !== after.active;
+  const versionChanged = !before || before.assignmentVersion !== after.assignmentVersion;
+
+  if (!driverChanged && !activeChanged && !versionChanged) {
+    return null;
+  }
+
+  const incomingVersion = Number(after.assignmentVersion) || 0;
+  const now = Date.now();
+
+  // 3. Out-of-order & duplicate event check against RTDB
+  if (rtdb) {
+    try {
+      const opSnap = await rtdb.ref(`bus_operators/${busId}`).get();
+      const opVal = opSnap.val() || {};
+      const currentRtdbVersion = Number(opVal.assignmentVersion) || 0;
+
+      // Discard stale out-of-order event
+      if (incomingVersion > 0 && incomingVersion < currentRtdbVersion) {
+        console.warn(`[onBusAssignmentWritten] Discarding stale out-of-order event for ${busId}: incoming v${incomingVersion} < current RTDB v${currentRtdbVersion}`);
+        return null;
+      }
+
+      // Skip duplicate idempotent write
+      const currentPerm = opVal.permanentDriverUid || null;
+      const targetDriver = after.active === false ? null : (after.driverId || null);
+      if (incomingVersion > 0 && incomingVersion === currentRtdbVersion && currentPerm === targetDriver) {
+        console.log(`[onBusAssignmentWritten] Duplicate event for ${busId} (v${incomingVersion}). Skipping.`);
+        return null;
+      }
+
+      // 4. Legacy Android write detection: if after.assignmentVersion was not set by Android
+      let effectiveVersion = incomingVersion;
+      if (incomingVersion <= 0 || incomingVersion <= currentRtdbVersion) {
+        effectiveVersion = currentRtdbVersion + 1;
+        await db.collection("buses").doc(busId).update({
+          assignmentVersion: effectiveVersion,
+          rtdbSyncStatus: "SYNCED"
+        }).catch(err => console.warn(`[onBusAssignmentWritten] Warning updating bus version for ${busId}:`, err.message));
+      }
+
+      // 5. Execute authoritative RTDB sync
+      await syncAssignmentToRtdb({
+        busId,
+        driverUid: targetDriver,
+        driverName: after.driverName || "",
+        previousDriverUid: before ? before.driverId : null,
+        epoch: now,
+        version: effectiveVersion
+      }, rtdb);
+
+      // Reconcile new driver profile if assigned
+      if (targetDriver) {
+        await db.collection("users").doc(targetDriver).update({
+          assignedBusId: busId
+        }).catch(() => {});
+      }
+      // Reconcile previous driver profile if unassigned
+      if (before && before.driverId && before.driverId !== targetDriver) {
+        await db.collection("users").doc(before.driverId).update({
+          assignedBusId: null
+        }).catch(() => {});
+      }
+
+    } catch (e) {
+      console.error(`[onBusAssignmentWritten] Error reconciling ${busId}:`, e.message);
+      await db.collection("buses").doc(busId).update({
+        rtdbSyncStatus: "FAILED",
+        rtdbSyncError: e.message,
+        rtdbSyncLastAttempt: now
+      }).catch(() => {});
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 8. resetDriverPassword
+ * Hardened driver password reset with active-admin verification.
+ */
+async function processResetDriverPassword(data, context, dependencies = {}) {
+  const db = dependencies.db || admin.firestore();
+  const auth = dependencies.auth || admin.auth();
+
+  await verifyActiveAdmin(context, db);
+
+  const driverUid = data && data.driverUid ? String(data.driverUid).trim() : null;
+  const newPassword = data && data.newPassword ? String(data.newPassword) : null;
+
+  if (!driverUid) {
+    throw new functions.https.HttpsError("invalid-argument", "Target driver UID must be provided.");
+  }
+  if (!newPassword || newPassword.length < 6) {
+    throw new functions.https.HttpsError("invalid-argument", "Password must be at least 6 characters long.");
+  }
+
+  const targetDoc = await db.collection("users").doc(driverUid).get();
+  if (!targetDoc.exists) {
+    throw new functions.https.HttpsError("not-found", "Target driver profile not found.");
+  }
+  const targetData = targetDoc.data() || {};
+  if (targetData.role !== "DRIVER") {
+    throw new functions.https.HttpsError("permission-denied", "Unauthorized: Target user is not a driver.");
+  }
+
+  try {
+    await auth.updateUser(driverUid, { password: newPassword });
+    console.log(`[resetDriverPassword] Successfully reset password for driver ${driverUid}`);
+    return { success: true, message: "Driver password reset successfully." };
+  } catch (error) {
+    console.error(`[resetDriverPassword] Error resetting password for driver ${driverUid}:`, error.message);
+    throw new functions.https.HttpsError("internal", error.message || "Failed to reset driver password.");
+  }
+}
+
+/**
+ * 9. deleteDriverAccount
+ * Hardened permanent driver account deletion with full Firestore, RTDB, and Auth cleanup.
+ */
+async function processDeleteDriverAccount(data, context, dependencies = {}) {
+  const db = dependencies.db || admin.firestore();
+  const auth = dependencies.auth || admin.auth();
+  const rtdb = dependencies.rtdb || admin.database();
+
+  const { callerUid } = await verifyActiveAdmin(context, db);
+
+  const driverUid = data && data.driverUid ? String(data.driverUid).trim() : null;
+  if (!driverUid) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid driverUid must be provided.");
+  }
+  if (driverUid === callerUid) {
+    throw new functions.https.HttpsError("invalid-argument", "Administrators cannot delete their own active account.");
+  }
+
+  const targetDoc = await db.collection("users").doc(driverUid).get();
+  if (targetDoc.exists) {
+    const targetData = targetDoc.data() || {};
+    if (targetData.role === "ADMIN") {
+      throw new functions.https.HttpsError("permission-denied", "Administrator accounts cannot be deleted via the driver management endpoint.");
+    }
+
+    // 1. Unassign from assigned bus
+    if (targetData.assignedBusId) {
+      const busId = targetData.assignedBusId;
+      await db.collection("buses").doc(busId).update({
+        driverId: null,
+        driverName: null,
+        rtdbSyncStatus: "SYNCED"
+      }).catch(() => {});
+
+      if (rtdb) {
+        await syncAssignmentToRtdb({
+          busId,
+          driverUid: null,
+          previousDriverUid: driverUid,
+          epoch: Date.now(),
+          version: 1
+        }, rtdb).catch(() => {});
+      }
+    }
+
+    // Unassign from any other bus if driverId matches
+    const busesSnap = await db.collection("buses").where("driverId", "==", driverUid).get();
+    for (const bDoc of busesSnap.docs) {
+      await bDoc.ref.update({ driverId: null, driverName: null }).catch(() => {});
+      if (rtdb) {
+        await syncAssignmentToRtdb({ busId: bDoc.id, driverUid: null, previousDriverUid: driverUid }, rtdb).catch(() => {});
+      }
+    }
+
+    // 2. Delete Firestore users document
+    await db.collection("users").doc(driverUid).delete().catch(() => {});
+  }
+
+  // 3. Remove RTDB user node
+  if (rtdb) {
+    await rtdb.ref(`users/${driverUid}`).remove().catch(() => {});
+  }
+
+  // 4. Delete Firebase Auth user
+  try {
+    await auth.deleteUser(driverUid);
+    console.log(`[deleteDriverAccount] Successfully deleted user ${driverUid} from Firebase Auth`);
+    return { success: true, driverUid, message: `Driver user ${driverUid} deleted from Firebase Authentication.` };
+  } catch (error) {
+    if (error.code === "auth/user-not-found") {
+      return { success: true, driverUid, message: "User was already absent from Firebase Authentication." };
+    }
+    console.error(`[deleteDriverAccount] Error deleting user ${driverUid}:`, error.message);
+    throw new functions.https.HttpsError("internal", error.message || "Failed to delete user from Firebase Authentication.");
+  }
+}
+
+// =========================================================================
+// HTTPS CALLABLE & TRIGGER EXPORTS WITH APP CHECK CONFIGURATION
+// =========================================================================
+
+exports.createDriverAccount = regionalFunctions
+  .runWith({ enforceAppCheck: true })
+  .https.onCall(async (data, context) => {
+    return processCreateDriverAccount(data, context);
+  });
+
+exports.setBusDriverAssignment = regionalFunctions
+  .runWith({ enforceAppCheck: true })
+  .https.onCall(async (data, context) => {
+    return processSetBusDriverAssignment(data, context);
+  });
+
+exports.toggleDriverActiveStatus = regionalFunctions
+  .runWith({ enforceAppCheck: true })
+  .https.onCall(async (data, context) => {
+    return processToggleDriverActiveStatus(data, context);
+  });
+
+exports.toggleBusActiveStatus = regionalFunctions
+  .runWith({ enforceAppCheck: true })
+  .https.onCall(async (data, context) => {
+    return processToggleBusActiveStatus(data, context);
+  });
+
+exports.updateDriverStaffProfile = regionalFunctions
+  .runWith({ enforceAppCheck: true })
+  .https.onCall(async (data, context) => {
+    return processUpdateDriverStaffProfile(data, context);
+  });
+
+exports.reconcileBusRtdb = regionalFunctions
+  .runWith({ enforceAppCheck: true })
+  .https.onCall(async (data, context) => {
+    return processReconcileBusRtdb(data, context);
+  });
+
+exports.onBusAssignmentWritten = regionalFunctions.firestore
+  .document("buses/{busId}")
+  .onWrite(async (change, context) => {
+    return processOnBusAssignmentWritten(change, context);
+  });
+
+// Export business logic handlers and helpers for automated test harness
+exports.processCreateDriverAccount = processCreateDriverAccount;
+exports.processSetBusDriverAssignment = processSetBusDriverAssignment;
+exports.processToggleDriverActiveStatus = processToggleDriverActiveStatus;
+exports.processToggleBusActiveStatus = processToggleBusActiveStatus;
+exports.processUpdateDriverStaffProfile = processUpdateDriverStaffProfile;
+exports.processReconcileBusRtdb = processReconcileBusRtdb;
+exports.processOnBusAssignmentWritten = processOnBusAssignmentWritten;
+exports.processResetDriverPassword = processResetDriverPassword;
+exports.processDeleteDriverAccount = processDeleteDriverAccount;
+exports.validateDriverProfileInputs = validateDriverProfileInputs;
+exports.mapStaffEmail = mapStaffEmail;
+exports.syncAssignmentToRtdb = syncAssignmentToRtdb;
 

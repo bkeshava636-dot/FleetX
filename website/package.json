@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types test_release_service.mjs && node test_dashboard_service.mjs && node test_security_performance_audit.mjs && node test_milestone3_submissions.mjs && node test_live_tracking_service.mjs"
+    "test": "node --experimental-strip-types test_release_service.mjs && node test_dashboard_service.mjs && node test_security_performance_audit.mjs && node test_milestone3_submissions.mjs && node test_live_tracking_service.mjs && node ../backend/functions/test_fleet_driver_lifecycle.js"
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",
