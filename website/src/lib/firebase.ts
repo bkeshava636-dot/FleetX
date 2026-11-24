@@ -27,14 +27,28 @@ const functions: Functions = getFunctions(app, 'asia-south1'); // Project region
 let appCheck: AppCheck | null = null;
 const appCheckKey = import.meta.env.VITE_FIREBASE_APP_CHECK_KEY;
 
-if (typeof window !== 'undefined' && appCheckKey) {
-  try {
-    appCheck = initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(appCheckKey),
-      isTokenAutoRefreshEnabled: true,
-    });
-  } catch (err) {
-    console.warn('[Firebase AppCheck] Failed to initialize App Check:', err);
+if (typeof window !== 'undefined') {
+  // 1. Development-Only Debug Token
+  // Strictly enabled ONLY during local development (import.meta.env.DEV) to allow emulator & localhost testing without reCAPTCHA friction.
+  // In production builds, this branch is statically evaluated to false and eliminated by bundler minification.
+  if (import.meta.env.DEV && !import.meta.env.PROD) {
+    const globalWithDebug = window as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean | string };
+    if (globalWithDebug.FIREBASE_APPCHECK_DEBUG_TOKEN === undefined) {
+      globalWithDebug.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+      console.info('[Firebase AppCheck] Local development debug token enabled.');
+    }
+  }
+
+  // 2. Production reCAPTCHA v3 Provider
+  if (appCheckKey) {
+    try {
+      appCheck = initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(appCheckKey),
+        isTokenAutoRefreshEnabled: true,
+      });
+    } catch (err) {
+      console.warn('[Firebase AppCheck] Failed to initialize App Check:', err);
+    }
   }
 }
 

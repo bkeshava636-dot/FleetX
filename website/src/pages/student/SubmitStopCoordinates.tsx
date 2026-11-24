@@ -50,3 +50,5 @@ export const SubmitStopCoordinates: React.FC = () => {
     </div>
   );
 };
+
+export default SubmitStopCoordinates;

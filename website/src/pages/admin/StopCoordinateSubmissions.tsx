@@ -23,3 +23,5 @@ export const StopCoordinateSubmissions: React.FC = () => {
     </div>
   );
 };
+
+export default StopCoordinateSubmissions;

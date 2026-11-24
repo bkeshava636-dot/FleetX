@@ -1,32 +1,50 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AdminAuthProvider } from './context/AdminAuthContext';
 import { Home } from './pages/Home';
-import { AdminLogin } from './pages/admin/AdminLogin';
-import { AdminLayout } from './layouts/AdminLayout';
-import { AdminDashboard } from './pages/admin/AdminDashboard';
-import { StopCoordinateSubmissions } from './pages/admin/StopCoordinateSubmissions';
-import { RoutesAndStops } from './pages/admin/RoutesAndStops';
-import { SubmitStopCoordinates } from './pages/student/SubmitStopCoordinates';
-import { ProtectedRoute } from './components/admin/ProtectedRoute';
+import { RouteLoadingFallback } from './components/common/RouteLoadingFallback';
+
+// Lazy-loaded routes and administration scope
+// Ensures public landing page visitors download 0 KB of Firebase or Google Maps code
+const SubmitStopCoordinates = lazy(() => import('./pages/student/SubmitStopCoordinates'));
+const AdminRoot = lazy(() => import('./layouts/AdminRoot'));
+const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
+const AdminLayout = lazy(() => import('./layouts/AdminLayout'));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const StopCoordinateSubmissions = lazy(() => import('./pages/admin/StopCoordinateSubmissions'));
+const RoutesAndStops = lazy(() => import('./pages/admin/RoutesAndStops'));
+const ProtectedRoute = lazy(() => import('./components/admin/ProtectedRoute').then((m) => ({ default: m.ProtectedRoute })));
 
 export const App: React.FC = () => {
   return (
-    <AdminAuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public Landing Page (Preserved 100%) */}
-          <Route path="/" element={<Home />} />
+    <BrowserRouter>
+      <Routes>
+        {/* Public Landing Page (Preserved 100%, fast initial paint without Firebase) */}
+        <Route path="/" element={<Home />} />
 
-          {/* Student Stop Coordinate Crowdsourcing */}
-          <Route path="/submit-stop" element={<SubmitStopCoordinates />} />
+        {/* Student Stop Coordinate Crowdsourcing (Lazy-loaded) */}
+        <Route
+          path="/submit-stop"
+          element={
+            <Suspense fallback={<RouteLoadingFallback message="Loading Stop Portal..." />}>
+              <SubmitStopCoordinates />
+            </Suspense>
+          }
+        />
 
-          {/* Admin Login */}
-          <Route path="/admin/login" element={<AdminLogin />} />
+        {/* Administration Portal Scope (Lazy-loaded Firebase & Auth context) */}
+        <Route
+          path="/admin"
+          element={
+            <Suspense fallback={<RouteLoadingFallback message="Loading Administrator Portal..." />}>
+              <AdminRoot />
+            </Suspense>
+          }
+        >
+          {/* Admin Login Route */}
+          <Route path="login" element={<AdminLogin />} />
 
-          {/* Protected Admin Console */}
+          {/* Protected Management Routes */}
           <Route
-            path="/admin"
             element={
               <ProtectedRoute>
                 <AdminLayout />
@@ -37,12 +55,15 @@ export const App: React.FC = () => {
             <Route path="submissions" element={<StopCoordinateSubmissions />} />
             <Route path="routes" element={<RoutesAndStops />} />
           </Route>
+        </Route>
 
-          {/* Fallback to Home */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AdminAuthProvider>
+        {/* Direct /admin/login alias */}
+        <Route path="/admin/login" element={<Navigate to="/admin/login" replace />} />
+
+        {/* Fallback to Home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 };
 
