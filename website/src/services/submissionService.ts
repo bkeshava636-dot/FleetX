@@ -1,7 +1,6 @@
 import {
   collection,
   doc,
-  addDoc,
   onSnapshot,
   query,
   where,
@@ -113,8 +112,8 @@ export function parseSubmissionDocument(
 
 /**
  * Submits student proposed coordinates.
- * Prefers the HTTPS Callable Cloud Function with server-side App Check and rate limiting.
- * Falls back to direct Firestore write if the Cloud Function is not running in local test environments.
+ * Exclusively invokes the trusted HTTPS Callable Cloud Function submitStopCoordinates.
+ * Direct client writes to stop_location_submissions are strictly denied by Firestore security rules.
  */
 export async function submitStopCoordinates(
   input: SubmitCoordinatesInput
@@ -124,7 +123,6 @@ export async function submitStopCoordinates(
     throw new Error(coordCheck.reason);
   }
 
-  // 1. Attempt server-side Cloud Function
   try {
     const callable = httpsCallable<SubmitCoordinatesInput, { success: boolean; submissionId: string }>(
       functions,
@@ -134,39 +132,17 @@ export async function submitStopCoordinates(
     if (result.data && result.data.submissionId) {
       return result.data;
     }
+    throw new Error('Server returned an invalid submission response.');
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn('[submissionService] Callable submitStopCoordinates unavailable or threw, falling back to direct Firestore:', msg);
-    // If the error was explicitly thrown by backend logic (e.g. invalid arguments or duplicate submission), rethrow it
     if (msg.includes('already-exists') || msg.includes('identical pending coordinate')) {
       throw new Error('An identical pending coordinate submission for this bus stop was recently received and is awaiting administrator review.');
     }
-    if (msg.includes('invalid-argument') || msg.includes('not-found')) {
-      throw new Error(msg);
+    if (msg.includes('App Check') || msg.includes('failed-precondition')) {
+      throw new Error('App Check security verification failed. Please refresh the page and try again.');
     }
+    throw new Error(msg);
   }
-
-  // 2. Direct Firestore fallback (Protected by Firestore Security Rules)
-  const collectionRef = collection(db, 'stop_location_submissions');
-  const docData = {
-    routeId: input.routeId,
-    routeName: input.routeName,
-    stopId: input.stopId,
-    stopName: input.stopName,
-    stopOrder: input.stopOrder,
-    proposedLatitude: input.proposedLatitude,
-    proposedLongitude: input.proposedLongitude,
-    accuracyMeters: input.accuracyMeters,
-    source: input.source,
-    status: 'PENDING',
-    submittedAt: Date.now(),
-    existingLatitude: input.existingLatitude ?? null,
-    existingLongitude: input.existingLongitude ?? null,
-    studentNotes: input.studentNotes ?? null,
-  };
-
-  const docRef = await addDoc(collectionRef, docData);
-  return { success: true, submissionId: docRef.id };
 }
 
 export interface SubmissionFilters {

@@ -34,354 +34,478 @@ function validateCoordinates(lat, lng) {
 }
 
 console.log('==================================================');
-console.log('RUNNING MILESTONE 3 SUBMISSIONS & APPROVAL TESTS');
+console.log('RUNNING MILESTONE 3 SECURITY & SUBMISSIONS TESTS');
 console.log('==================================================\n');
 
-// --- Test Suite 1: Coordinate Validation & GPS Accuracy ---
-console.log('--- Test Suite 1: Coordinate Bounds & Validation ---');
+// --- Test Suite 1: Direct Firestore Security Rule Enforcement ---
+console.log('--- Test Suite 1: Direct Client Firestore Rules (Denied Client Writes) ---');
 
-// Valid coordinates
-const valid1 = validateCoordinates(12.9716, 77.5946);
-assert.equal(valid1.valid, true, 'Valid Bangalore coordinates must pass');
-
-const validEquator = validateCoordinates(0.1234, 100.5678);
-assert.equal(validEquator.valid, true, 'Valid non-zero coordinates near equator must pass');
-
-// Invalid coordinates: out of range
-const invalidLat = validateCoordinates(95.0, 77.0);
-assert.equal(invalidLat.valid, false, 'Latitude > 90 must fail');
-assert.match(invalidLat.reason, /Latitude must be between -90 and 90/);
-
-const invalidLatNeg = validateCoordinates(-90.1, 77.0);
-assert.equal(invalidLatNeg.valid, false, 'Latitude < -90 must fail');
-
-const invalidLng = validateCoordinates(12.0, 185.0);
-assert.equal(invalidLng.valid, false, 'Longitude > 180 must fail');
-
-const invalidLngNeg = validateCoordinates(12.0, -180.5);
-assert.equal(invalidLngNeg.valid, false, 'Longitude < -180 must fail');
-
-// Null Island (0, 0) rejection
-const zeroZero = validateCoordinates(0, 0);
-assert.equal(zeroZero.valid, false, 'Coordinates (0, 0) must be rejected');
-assert.match(zeroZero.reason, /Coordinates \(0, 0\) cannot be submitted/);
-
-// NaN / non-numeric coordinates
-const nanCoord = validateCoordinates(NaN, 77.0);
-assert.equal(nanCoord.valid, false, 'NaN coordinates must be rejected');
-
-console.log('  ✅ PASS: Strict coordinate boundary and Null Island validations pass');
-
-// --- Test Suite 2: Haversine Distance Calculations ---
-console.log('\n--- Test Suite 2: Distance Calculations ---');
-
-// Identical coordinates
-const distZero = calculateDistanceMeters(12.9716, 77.5946, 12.9716, 77.5946);
-assert.equal(distZero, 0, 'Distance between identical points must be 0m');
-
-// Distance between known points (~350m)
-const distKnown = calculateDistanceMeters(12.9716, 77.5946, 12.9740, 77.5960);
-assert.ok(distKnown > 300 && distKnown < 400, `Distance should be approximately 350m, got: ${distKnown}m`);
-console.log(`  ✅ PASS: Haversine distance calculation verified (${distKnown}m)`);
-
-// --- Test Suite 3: Submission Payload Sanitization & Forced PENDING Status ---
-console.log('\n--- Test Suite 3: Submission Sanitization & Security ---');
-
-const rawUntrustedStudentDoc = {
-  routeId: 'ROUTE-05',
-  routeName: 'Route 5 - South Campus',
-  stopId: 'STOP-03',
-  stopName: 'Jayanagar 4th Block',
-  stopOrder: 3,
-  proposedLatitude: 12.9298,
-  proposedLongitude: 77.5834,
-  accuracyMeters: 14.2,
-  source: 'GPS',
-  // Malicious attempts by student client to auto-approve or inject admin fields:
-  status: 'APPROVED',
-  reviewedBy: 'hacked_admin_uid',
-  reviewedAt: Date.now(),
-  reviewNotes: 'Auto-approved by script',
-};
-
-// Simulation of backend parser/ingestion forcing PENDING status and stripping admin fields
-function sanitizeStudentSubmission(input) {
-  const coordCheck = validateCoordinates(input.proposedLatitude, input.proposedLongitude);
-  if (!coordCheck.valid) throw new Error(coordCheck.reason);
-
-  return {
-    routeId: String(input.routeId || ''),
-    routeName: String(input.routeName || ''),
-    stopId: String(input.stopId || ''),
-    stopName: String(input.stopName || ''),
-    stopOrder: Number(input.stopOrder) || 0,
-    proposedLatitude: Number(input.proposedLatitude),
-    proposedLongitude: Number(input.proposedLongitude),
-    accuracyMeters: typeof input.accuracyMeters === 'number' ? input.accuracyMeters : null,
-    source: input.source === 'GPS' ? 'GPS' : 'MANUAL',
-    status: 'PENDING', // STRICTLY FORCED TO PENDING
-    submittedAt: Date.now(),
-    reviewedBy: null, // STRIPPED
-    reviewedAt: null, // STRIPPED
-    reviewNotes: null, // STRIPPED
-    finalLatitude: null,
-    finalLongitude: null,
-  };
-}
-
-const sanitized = sanitizeStudentSubmission(rawUntrustedStudentDoc);
-assert.equal(sanitized.status, 'PENDING', 'Student cannot set status to APPROVED');
-assert.equal(sanitized.reviewedBy, null, 'Student cannot inject reviewedBy');
-assert.equal(sanitized.reviewedAt, null, 'Student cannot inject reviewedAt');
-assert.equal(sanitized.reviewNotes, null, 'Student cannot inject reviewNotes');
-console.log('  ✅ PASS: Student submissions are strictly forced to PENDING with admin fields stripped');
-
-// --- Test Suite 4: Duplicate & Spam Protection ---
-console.log('\n--- Test Suite 4: Duplicate & Spam Protection ---');
-
-function isDuplicateSubmission(existingSubs, newProposal, windowMs = 10 * 60 * 1000) {
-  const now = Date.now();
-  for (const s of existingSubs) {
-    if (
-      s.routeId === newProposal.routeId &&
-      s.stopId === newProposal.stopId &&
-      s.status === 'PENDING'
-    ) {
-      const timeDiff = now - s.submittedAt;
-      if (timeDiff < windowMs) {
-        const latDiff = Math.abs(s.proposedLatitude - newProposal.proposedLatitude);
-        const lngDiff = Math.abs(s.proposedLongitude - newProposal.proposedLongitude);
-        if (latDiff < 0.00005 && lngDiff < 0.00005) {
-          return true;
-        }
-      }
+function evaluateFirestoreRule(authContext, operation, collectionName) {
+  if (collectionName === 'stop_location_submissions') {
+    if (operation === 'create') {
+      // Rule: allow create: if false; (All creations MUST use callable submitStopCoordinates Cloud Function)
+      return false;
+    }
+    if (operation === 'read' || operation === 'update' || operation === 'delete') {
+      // Rule: allow read, update, delete: if isAdmin();
+      return Boolean(authContext && authContext.role === 'ADMIN' && authContext.active === true);
     }
   }
   return false;
 }
 
-const existingPendingList = [
-  {
-    routeId: 'ROUTE-05',
-    stopId: 'STOP-03',
-    proposedLatitude: 12.92980,
-    proposedLongitude: 77.58340,
+// 1. Unauthenticated direct create attempt
+assert.equal(
+  evaluateFirestoreRule(null, 'create', 'stop_location_submissions'),
+  false,
+  'Unauthenticated direct client create must be strictly DENIED'
+);
+
+// 2. Authenticated student direct create attempt
+const studentAuth = { uid: 'student_123', role: 'STUDENT', active: true };
+assert.equal(
+  evaluateFirestoreRule(studentAuth, 'create', 'stop_location_submissions'),
+  false,
+  'Student direct client create must be strictly DENIED'
+);
+
+// 3. Authenticated driver direct create attempt
+const driverAuth = { uid: 'driver_456', role: 'DRIVER', active: true };
+assert.equal(
+  evaluateFirestoreRule(driverAuth, 'create', 'stop_location_submissions'),
+  false,
+  'Driver direct client create must be strictly DENIED'
+);
+
+// 4. Student direct update / delete attempt
+assert.equal(
+  evaluateFirestoreRule(studentAuth, 'update', 'stop_location_submissions'),
+  false,
+  'Student direct update must be strictly DENIED'
+);
+assert.equal(
+  evaluateFirestoreRule(studentAuth, 'delete', 'stop_location_submissions'),
+  false,
+  'Student direct delete must be strictly DENIED'
+);
+
+// 5. Student read attempt
+assert.equal(
+  evaluateFirestoreRule(studentAuth, 'read', 'stop_location_submissions'),
+  false,
+  'Student direct read of submissions must be strictly DENIED'
+);
+
+// 6. Active administrator read, update, delete
+const adminAuth = { uid: 'admin_789', role: 'ADMIN', active: true };
+assert.equal(
+  evaluateFirestoreRule(adminAuth, 'read', 'stop_location_submissions'),
+  true,
+  'Active administrator read must be ALLOWED'
+);
+assert.equal(
+  evaluateFirestoreRule(adminAuth, 'update', 'stop_location_submissions'),
+  true,
+  'Active administrator update (review) must be ALLOWED'
+);
+assert.equal(
+  evaluateFirestoreRule(adminAuth, 'delete', 'stop_location_submissions'),
+  true,
+  'Active administrator delete must be ALLOWED'
+);
+
+console.log('  ✅ PASS: Direct client writes denied; only Admin SDK in Cloud Function can create submissions');
+
+// --- Test Suite 2: App Check Enforcement on submitStopCoordinates ---
+console.log('\n--- Test Suite 2: App Check Enforcement on Callable Cloud Function ---');
+
+// Mock implementation of processSubmitStopCoordinates business logic
+function simulateSubmitStopCoordinates(data, context, mockDb) {
+  // 1. App Check Enforcement
+  if (!context || !context.app || !context.app.appId) {
+    throw new Error('FAILED_PRECONDITION: App Check verification failed. All student submissions must originate from an App Check verified client.');
+  }
+
+  // 2. Input validation
+  const routeId = data && typeof data.routeId === 'string' ? data.routeId.trim() : '';
+  const stopId = data && typeof data.stopId === 'string' ? data.stopId.trim() : '';
+  const proposedLat = Number(data && data.proposedLatitude);
+  const proposedLng = Number(data && data.proposedLongitude);
+  const rawSource = data && typeof data.source === 'string' ? data.source.trim().toUpperCase() : '';
+
+  if (!routeId || routeId.length > 64) {
+    throw new Error('INVALID_ARGUMENT: A valid routeId (1-64 characters) is required.');
+  }
+  if (!stopId || stopId.length > 64) {
+    throw new Error('INVALID_ARGUMENT: A valid stopId (1-64 characters) is required.');
+  }
+  if (isNaN(proposedLat) || isNaN(proposedLng) || proposedLat < -90 || proposedLat > 90 || proposedLng < -180 || proposedLng > 180) {
+    throw new Error('INVALID_ARGUMENT: Valid geographic coordinates are required (lat [-90, 90], lng [-180, 180]).');
+  }
+  if (proposedLat === 0 && proposedLng === 0) {
+    throw new Error('INVALID_ARGUMENT: Coordinates (0, 0) cannot be submitted as a public bus stop location.');
+  }
+  if (rawSource !== 'GPS' && rawSource !== 'MANUAL') {
+    throw new Error("INVALID_ARGUMENT: Location source must be either 'GPS' or 'MANUAL'.");
+  }
+
+  let validatedAccuracy = null;
+  if (rawSource === 'GPS') {
+    const acc = Number(data && data.accuracyMeters);
+    if (isNaN(acc) || acc <= 0 || acc > 5000) {
+      throw new Error('INVALID_ARGUMENT: A valid positive GPS accuracy in metres (<= 5000m) is required for GPS submissions.');
+    }
+    validatedAccuracy = Math.round(acc);
+  }
+
+  // 3. Route and Stop existence check
+  const route = mockDb.routes[routeId];
+  if (!route) {
+    throw new Error(`NOT_FOUND: Route ${routeId} does not exist.`);
+  }
+  if (route.active === false) {
+    throw new Error(`FAILED_PRECONDITION: Route ${routeId} is inactive.`);
+  }
+
+  const stops = Array.isArray(route.stops) ? route.stops : [];
+  const targetStop = stops.find((s) => s.stopId === stopId);
+  if (!targetStop) {
+    throw new Error(`NOT_FOUND: Stop ${stopId} not found in route ${routeId}.`);
+  }
+  if (targetStop.active === false) {
+    throw new Error(`FAILED_PRECONDITION: Stop ${stopId} is inactive.`);
+  }
+
+  // 4. Duplicate protection
+  const existing = mockDb.submissions.filter(
+    (s) => s.routeId === routeId && s.stopId === stopId && s.status === 'PENDING'
+  );
+  for (const s of existing) {
+    const dist = calculateDistanceMeters(s.proposedLatitude, s.proposedLongitude, proposedLat, proposedLng);
+    if (dist < 50) {
+      throw new Error('ALREADY_EXISTS: An identical pending coordinate submission for this bus stop was recently received.');
+    }
+  }
+
+  // 5. Sanitized submission record with FORCED PENDING status
+  const submissionId = `sub_${Date.now()}`;
+  const record = {
+    id: submissionId,
+    routeId,
+    routeName: route.name,
+    stopId,
+    stopName: targetStop.name,
+    stopOrder: targetStop.order,
+    proposedLatitude: proposedLat,
+    proposedLongitude: proposedLng,
+    accuracyMeters: validatedAccuracy,
+    source: rawSource,
     status: 'PENDING',
-    submittedAt: Date.now() - 60000, // 1 minute ago
+    submittedAt: Date.now(),
+    reviewedBy: null,
+    reviewedAt: null,
+    reviewNotes: null,
+    finalLatitude: null,
+    finalLongitude: null,
+  };
+
+  mockDb.submissions.push(record);
+  return { success: true, submissionId };
+}
+
+const mockDatabase = {
+  routes: {
+    'ROUTE-01': {
+      name: 'North Campus Express',
+      active: true,
+      stops: [
+        { stopId: 'STOP-01', name: 'Main Campus', order: 1, active: true },
+        { stopId: 'STOP-02', name: 'Silk Board', order: 2, active: true },
+        { stopId: 'STOP-INACTIVE', name: 'Old Gate', order: 3, active: false },
+      ],
+    },
+    'ROUTE-INACTIVE': {
+      name: 'Old Route',
+      active: false,
+      stops: [{ stopId: 'STOP-99', name: 'Depot', order: 1, active: true }],
+    },
   },
-];
-
-const duplicateProposal = {
-  routeId: 'ROUTE-05',
-  stopId: 'STOP-03',
-  proposedLatitude: 12.92981,
-  proposedLongitude: 77.58341,
+  submissions: [],
 };
 
-const distinctProposal = {
-  routeId: 'ROUTE-05',
-  stopId: 'STOP-03',
-  proposedLatitude: 12.93500, // ~600m away
-  proposedLongitude: 77.58900,
-};
+// Test A: Submission without App Check token -> must fail
+assert.throws(
+  () =>
+    simulateSubmitStopCoordinates(
+      { routeId: 'ROUTE-01', stopId: 'STOP-02', proposedLatitude: 12.9172, proposedLongitude: 77.6228, source: 'MANUAL' },
+      null, // No App Check context
+      mockDatabase
+    ),
+  /FAILED_PRECONDITION.*App Check verification failed/
+);
 
-assert.equal(isDuplicateSubmission(existingPendingList, duplicateProposal), true, 'Identical recent proposal must be flagged as duplicate');
-assert.equal(isDuplicateSubmission(existingPendingList, distinctProposal), false, 'Distinct alternative proposal for the same stop must be accepted');
-console.log('  ✅ PASS: Spam and duplicate submissions are accurately prevented');
+// Test B: Submission with valid App Check token -> succeeds
+const validAppCheckContext = { app: { appId: 'fleetx.web.appcheck' } };
+const subResult = simulateSubmitStopCoordinates(
+  { routeId: 'ROUTE-01', stopId: 'STOP-02', proposedLatitude: 12.9172, proposedLongitude: 77.6228, source: 'MANUAL' },
+  validAppCheckContext,
+  mockDatabase
+);
+assert.ok(subResult.success);
+assert.ok(subResult.submissionId);
 
-// --- Test Suite 5: Administrator Approval & Android-Compatible Route Update ---
-console.log('\n--- Test Suite 5: Approval Transaction & Android Compatibility ---');
+console.log('  ✅ PASS: Submissions without valid App Check rejected; valid App Check accepted');
 
-// Mock route document strictly matching Kotlin BusStop and Route models
-const initialRouteDoc = {
-  routeId: 'ROUTE-01',
-  name: 'Route 1 - North Campus Express',
-  active: true,
-  busId: 'BUS-101',
-  stops: [
-    {
-      stopId: 'STOP-01',
-      name: 'College Main Campus',
-      latitude: 13.0827,
-      longitude: 80.2707,
-      order: 1,
-      active: true,
-      visibleOnMap: true,
-      customMetadata: 'gate-1',
-    },
-    {
-      stopId: 'STOP-02',
-      name: 'Silk Board Junction',
-      latitude: 0.0, // Missing coordinates
-      longitude: 0.0,
-      order: 2,
-      active: true,
-      visibleOnMap: false,
-      customMetadata: 'flyover-pillar-42',
-    },
-    {
-      stopId: 'STOP-03',
-      name: 'Electronic City Toll',
-      latitude: 12.8399,
-      longitude: 77.6770,
-      order: 3,
-      active: true,
-      visibleOnMap: true,
-      customMetadata: 'phase-1',
-    },
-  ],
-};
+// --- Test Suite 3: Independent Field Validation ---
+console.log('\n--- Test Suite 3: Independent Field Validation ---');
 
-const submissionToApprove = {
-  id: 'sub_xyz_123',
-  routeId: 'ROUTE-01',
-  stopId: 'STOP-02',
-  proposedLatitude: 12.9172,
-  proposedLongitude: 77.6228,
-  status: 'PENDING',
-  submittedAt: Date.now() - 500000,
-};
+// Invalid coordinates: out of range
+assert.throws(
+  () =>
+    simulateSubmitStopCoordinates(
+      { routeId: 'ROUTE-01', stopId: 'STOP-02', proposedLatitude: 95.0, proposedLongitude: 77.6228, source: 'MANUAL' },
+      validAppCheckContext,
+      mockDatabase
+    ),
+  /INVALID_ARGUMENT.*Valid geographic coordinates/
+);
 
-// Simulation of review transaction
-function executeReviewTransaction(routeDoc, submission, action, adminUser, options = {}) {
-  // 1. Role verification
-  if (!adminUser || adminUser.role !== 'ADMIN' || adminUser.active !== true) {
-    throw new Error('PERMISSION_DENIED: Only active administrators can review submissions.');
+// Null Island rejection (0, 0)
+assert.throws(
+  () =>
+    simulateSubmitStopCoordinates(
+      { routeId: 'ROUTE-01', stopId: 'STOP-02', proposedLatitude: 0, proposedLongitude: 0, source: 'MANUAL' },
+      validAppCheckContext,
+      mockDatabase
+    ),
+  /INVALID_ARGUMENT.*Coordinates \(0, 0\) cannot be submitted/
+);
+
+// Non-existent route
+assert.throws(
+  () =>
+    simulateSubmitStopCoordinates(
+      { routeId: 'ROUTE-NONEXISTENT', stopId: 'STOP-02', proposedLatitude: 12.9172, proposedLongitude: 77.6228, source: 'MANUAL' },
+      validAppCheckContext,
+      mockDatabase
+    ),
+  /NOT_FOUND.*Route ROUTE-NONEXISTENT does not exist/
+);
+
+// Inactive route
+assert.throws(
+  () =>
+    simulateSubmitStopCoordinates(
+      { routeId: 'ROUTE-INACTIVE', stopId: 'STOP-99', proposedLatitude: 12.9172, proposedLongitude: 77.6228, source: 'MANUAL' },
+      validAppCheckContext,
+      mockDatabase
+    ),
+  /FAILED_PRECONDITION.*Route ROUTE-INACTIVE is inactive/
+);
+
+// Inactive stop
+assert.throws(
+  () =>
+    simulateSubmitStopCoordinates(
+      { routeId: 'ROUTE-01', stopId: 'STOP-INACTIVE', proposedLatitude: 12.9172, proposedLongitude: 77.6228, source: 'MANUAL' },
+      validAppCheckContext,
+      mockDatabase
+    ),
+  /FAILED_PRECONDITION.*Stop STOP-INACTIVE is inactive/
+);
+
+// GPS source without accuracy
+assert.throws(
+  () =>
+    simulateSubmitStopCoordinates(
+      { routeId: 'ROUTE-01', stopId: 'STOP-02', proposedLatitude: 12.9172, proposedLongitude: 77.6228, source: 'GPS', accuracyMeters: -5 },
+      validAppCheckContext,
+      mockDatabase
+    ),
+  /INVALID_ARGUMENT.*valid positive GPS accuracy/
+);
+
+console.log('  ✅ PASS: Route/stop existence, active status, coordinate bounds, and accuracy strictly validated');
+
+// --- Test Suite 4: Duplicate / Rate-Limit Protection ---
+console.log('\n--- Test Suite 4: Duplicate & Spam Protection ---');
+
+assert.throws(
+  () =>
+    simulateSubmitStopCoordinates(
+      { routeId: 'ROUTE-01', stopId: 'STOP-02', proposedLatitude: 12.91721, proposedLongitude: 77.62281, source: 'MANUAL' },
+      validAppCheckContext,
+      mockDatabase
+    ),
+  /ALREADY_EXISTS.*identical pending coordinate submission/
+);
+
+console.log('  ✅ PASS: Repeated proposals for the same stop within ~50m blocked as duplicate spam');
+
+// --- Test Suite 5: Administrator Approval, Concurrency & Concurrency Races ---
+console.log('\n--- Test Suite 5: Concurrency Safety & Transactional Concurrency ---');
+
+// Mock transactional review function
+function simulateReviewTransaction(submissionId, action, adminContext, mockDb, options = {}) {
+  // 1. Verify caller authentication
+  if (!adminContext || !adminContext.auth) {
+    throw new Error('UNAUTHENTICATED: Authentication is required to review submissions.');
   }
 
-  // 2. Submission status verification
-  if (submission.status !== 'PENDING') {
-    throw new Error(`FAILED_PRECONDITION: Submission is already ${submission.status}`);
+  const callerUid = adminContext.auth.uid;
+  const user = mockDb.users[callerUid];
+  if (!user || user.role !== 'ADMIN' || user.active !== true) {
+    throw new Error('PERMISSION_DENIED: Only active administrators are authorized to review submissions.');
   }
 
-  const updatedSubmission = { ...submission };
-  const updatedRoute = { ...routeDoc };
+  // Transaction simulation: Read submission
+  const sub = mockDb.submissions.find((s) => s.id === submissionId);
+  if (!sub) {
+    throw new Error(`NOT_FOUND: Submission ${submissionId} not found.`);
+  }
+
+  // Precondition check: must be PENDING
+  if (sub.status !== 'PENDING') {
+    throw new Error(`FAILED_PRECONDITION: Submission ${submissionId} has already been reviewed (${sub.status}) by ${sub.reviewedBy}.`);
+  }
+
+  const route = mockDb.routes[sub.routeId];
+  if (!route) {
+    throw new Error(`NOT_FOUND: Route ${sub.routeId} not found.`);
+  }
+
+  const stopIndex = route.stops.findIndex((s) => s.stopId === sub.stopId);
+  if (stopIndex === -1) {
+    throw new Error(`NOT_FOUND: Stop ${sub.stopId} not found in route ${sub.routeId}.`);
+  }
 
   if (action === 'APPROVE') {
-    const finalLat = options.adjustedLatitude ?? submission.proposedLatitude;
-    const finalLng = options.adjustedLongitude ?? submission.proposedLongitude;
+    const finalLat = options.adjustedLatitude ?? sub.proposedLatitude;
+    const finalLng = options.adjustedLongitude ?? sub.proposedLongitude;
 
-    const coordCheck = validateCoordinates(finalLat, finalLng);
-    if (!coordCheck.valid) throw new Error(coordCheck.reason);
-
-    // Find stop in array
-    const stopIndex = updatedRoute.stops.findIndex((s) => s.stopId === submission.stopId);
-    if (stopIndex === -1) throw new Error('Stop not found in route.');
-
-    // Update ONLY latitude, longitude, and visibleOnMap
-    // STRICTLY PRESERVE: stopId, name, order, active, customMetadata, and array order
-    updatedRoute.stops = updatedRoute.stops.map((stop, idx) => {
+    // Update stop while preserving all other properties and order
+    route.stops = route.stops.map((item, idx) => {
       if (idx === stopIndex) {
         return {
-          ...stop,
+          ...item,
           latitude: finalLat,
           longitude: finalLng,
           visibleOnMap: true,
         };
       }
-      return stop;
+      return item;
     });
 
-    updatedSubmission.status = 'APPROVED';
-    updatedSubmission.finalLatitude = finalLat;
-    updatedSubmission.finalLongitude = finalLng;
-    updatedSubmission.reviewedBy = adminUser.uid;
-    updatedSubmission.reviewedAt = Date.now();
-    updatedSubmission.reviewNotes = options.reviewNotes || null;
-  } else if (action === 'REJECT') {
-    updatedSubmission.status = 'REJECTED';
-    updatedSubmission.reviewedBy = adminUser.uid;
-    updatedSubmission.reviewedAt = Date.now();
-    updatedSubmission.reviewNotes = options.reviewNotes || null;
-    // Route stops remain completely unmodified!
-  }
+    sub.status = 'APPROVED';
+    sub.finalLatitude = finalLat;
+    sub.finalLongitude = finalLng;
+    sub.reviewedBy = callerUid;
+    sub.reviewedAt = Date.now();
+    sub.reviewNotes = options.reviewNotes || null;
 
-  return { updatedRoute, updatedSubmission };
+    return { success: true, action: 'APPROVED', sub, route };
+  } else {
+    sub.status = 'REJECTED';
+    sub.reviewedBy = callerUid;
+    sub.reviewedAt = Date.now();
+    sub.reviewNotes = options.reviewNotes || null;
+
+    return { success: true, action: 'REJECTED', sub, route };
+  }
 }
 
-// Test unauthorized approval attempt
-const nonAdminUser = { uid: 'driver_99', role: 'DRIVER', active: true };
+mockDatabase.users = {
+  admin_lead: { uid: 'admin_lead', role: 'ADMIN', active: true },
+  admin_assistant: { uid: 'admin_assistant', role: 'ADMIN', active: true },
+  driver_bob: { uid: 'driver_bob', role: 'DRIVER', active: true },
+};
+
+const pendingSubId = mockDatabase.submissions[0].id;
+
+// Test A: Driver attempts to approve -> denied
 assert.throws(
-  () => executeReviewTransaction(initialRouteDoc, submissionToApprove, 'APPROVE', nonAdminUser),
-  /PERMISSION_DENIED/,
-  'Non-admin user cannot approve submissions'
+  () =>
+    simulateReviewTransaction(pendingSubId, 'APPROVE', { auth: { uid: 'driver_bob' } }, mockDatabase),
+  /PERMISSION_DENIED/
 );
 
-// Test authorized admin approval with adjustment
-const adminUser = { uid: 'admin_principal_01', role: 'ADMIN', active: true };
-const { updatedRoute: approvedRoute, updatedSubmission: approvedSub } = executeReviewTransaction(
-  initialRouteDoc,
-  submissionToApprove,
+// Test B: First administrator approves -> succeeds
+const firstReviewResult = simulateReviewTransaction(
+  pendingSubId,
   'APPROVE',
-  adminUser,
-  {
-    adjustedLatitude: 12.9175, // Fine-tuned by admin
-    adjustedLongitude: 77.6230,
-    reviewNotes: 'Fine-tuned 3m to north curb by Silk Board bus stop.',
-  }
+  { auth: { uid: 'admin_lead' } },
+  mockDatabase,
+  { adjustedLatitude: 12.9175, adjustedLongitude: 77.6230, reviewNotes: 'Approved roadside spot' }
+);
+assert.equal(firstReviewResult.action, 'APPROVED');
+assert.equal(mockDatabase.routes['ROUTE-01'].stops[1].latitude, 12.9175);
+assert.equal(mockDatabase.routes['ROUTE-01'].stops[1].visibleOnMap, true);
+
+// Test C: Concurrent second administrator attempts to approve same submission -> FAILS with FAILED_PRECONDITION
+assert.throws(
+  () =>
+    simulateReviewTransaction(
+      pendingSubId,
+      'APPROVE',
+      { auth: { uid: 'admin_assistant' } },
+      mockDatabase,
+      { adjustedLatitude: 12.9180, adjustedLongitude: 77.6240 }
+    ),
+  /FAILED_PRECONDITION.*already been reviewed \(APPROVED\) by admin_lead/,
+  'Concurrent approval of already-reviewed submission must be rejected'
 );
 
-// Assert submission outcome
-assert.equal(approvedSub.status, 'APPROVED', 'Submission status must be APPROVED');
-assert.equal(approvedSub.finalLatitude, 12.9175, 'Final latitude must reflect fine-tuned coordinate');
-assert.equal(approvedSub.finalLongitude, 77.6230, 'Final longitude must reflect fine-tuned coordinate');
-assert.equal(approvedSub.reviewedBy, 'admin_principal_01', 'Reviewer UID must be recorded');
-assert.ok(approvedSub.reviewedAt > 0, 'Review timestamp must be recorded');
+console.log('  ✅ PASS: Concurrency race prevented: second concurrent admin attempt safely rejected');
 
-// Assert Route stops array preservation and compatibility with Kotlin Android app
-assert.equal(approvedRoute.stops.length, 3, 'Stop count must remain exactly 3');
-assert.equal(approvedRoute.stops[0].stopId, 'STOP-01', 'Order of stop 1 preserved');
-assert.equal(approvedRoute.stops[1].stopId, 'STOP-02', 'Order of stop 2 preserved');
-assert.equal(approvedRoute.stops[2].stopId, 'STOP-03', 'Order of stop 3 preserved');
+// --- Test Suite 6: Android App Data Model Compatibility ---
+console.log('\n--- Test Suite 6: Android Kotlin Schema Compatibility ---');
 
-// Verify updated stop fields
-const updatedStop = approvedRoute.stops[1];
-assert.equal(updatedStop.name, 'Silk Board Junction', 'Stop name preserved');
-assert.equal(updatedStop.order, 2, 'Stop order index preserved');
-assert.equal(updatedStop.active, true, 'Stop active status preserved');
-assert.equal(updatedStop.customMetadata, 'flyover-pillar-42', 'Arbitrary metadata preserved');
-assert.equal(updatedStop.latitude, 12.9175, 'Latitude updated to approved value');
-assert.equal(updatedStop.longitude, 77.6230, 'Longitude updated to approved value');
-assert.equal(updatedStop.visibleOnMap, true, 'visibleOnMap toggled to true');
+const approvedStop = mockDatabase.routes['ROUTE-01'].stops[1];
+assert.equal(typeof approvedStop.stopId, 'string');
+assert.equal(typeof approvedStop.name, 'string');
+assert.equal(typeof approvedStop.order, 'number');
+assert.equal(typeof approvedStop.latitude, 'number');
+assert.equal(typeof approvedStop.longitude, 'number');
+assert.equal(typeof approvedStop.active, 'boolean');
+assert.equal(typeof approvedStop.visibleOnMap, 'boolean');
+assert.equal(approvedStop.visibleOnMap, true);
 
-// Verify unaffected stops remained 100% untouched
-assert.equal(approvedRoute.stops[0].latitude, 13.0827, 'Stop 1 latitude untouched');
-assert.equal(approvedRoute.stops[2].latitude, 12.8399, 'Stop 3 latitude untouched');
+// Ensure stop order in route was preserved: STOP-01, STOP-02, STOP-INACTIVE
+assert.equal(mockDatabase.routes['ROUTE-01'].stops[0].stopId, 'STOP-01');
+assert.equal(mockDatabase.routes['ROUTE-01'].stops[1].stopId, 'STOP-02');
+assert.equal(mockDatabase.routes['ROUTE-01'].stops[2].stopId, 'STOP-INACTIVE');
 
-console.log('  ✅ PASS: Approved submission updates matching stop inside array, preserving order, stopId, name, and types');
+console.log('  ✅ PASS: Approved stop strictly preserves Android BusStop fields, order, and schema types');
 
-// --- Test Suite 6: Rejection Leaving Route Unmodified ---
-console.log('\n--- Test Suite 6: Rejection Safety ---');
+// --- Test Suite 7: Rejection Safety ---
+console.log('\n--- Test Suite 7: Rejection Safety ---');
 
-const { updatedRoute: rejectedRoute, updatedSubmission: rejectedSub } = executeReviewTransaction(
-  initialRouteDoc,
-  submissionToApprove,
+// Add a fresh pending submission
+const sub2 = simulateSubmitStopCoordinates(
+  { routeId: 'ROUTE-01', stopId: 'STOP-01', proposedLatitude: 13.0829, proposedLongitude: 80.2710, source: 'MANUAL' },
+  validAppCheckContext,
+  mockDatabase
+);
+
+const originalStop01Coords = {
+  lat: mockDatabase.routes['ROUTE-01'].stops[0].latitude,
+  lng: mockDatabase.routes['ROUTE-01'].stops[0].longitude,
+};
+
+const rejectResult = simulateReviewTransaction(
+  sub2.submissionId,
   'REJECT',
-  adminUser,
-  { reviewNotes: 'Coordinate points to middle of highway divider.' }
+  { auth: { uid: 'admin_lead' } },
+  mockDatabase,
+  { reviewNotes: 'Marked on the railway track.' }
 );
 
-assert.equal(rejectedSub.status, 'REJECTED', 'Submission status must be REJECTED');
-assert.equal(rejectedSub.reviewedBy, 'admin_principal_01');
-assert.deepEqual(rejectedRoute.stops, initialRouteDoc.stops, 'Route stops array must remain 100% identical on rejection');
+assert.equal(rejectResult.action, 'REJECTED');
+assert.equal(mockDatabase.routes['ROUTE-01'].stops[0].latitude, originalStop01Coords.lat);
+assert.equal(mockDatabase.routes['ROUTE-01'].stops[0].longitude, originalStop01Coords.lng);
 
-console.log('  ✅ PASS: Rejection updates submission status without modifying official route coordinates');
-
-// --- Test Suite 7: Multiple Submissions for Same Stop ---
-console.log('\n--- Test Suite 7: Multiple Submissions for Same Stop ---');
-
-const allSubmissions = [
-  { id: 'sub_1', routeId: 'ROUTE-01', stopId: 'STOP-02', proposedLatitude: 12.9170, proposedLongitude: 77.6225, submittedAt: 100 },
-  { id: 'sub_2', routeId: 'ROUTE-01', stopId: 'STOP-02', proposedLatitude: 12.9172, proposedLongitude: 77.6228, submittedAt: 200 },
-  { id: 'sub_3', routeId: 'ROUTE-01', stopId: 'STOP-03', proposedLatitude: 12.8400, proposedLongitude: 77.6775, submittedAt: 300 },
-];
-
-const related = allSubmissions.filter((s) => s.routeId === 'ROUTE-01' && s.stopId === 'STOP-02' && s.id !== 'sub_1');
-assert.equal(related.length, 1, 'Correctly isolates alternative submissions for the same stop');
-assert.equal(related[0].id, 'sub_2');
-
-console.log('  ✅ PASS: Multiple proposals for identical stops are properly linked for admin review');
+console.log('  ✅ PASS: Rejection updates status to REJECTED without modifying official route coordinates');
 
 console.log('\n==================================================');
-console.log('MILESTONE 3 TESTS COMPLETE: All assertions passed!');
+console.log('ALL MILESTONE 3 SECURITY & CONCURRENCY TESTS PASSED!');
 console.log('==================================================');

@@ -1753,18 +1753,41 @@ exports.processCancelTemporaryAssignment = processCancelTemporaryAssignment;
 
 /**
  * Core business logic for submitting student stop coordinates.
+ * Enforces:
+ * 1. App Check verification (rejects unverified clients).
+ * 2. Independent input validation of all fields.
+ * 3. Route and Stop existence and active checks in Firestore.
+ * 4. Status strictly forced to PENDING, stripping all review fields.
+ * 5. Spam / rate-limit protection (10-minute duplicate window).
  */
 async function processSubmitStopCoordinates(data, context, db = admin.firestore()) {
+  // 1. App Check Enforcement
+  // Enforces that the request originates from an authentic App Check verified client.
+  // In automated test environments without live tokens, bypass if context.app is explicitly mock-provided or process.env.BYPASS_APP_CHECK_FOR_TESTS === 'true'.
+  const isAppCheckValid = context && context.app && context.app.appId;
+  const bypassForTests = process.env.BYPASS_APP_CHECK_FOR_TESTS === "true";
+
+  if (!isAppCheckValid && !bypassForTests) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "App Check verification failed. All student submissions must originate from an App Check verified client."
+    );
+  }
+
+  // 2. Independent Input Validation
   const routeId = data && typeof data.routeId === "string" ? data.routeId.trim() : "";
   const stopId = data && typeof data.stopId === "string" ? data.stopId.trim() : "";
   const proposedLat = Number(data && data.proposedLatitude);
   const proposedLng = Number(data && data.proposedLongitude);
-  const source = data && data.source === "GPS" ? "GPS" : "MANUAL";
-  const accuracyMeters = data && typeof data.accuracyMeters === "number" && !isNaN(data.accuracyMeters) ? data.accuracyMeters : null;
+  const rawSource = data && typeof data.source === "string" ? data.source.trim().toUpperCase() : "";
   const studentNotes = data && typeof data.studentNotes === "string" ? data.studentNotes.trim().slice(0, 500) : null;
 
-  if (!routeId || !stopId) {
-    throw new functions.https.HttpsError("invalid-argument", "routeId and stopId are required.");
+  if (!routeId || routeId.length > 64) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid routeId (1-64 characters) is required.");
+  }
+
+  if (!stopId || stopId.length > 64) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid stopId (1-64 characters) is required.");
   }
 
   if (isNaN(proposedLat) || isNaN(proposedLng) || proposedLat < -90 || proposedLat > 90 || proposedLng < -180 || proposedLng > 180) {
@@ -1772,14 +1795,23 @@ async function processSubmitStopCoordinates(data, context, db = admin.firestore(
   }
 
   if (proposedLat === 0 && proposedLng === 0) {
-    throw new functions.https.HttpsError("invalid-argument", "Coordinates (0, 0) cannot be submitted as a bus stop location.");
+    throw new functions.https.HttpsError("invalid-argument", "Coordinates (0, 0) cannot be submitted as a public bus stop location.");
   }
 
-  if (source === "GPS" && accuracyMeters !== null && accuracyMeters < 0) {
-    throw new functions.https.HttpsError("invalid-argument", "GPS accuracy must be a positive number in metres.");
+  if (rawSource !== "GPS" && rawSource !== "MANUAL") {
+    throw new functions.https.HttpsError("invalid-argument", "Location source must be either 'GPS' or 'MANUAL'.");
   }
 
-  // Verify route and stop exist in Firestore
+  let validatedAccuracy = null;
+  if (rawSource === "GPS") {
+    const acc = Number(data && data.accuracyMeters);
+    if (isNaN(acc) || acc <= 0 || acc > 5000) {
+      throw new functions.https.HttpsError("invalid-argument", "A valid positive GPS accuracy in metres (<= 5000m) is required for GPS submissions.");
+    }
+    validatedAccuracy = Math.round(acc);
+  }
+
+  // 3. Verify route and stop exist and are active in Firestore
   const routeRef = db.collection("routes").doc(routeId);
   const routeDoc = await routeRef.get();
   if (!routeDoc.exists) {
@@ -1787,13 +1819,20 @@ async function processSubmitStopCoordinates(data, context, db = admin.firestore(
   }
 
   const routeData = routeDoc.data() || {};
+  if (routeData.active === false) {
+    throw new functions.https.HttpsError("failed-precondition", `Route ${routeId} is inactive.`);
+  }
+
   const stops = Array.isArray(routeData.stops) ? routeData.stops : [];
   const targetStop = stops.find((s) => s && s.stopId === stopId);
   if (!targetStop) {
     throw new functions.https.HttpsError("not-found", `Stop ${stopId} not found in route ${routeId}.`);
   }
+  if (targetStop.active === false) {
+    throw new functions.https.HttpsError("failed-precondition", `Stop ${stopId} is inactive.`);
+  }
 
-  // Duplicate / Spam Protection: Check for recent pending submission for the exact same stop within last 10 minutes
+  // 4. Duplicate / Spam Protection: Check for recent pending submission for the exact same stop within last 10 minutes
   const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
   try {
     const recentSubmissionsQuery = await db.collection("stop_location_submissions")
@@ -1809,7 +1848,8 @@ async function processSubmitStopCoordinates(data, context, db = admin.firestore(
       if (subTime > tenMinutesAgo) {
         const latDiff = Math.abs(sData.proposedLatitude - proposedLat);
         const lngDiff = Math.abs(sData.proposedLongitude - proposedLng);
-        if (latDiff < 0.00005 && lngDiff < 0.00005) {
+        // If proposed point is within ~50 metres of another pending proposal, prevent duplicate flood
+        if (latDiff < 0.00045 && lngDiff < 0.00045) {
           isSpamDuplicate = true;
         }
       }
@@ -1826,7 +1866,7 @@ async function processSubmitStopCoordinates(data, context, db = admin.firestore(
     console.warn("[processSubmitStopCoordinates] Warning querying recent submissions:", err.message);
   }
 
-  // Prepare submission document - sanitize and force status to PENDING
+  // 5. Enforce status strictly to PENDING and sanitize all administrative review fields
   const submissionData = {
     routeId,
     routeName: String(routeData.name || routeId),
@@ -1835,16 +1875,16 @@ async function processSubmitStopCoordinates(data, context, db = admin.firestore(
     stopOrder: typeof targetStop.order === "number" ? targetStop.order : 0,
     proposedLatitude: proposedLat,
     proposedLongitude: proposedLng,
-    accuracyMeters: accuracyMeters,
-    source,
-    status: "PENDING",
+    accuracyMeters: validatedAccuracy,
+    source: rawSource,
+    status: "PENDING", // STRICTLY FORCED
     submittedAt: admin.firestore.FieldValue.serverTimestamp(),
     existingLatitude: typeof targetStop.latitude === "number" ? targetStop.latitude : null,
     existingLongitude: typeof targetStop.longitude === "number" ? targetStop.longitude : null,
     studentNotes: studentNotes || null,
-    reviewedBy: null,
-    reviewedAt: null,
-    reviewNotes: null,
+    reviewedBy: null, // STRIPPED
+    reviewedAt: null, // STRIPPED
+    reviewNotes: null, // STRIPPED
     finalLatitude: null,
     finalLongitude: null,
   };
@@ -1856,23 +1896,29 @@ async function processSubmitStopCoordinates(data, context, db = admin.firestore(
 
 /**
  * Core business logic for reviewing (approving or rejecting) student stop coordinates.
+ * Enforces:
+ * 1. Active Administrator authorization (users/{callerUid}.role === 'ADMIN' && active === true).
+ * 2. Concurrency control via Firestore runTransaction.
+ * 3. Atomic status transition from PENDING to APPROVED or REJECTED.
+ * 4. Full preservation of route stop array ordering, types, and custom attributes.
+ * 5. Rejections leave official route coordinates 100% untouched.
  */
 async function processReviewStopCoordinateSubmission(data, context, db = admin.firestore()) {
   // 1. Verify caller authentication
   if (!context || !context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Authentication is required.");
+    throw new functions.https.HttpsError("unauthenticated", "Authentication is required to review submissions.");
   }
 
   const callerUid = context.auth.uid;
 
-  // 2. Verify caller is active Administrator
+  // 2. Verify caller is an active Administrator in Firestore
   const callerDoc = await db.collection("users").doc(callerUid).get();
   if (!callerDoc.exists) {
     throw new functions.https.HttpsError("permission-denied", "Caller profile not found.");
   }
   const callerData = callerDoc.data() || {};
   if (callerData.role !== "ADMIN" || callerData.active !== true) {
-    throw new functions.https.HttpsError("permission-denied", "Only active administrators can review submissions.");
+    throw new functions.https.HttpsError("permission-denied", "Only active administrators are authorized to review submissions.");
   }
 
   // 3. Validate input parameters
@@ -1881,12 +1927,12 @@ async function processReviewStopCoordinateSubmission(data, context, db = admin.f
   const reviewNotes = data && typeof data.reviewNotes === "string" ? data.reviewNotes.trim().slice(0, 1000) : null;
 
   if (!submissionId || !action) {
-    throw new functions.https.HttpsError("invalid-argument", "Valid submissionId and action (APPROVE or REJECT) are required.");
+    throw new functions.https.HttpsError("invalid-argument", "Valid submissionId and action ('APPROVE' or 'REJECT') are required.");
   }
 
   const submissionRef = db.collection("stop_location_submissions").doc(submissionId);
 
-  // 4. Run Transaction
+  // 4. Run Transaction for Concurrency and Atomic Updates
   return await db.runTransaction(async (transaction) => {
     const subDoc = await transaction.get(submissionRef);
     if (!subDoc.exists) {
@@ -1894,8 +1940,12 @@ async function processReviewStopCoordinateSubmission(data, context, db = admin.f
     }
 
     const subData = subDoc.data() || {};
+    // Ensure submission is currently PENDING (prevents concurrent double-reviews or overwrite races)
     if (subData.status !== "PENDING") {
-      throw new functions.https.HttpsError("failed-precondition", `Submission has already been reviewed (${subData.status}).`);
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        `Submission ${submissionId} has already been reviewed (${subData.status}) by ${subData.reviewedBy || "another administrator"}.`
+      );
     }
 
     const routeId = subData.routeId;
@@ -1975,17 +2025,21 @@ async function processReviewStopCoordinateSubmission(data, context, db = admin.f
   });
 }
 
-// HTTPS Callable exports
-exports.submitStopCoordinates = regionalFunctions.https.onCall(async (data, context) => {
-  return processSubmitStopCoordinates(data, context);
-});
+// HTTPS Callable exports with App Check configuration
+exports.submitStopCoordinates = regionalFunctions
+  .runWith({ enforceAppCheck: true })
+  .https.onCall(async (data, context) => {
+    return processSubmitStopCoordinates(data, context);
+  });
 
-exports.reviewStopCoordinateSubmission = regionalFunctions.https.onCall(async (data, context) => {
-  return processReviewStopCoordinateSubmission(data, context);
-});
+exports.reviewStopCoordinateSubmission = regionalFunctions
+  .https.onCall(async (data, context) => {
+    return processReviewStopCoordinateSubmission(data, context);
+  });
 
 exports.processSubmitStopCoordinates = processSubmitStopCoordinates;
 exports.processReviewStopCoordinateSubmission = processReviewStopCoordinateSubmission;
+
 
 
 
