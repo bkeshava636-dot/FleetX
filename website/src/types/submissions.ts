@@ -1,27 +1,48 @@
 export type SubmissionStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
-export type SubmissionMethod = 'GPS' | 'MANUAL';
+export type LocationSource = 'GPS' | 'MANUAL';
 
-export interface StopLocationSubmission {
-  submissionId: string;
-  stopId: string;
-  stopName: string;
+export interface StopCoordinateSubmission {
+  id: string;
   routeId: string;
   routeName: string;
-  busId: string;
-  studentIdentifier?: string;
-  latitude: number;
-  longitude: number;
+  stopId: string;
+  stopName: string;
+  stopOrder: number;
+  proposedLatitude: number;
+  proposedLongitude: number;
   accuracyMeters: number | null;
-  submissionMethod: SubmissionMethod;
+  source: LocationSource;
   status: SubmissionStatus;
-  submittedAt: number; // Unix epoch ms
-  reviewedAt?: number | null;
+  submittedAt: number; // UTC timestamp ms
+  existingLatitude?: number | null;
+  existingLongitude?: number | null;
+  studentNotes?: string | null;
   reviewedBy?: string | null;
-  adminNote?: string | null;
+  reviewedAt?: number | null;
+  reviewNotes?: string | null;
+  finalLatitude?: number | null;
+  finalLongitude?: number | null;
 }
 
-export interface SubmissionFilterOptions {
-  status: SubmissionStatus | 'ALL';
-  routeId?: string;
-  searchQuery?: string;
+export interface SubmitCoordinatesInput {
+  routeId: string;
+  routeName: string;
+  stopId: string;
+  stopName: string;
+  stopOrder: number;
+  proposedLatitude: number;
+  proposedLongitude: number;
+  accuracyMeters: number | null;
+  source: LocationSource;
+  existingLatitude?: number | null;
+  existingLongitude?: number | null;
+  studentNotes?: string | null;
+}
+
+export interface ReviewSubmissionInput {
+  submissionId: string;
+  action: 'APPROVE' | 'REJECT';
+  adjustedLatitude?: number;
+  adjustedLongitude?: number;
+  reviewNotes?: string;
 }

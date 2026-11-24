@@ -223,5 +223,24 @@ service cloud.firestore {
         (!('versions' in request.resource.data) || (request.resource.data.versions is map && request.resource.data.versions.size() <= 10));
       allow read, delete: if isAdmin();
     }
+    // Stop Location Submissions: Crowdsourced stop coordinates submitted by students.
+    // - Students (unauthenticated or anonymous) can create submissions if status is strictly 'PENDING',
+    //   coordinates are strictly within valid geographical bounds, and no administrative fields are included.
+    // - Only authenticated active administrators can read, update (approve/reject), or delete submissions.
+    match /stop_location_submissions/{submissionId} {
+      allow read: if isAdmin();
+      allow create: if request.resource.data.status == 'PENDING' &&
+        request.resource.data.routeId is string && request.resource.data.routeId.size() > 0 &&
+        request.resource.data.stopId is string && request.resource.data.stopId.size() > 0 &&
+        request.resource.data.proposedLatitude is number &&
+        request.resource.data.proposedLatitude >= -90.0 && request.resource.data.proposedLatitude <= 90.0 &&
+        request.resource.data.proposedLongitude is number &&
+        request.resource.data.proposedLongitude >= -180.0 && request.resource.data.proposedLongitude <= 180.0 &&
+        !(request.resource.data.proposedLatitude == 0.0 && request.resource.data.proposedLongitude == 0.0) &&
+        !('reviewedBy' in request.resource.data) &&
+        !('reviewedAt' in request.resource.data) &&
+        !('reviewNotes' in request.resource.data);
+      allow update, delete: if isAdmin();
+    }
   }
 }

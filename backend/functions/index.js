@@ -1747,4 +1747,245 @@ exports.getEffectiveDriver = getEffectiveDriver;
 exports.processCreateTemporaryAssignment = processCreateTemporaryAssignment;
 exports.processCancelTemporaryAssignment = processCancelTemporaryAssignment;
 
+// =========================================================================
+// STUDENT STOP-COORDINATE CROWDSOURCING & ADMINISTRATOR REVIEW (Milestone 3)
+// =========================================================================
+
+/**
+ * Core business logic for submitting student stop coordinates.
+ */
+async function processSubmitStopCoordinates(data, context, db = admin.firestore()) {
+  const routeId = data && typeof data.routeId === "string" ? data.routeId.trim() : "";
+  const stopId = data && typeof data.stopId === "string" ? data.stopId.trim() : "";
+  const proposedLat = Number(data && data.proposedLatitude);
+  const proposedLng = Number(data && data.proposedLongitude);
+  const source = data && data.source === "GPS" ? "GPS" : "MANUAL";
+  const accuracyMeters = data && typeof data.accuracyMeters === "number" && !isNaN(data.accuracyMeters) ? data.accuracyMeters : null;
+  const studentNotes = data && typeof data.studentNotes === "string" ? data.studentNotes.trim().slice(0, 500) : null;
+
+  if (!routeId || !stopId) {
+    throw new functions.https.HttpsError("invalid-argument", "routeId and stopId are required.");
+  }
+
+  if (isNaN(proposedLat) || isNaN(proposedLng) || proposedLat < -90 || proposedLat > 90 || proposedLng < -180 || proposedLng > 180) {
+    throw new functions.https.HttpsError("invalid-argument", "Valid geographic coordinates are required (lat [-90, 90], lng [-180, 180]).");
+  }
+
+  if (proposedLat === 0 && proposedLng === 0) {
+    throw new functions.https.HttpsError("invalid-argument", "Coordinates (0, 0) cannot be submitted as a bus stop location.");
+  }
+
+  if (source === "GPS" && accuracyMeters !== null && accuracyMeters < 0) {
+    throw new functions.https.HttpsError("invalid-argument", "GPS accuracy must be a positive number in metres.");
+  }
+
+  // Verify route and stop exist in Firestore
+  const routeRef = db.collection("routes").doc(routeId);
+  const routeDoc = await routeRef.get();
+  if (!routeDoc.exists) {
+    throw new functions.https.HttpsError("not-found", `Route ${routeId} does not exist.`);
+  }
+
+  const routeData = routeDoc.data() || {};
+  const stops = Array.isArray(routeData.stops) ? routeData.stops : [];
+  const targetStop = stops.find((s) => s && s.stopId === stopId);
+  if (!targetStop) {
+    throw new functions.https.HttpsError("not-found", `Stop ${stopId} not found in route ${routeId}.`);
+  }
+
+  // Duplicate / Spam Protection: Check for recent pending submission for the exact same stop within last 10 minutes
+  const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
+  try {
+    const recentSubmissionsQuery = await db.collection("stop_location_submissions")
+      .where("routeId", "==", routeId)
+      .where("stopId", "==", stopId)
+      .where("status", "==", "PENDING")
+      .get();
+
+    let isSpamDuplicate = false;
+    recentSubmissionsQuery.forEach((doc) => {
+      const sData = doc.data() || {};
+      const subTime = sData.submittedAt ? (sData.submittedAt.toMillis ? sData.submittedAt.toMillis() : Number(sData.submittedAt)) : 0;
+      if (subTime > tenMinutesAgo) {
+        const latDiff = Math.abs(sData.proposedLatitude - proposedLat);
+        const lngDiff = Math.abs(sData.proposedLongitude - proposedLng);
+        if (latDiff < 0.00005 && lngDiff < 0.00005) {
+          isSpamDuplicate = true;
+        }
+      }
+    });
+
+    if (isSpamDuplicate) {
+      throw new functions.https.HttpsError(
+        "already-exists",
+        "An identical pending coordinate submission for this bus stop was recently received and is awaiting administrator review."
+      );
+    }
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    console.warn("[processSubmitStopCoordinates] Warning querying recent submissions:", err.message);
+  }
+
+  // Prepare submission document - sanitize and force status to PENDING
+  const submissionData = {
+    routeId,
+    routeName: String(routeData.name || routeId),
+    stopId,
+    stopName: String(targetStop.name || stopId),
+    stopOrder: typeof targetStop.order === "number" ? targetStop.order : 0,
+    proposedLatitude: proposedLat,
+    proposedLongitude: proposedLng,
+    accuracyMeters: accuracyMeters,
+    source,
+    status: "PENDING",
+    submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+    existingLatitude: typeof targetStop.latitude === "number" ? targetStop.latitude : null,
+    existingLongitude: typeof targetStop.longitude === "number" ? targetStop.longitude : null,
+    studentNotes: studentNotes || null,
+    reviewedBy: null,
+    reviewedAt: null,
+    reviewNotes: null,
+    finalLatitude: null,
+    finalLongitude: null,
+  };
+
+  const docRef = await db.collection("stop_location_submissions").add(submissionData);
+  console.log(`[submitStopCoordinates] Submitted proposal ${docRef.id} for route ${routeId}, stop ${stopId}`);
+  return { success: true, submissionId: docRef.id };
+}
+
+/**
+ * Core business logic for reviewing (approving or rejecting) student stop coordinates.
+ */
+async function processReviewStopCoordinateSubmission(data, context, db = admin.firestore()) {
+  // 1. Verify caller authentication
+  if (!context || !context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Authentication is required.");
+  }
+
+  const callerUid = context.auth.uid;
+
+  // 2. Verify caller is active Administrator
+  const callerDoc = await db.collection("users").doc(callerUid).get();
+  if (!callerDoc.exists) {
+    throw new functions.https.HttpsError("permission-denied", "Caller profile not found.");
+  }
+  const callerData = callerDoc.data() || {};
+  if (callerData.role !== "ADMIN" || callerData.active !== true) {
+    throw new functions.https.HttpsError("permission-denied", "Only active administrators can review submissions.");
+  }
+
+  // 3. Validate input parameters
+  const submissionId = data && typeof data.submissionId === "string" ? data.submissionId.trim() : "";
+  const action = data && (data.action === "APPROVE" || data.action === "REJECT") ? data.action : null;
+  const reviewNotes = data && typeof data.reviewNotes === "string" ? data.reviewNotes.trim().slice(0, 1000) : null;
+
+  if (!submissionId || !action) {
+    throw new functions.https.HttpsError("invalid-argument", "Valid submissionId and action (APPROVE or REJECT) are required.");
+  }
+
+  const submissionRef = db.collection("stop_location_submissions").doc(submissionId);
+
+  // 4. Run Transaction
+  return await db.runTransaction(async (transaction) => {
+    const subDoc = await transaction.get(submissionRef);
+    if (!subDoc.exists) {
+      throw new functions.https.HttpsError("not-found", `Submission ${submissionId} not found.`);
+    }
+
+    const subData = subDoc.data() || {};
+    if (subData.status !== "PENDING") {
+      throw new functions.https.HttpsError("failed-precondition", `Submission has already been reviewed (${subData.status}).`);
+    }
+
+    const routeId = subData.routeId;
+    const stopId = subData.stopId;
+    const routeRef = db.collection("routes").doc(routeId);
+    const routeDoc = await transaction.get(routeRef);
+
+    if (!routeDoc.exists) {
+      throw new functions.https.HttpsError("not-found", `Route ${routeId} not found.`);
+    }
+
+    const routeData = routeDoc.data() || {};
+    const stops = Array.isArray(routeData.stops) ? routeData.stops : [];
+    const stopIndex = stops.findIndex((s) => s && s.stopId === stopId);
+
+    if (stopIndex === -1) {
+      throw new functions.https.HttpsError("not-found", `Stop ${stopId} not found in route ${routeId}.`);
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    if (action === "APPROVE") {
+      const adjustedLat = data && typeof data.adjustedLatitude === "number" && !isNaN(data.adjustedLatitude)
+        ? data.adjustedLatitude
+        : subData.proposedLatitude;
+      const adjustedLng = data && typeof data.adjustedLongitude === "number" && !isNaN(data.adjustedLongitude)
+        ? data.adjustedLongitude
+        : subData.proposedLongitude;
+
+      if (adjustedLat < -90 || adjustedLat > 90 || adjustedLng < -180 || adjustedLng > 180 || (adjustedLat === 0 && adjustedLng === 0)) {
+        throw new functions.https.HttpsError("invalid-argument", "Invalid approval coordinates.");
+      }
+
+      // Update matching stop in array, strictly preserving all other properties and order
+      const updatedStops = stops.map((item, idx) => {
+        if (idx === stopIndex) {
+          return {
+            ...item,
+            latitude: adjustedLat,
+            longitude: adjustedLng,
+            visibleOnMap: true,
+          };
+        }
+        return item;
+      });
+
+      // Write updated stops array to route
+      transaction.update(routeRef, {
+        stops: updatedStops,
+        updatedAt: now,
+      });
+
+      // Update submission status to APPROVED
+      transaction.update(submissionRef, {
+        status: "APPROVED",
+        finalLatitude: adjustedLat,
+        finalLongitude: adjustedLng,
+        reviewedBy: callerUid,
+        reviewedAt: now,
+        reviewNotes: reviewNotes || null,
+      });
+
+      console.log(`[reviewStopCoordinateSubmission] APPROVED submission ${submissionId} for route ${routeId}, stop ${stopId} (${adjustedLat}, ${adjustedLng})`);
+      return { success: true, action: "APPROVED", submissionId, routeId, stopId };
+    } else {
+      // REJECT action: never touch route coordinates
+      transaction.update(submissionRef, {
+        status: "REJECTED",
+        reviewedBy: callerUid,
+        reviewedAt: now,
+        reviewNotes: reviewNotes || null,
+      });
+
+      console.log(`[reviewStopCoordinateSubmission] REJECTED submission ${submissionId} for route ${routeId}, stop ${stopId}`);
+      return { success: true, action: "REJECTED", submissionId, routeId, stopId };
+    }
+  });
+}
+
+// HTTPS Callable exports
+exports.submitStopCoordinates = regionalFunctions.https.onCall(async (data, context) => {
+  return processSubmitStopCoordinates(data, context);
+});
+
+exports.reviewStopCoordinateSubmission = regionalFunctions.https.onCall(async (data, context) => {
+  return processReviewStopCoordinateSubmission(data, context);
+});
+
+exports.processSubmitStopCoordinates = processSubmitStopCoordinates;
+exports.processReviewStopCoordinateSubmission = processReviewStopCoordinateSubmission;
+
+
 
