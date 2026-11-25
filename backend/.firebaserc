@@ -1,5 +1,22 @@
 {
   "projects": {
-    "default": "college-bus-tracker-prod"
+    "default": "college-bus-tracker-prod",
+    "staging": "college-bus-tracker-staging"
+  },
+  "targets": {
+    "college-bus-tracker-prod": {
+      "hosting": {
+        "prod": [
+          "college-bus-tracker-prod"
+        ]
+      }
+    },
+    "college-bus-tracker-staging": {
+      "hosting": {
+        "staging": [
+          "college-bus-tracker-staging"
+        ]
+      }
+    }
   }
 }

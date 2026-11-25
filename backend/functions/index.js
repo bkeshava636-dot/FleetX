@@ -1,11 +1,14 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { FieldValue } = require("firebase-admin/firestore");
+const crypto = require("crypto");
 
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
 const regionalFunctions = functions.region("asia-south1");
+const ENFORCE_APP_CHECK = process.env.ENFORCE_APP_CHECK !== "false";
 
 /**
  * Sanitizes strings for valid FCM topic format: [a-zA-Z0-9-_.~%]+
@@ -145,7 +148,7 @@ async function processBusSwapWrite(change, context, db = admin.firestore(), mess
     if (change.after.ref && typeof change.after.ref.update === "function") {
       await change.after.ref.update({
         cancellationNotified: true,
-        cancellationNotifiedAt: admin.firestore.FieldValue.serverTimestamp()
+        cancellationNotifiedAt: FieldValue.serverTimestamp()
       });
     }
 
@@ -278,8 +281,8 @@ async function processBusSwapWrite(change, context, db = admin.firestore(), mess
 
   if (successfullySentStops.length > 0 && change.after.ref && typeof change.after.ref.update === "function") {
     await change.after.ref.update({
-      notifiedStopIds: isReplacementChanged ? successfullySentStops : admin.firestore.FieldValue.arrayUnion(...successfullySentStops),
-      notificationSentAt: admin.firestore.FieldValue.serverTimestamp()
+      notifiedStopIds: isReplacementChanged ? successfullySentStops : FieldValue.arrayUnion(...successfullySentStops),
+      notificationSentAt: FieldValue.serverTimestamp()
     });
   }
 
@@ -307,7 +310,7 @@ exports.onBusSwapWritten = regionalFunctions.firestore
  * Hardened with App Check and authoritative Firestore / RTDB unassignment cleanup.
  */
 exports.deleteDriverAccount = regionalFunctions
-  .runWith({ enforceAppCheck: true })
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
   .https.onCall(async (data, context) => {
     return processDeleteDriverAccount(data, context);
   });
@@ -318,7 +321,9 @@ exports.deleteDriverAccount = regionalFunctions
  * Allows an authenticated active Administrator to update a driver's Firebase Auth login email
  * while strictly preserving their UID, password, and account history.
  */
-exports.updateDriverEmail = regionalFunctions.https.onCall(async (data, context) => {
+exports.updateDriverEmail = regionalFunctions
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
+  .https.onCall(async (data, context) => {
   // 1. Verify caller authentication
   if (!context.auth) {
     throw new functions.https.HttpsError(
@@ -418,21 +423,192 @@ function sendPasswordResetEmailViaRest(email) {
 }
 
 /**
+ * Evaluates whether an IP address belongs to loopback, private RFC1918, link-local, or documentation ranges.
+ */
+function isPrivateOrInternalIp(ip) {
+  if (!ip || typeof ip !== "string") return true;
+  const clean = ip.replace(/^::ffff:/, "").trim().toLowerCase();
+  if (clean === "127.0.0.1" || clean === "::1" || clean === "localhost" || clean === "0.0.0.0") return true;
+  // RFC 1918 (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) and RFC 3927 (169.254.0.0/16 link-local)
+  if (/^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|169\.254\.)/.test(clean)) return true;
+  // Unique local IPv6 (fc00::/7) or link-local (fe80::/10)
+  if (/^(fc|fd|fe80)/i.test(clean)) return true;
+  return false;
+}
+
+/**
+ * Resolves a trusted client IP address from the HTTPS Callable context.
+ * 
+ * Security Invariants:
+ * - Never blindly trusts client-supplied leftmost X-Forwarded-For values.
+ * - Prioritizes Google Cloud infrastructure-injected headers ('x-appengine-user-ip', 'fastly-client-ip').
+ * - In local emulator / test environments, allows loopback.
+ * - If multiple hops exist in X-Forwarded-For without trusted upstream, extracts the rightmost non-internal hop.
+ * - If no trusted IP can be resolved, returns null so rate limiting can fallback
+ *   to an isolated per-identifier bucket rather than a single shared bucket.
+ */
+function getClientIp(context) {
+  if (!context || !context.rawRequest) {
+    return null;
+  }
+  const headers = context.rawRequest.headers || {};
+
+  // 1. Google Cloud App Engine / Cloud Functions edge-authenticated client IP (GFE verified)
+  const appEngineIp = headers["x-appengine-user-ip"];
+  if (appEngineIp && typeof appEngineIp === "string" && appEngineIp.trim().length > 0) {
+    const clean = appEngineIp.replace(/^::ffff:/, "").trim();
+    if (!isPrivateOrInternalIp(clean)) {
+      return clean;
+    }
+  }
+
+  // 2. Inspect X-Forwarded-For conservatively
+  // Google Front End and standard reverse proxies append the connecting client IP at the end of the chain.
+  // We extract the rightmost non-internal hop, discarding any client-injected leftmost prefixes.
+  const xForwardedFor = headers["x-forwarded-for"] || headers["X-Forwarded-For"];
+  if (xForwardedFor && typeof xForwardedFor === "string") {
+    const hops = xForwardedFor.split(",").map(h => h.trim().replace(/^::ffff:/, "")).filter(Boolean);
+    const nonInternal = hops.filter(h => !isPrivateOrInternalIp(h));
+    if (nonInternal.length > 0) {
+      return nonInternal[nonInternal.length - 1];
+    }
+  }
+
+  // 3. Fastly CDN edge header (Firebase Hosting rewrites)
+  const fastlyIp = headers["fastly-client-ip"];
+  if (fastlyIp && typeof fastlyIp === "string" && fastlyIp.trim().length > 0) {
+    const clean = fastlyIp.replace(/^::ffff:/, "").trim();
+    if (!isPrivateOrInternalIp(clean)) {
+      return clean;
+    }
+  }
+
+  // 4. Cloudflare connecting IP (if proxied via Cloudflare)
+  const cfIp = headers["cf-connecting-ip"];
+  if (cfIp && typeof cfIp === "string" && cfIp.trim().length > 0) {
+    const clean = cfIp.replace(/^::ffff:/, "").trim();
+    if (!isPrivateOrInternalIp(clean)) {
+      return clean;
+    }
+  }
+
+  // 5. Direct socket remote address (only return if non-internal public IP)
+  const reqIp = context.rawRequest.ip || (context.rawRequest.socket && context.rawRequest.socket.remoteAddress);
+  if (reqIp && typeof reqIp === "string" && reqIp.trim().length > 0) {
+    const cleanReqIp = reqIp.replace(/^::ffff:/, "").trim();
+    if (!isPrivateOrInternalIp(cleanReqIp)) {
+      return cleanReqIp;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Atomic server-side rate limiter using Firestore transactions.
+ * Uses the internal 'security_rate_limits' collection.
+ */
+async function checkRateLimit(key, maxAttempts, windowMs, db = admin.firestore()) {
+  const safeDocId = key.replace(/[^a-zA-Z0-9_-]/g, "_").substring(0, 100);
+  const rateLimitRef = db.collection("security_rate_limits").doc(safeDocId);
+  const now = Date.now();
+
+  return await db.runTransaction(async (transaction) => {
+    const doc = await transaction.get(rateLimitRef);
+    if (!doc.exists) {
+      transaction.set(rateLimitRef, {
+        attempts: 1,
+        firstAttempt: now,
+        lastAttempt: now,
+        expiresAt: new Date(now + windowMs)
+      });
+      return { allowed: true, remaining: maxAttempts - 1 };
+    }
+
+    const data = doc.data() || {};
+    const firstAttempt = typeof data.firstAttempt === "number" ? data.firstAttempt : now;
+    const elapsed = now - firstAttempt;
+
+    if (elapsed > windowMs) {
+      // Window expired, reset counter
+      transaction.set(rateLimitRef, {
+        attempts: 1,
+        firstAttempt: now,
+        lastAttempt: now,
+        expiresAt: new Date(now + windowMs)
+      });
+      return { allowed: true, remaining: maxAttempts - 1 };
+    }
+
+    if (data.attempts >= maxAttempts) {
+      return {
+        allowed: false,
+        remaining: 0,
+        retryAfterMs: Math.max(0, windowMs - elapsed)
+      };
+    }
+
+    const nextAttempts = (typeof data.attempts === "number" ? data.attempts : 1) + 1;
+    transaction.update(rateLimitRef, {
+      attempts: nextAttempts,
+      lastAttempt: now
+    });
+    return { allowed: true, remaining: maxAttempts - nextAttempts };
+  });
+}
+
+/**
  * resolveAdminLogin
  * Secure server-side HTTPS Callable Cloud Function for Admin ID -> Firebase Auth Email Resolution.
  * Allows an unauthenticated client to resolve an Admin ID (e.g. 'admin26') strictly to the real
- * Firebase Auth email ('bkeshava636@gmail.com') without exposing Firestore profile records.
+ * Firebase Auth email without exposing Firestore profile records or enabling account enumeration.
+ * 
+ * Security Protections:
+ * - Server-side atomic rate limiting per IP (or isolated per-id fallback when IP is unresolvable).
+ * - Never returns personal external email addresses (e.g. @gmail.com) to unauthenticated callers.
+ * - Uniform fallback email returned for non-existent, inactive, non-admin, or external-email accounts.
+ * - Prevents username/staff ID enumeration: identical response pattern across all states.
  */
 exports.resolveAdminLogin = regionalFunctions.https.onCall(async (data, context) => {
-  const adminId = data && data.adminId ? String(data.adminId).trim().toLowerCase() : null;
-  if (!adminId) {
+  const rawAdminId = data && data.adminId ? String(data.adminId).trim() : "";
+  if (!rawAdminId || rawAdminId.length > 100) {
     throw new functions.https.HttpsError(
       "invalid-argument",
       "Administrator ID must be provided."
     );
   }
+  const adminId = rawAdminId.toLowerCase();
 
-  // Look up admin profile in Firestore using Firebase Admin SDK
+  // 1. Server-side Rate Limiting (10 requests per 5 minutes per IP or isolated per-ID fallback)
+  const clientIp = getClientIp(context);
+  let rateLimitKey;
+  if (clientIp) {
+    const ipHash = crypto.createHash("sha256").update(clientIp).digest("hex").substring(0, 16);
+    rateLimitKey = `login_res_ip_${ipHash}`;
+  } else {
+    // Isolated fallback: missing IP uses an identifier-specific bucket to prevent DoS for other users
+    const idHash = crypto.createHash("sha256").update(adminId).digest("hex").substring(0, 16);
+    rateLimitKey = `login_res_id_${idHash}`;
+  }
+
+  try {
+    const rateCheck = await checkRateLimit(rateLimitKey, 10, 5 * 60 * 1000);
+    if (!rateCheck.allowed) {
+      console.warn(`[resolveAdminLogin] Rate limit exceeded (key=${rateLimitKey})`);
+      throw new functions.https.HttpsError(
+        "resource-exhausted",
+        "Too many login resolution requests. Please try again later."
+      );
+    }
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    console.error("[resolveAdminLogin] Rate limit check error:", err);
+  }
+
+  // 2. Uniform fallback email to prevent account enumeration
+  const uniformFallbackEmail = adminId.includes("@") ? adminId : `${adminId}@collegebus.internal`;
+
+  // 3. Look up admin profile in Firestore using Firebase Admin SDK
   let querySnapshot = await admin.firestore().collection("users")
     .where("customId", "==", adminId)
     .limit(1)
@@ -445,35 +621,31 @@ exports.resolveAdminLogin = regionalFunctions.https.onCall(async (data, context)
       .get();
   }
 
+  // If user does not exist, return uniform email to prevent account enumeration
   if (querySnapshot.empty) {
-    // If not found, return generic error or fallback internal email for direct Firebase Auth check
-    if (adminId.includes("@")) {
-      return { email: adminId };
-    }
-    return { email: `${adminId}@collegebus.internal` };
+    return { email: uniformFallbackEmail };
   }
 
   const userDoc = querySnapshot.docs[0];
   const userData = userDoc.data() || {};
 
-  // Verify role is strictly ADMIN
-  if (userData.role !== "ADMIN") {
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Unauthorized: Account does not have ADMIN privileges."
-    );
+  // If user is NOT an active ADMIN, return uniform fallback email to prevent enumeration
+  // and status leakage (does NOT reveal role or deactivation status)
+  if (userData.role !== "ADMIN" || userData.active !== true) {
+    return { email: uniformFallbackEmail };
   }
 
-  // Verify account is active
-  if (userData.active !== true) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "Account is deactivated. Contact Administrator."
-    );
+  const registeredEmail = userData.email ? String(userData.email).trim() : "";
+
+  // Never disclose personal external email addresses (e.g. @gmail.com) to unauthenticated callers.
+  // Only internal organization emails (@collegebus.internal) are returned.
+  if (registeredEmail && registeredEmail.toLowerCase().endsWith("@collegebus.internal")) {
+    return { email: registeredEmail };
   }
 
-  const realEmail = userData.email || (adminId.includes("@") ? adminId : `${adminId}@collegebus.internal`);
-  return { email: String(realEmail).trim() };
+  // If the admin account uses an external personal email, return the uniform fallback internal email
+  // to prevent personal email extraction while maintaining anti-enumeration.
+  return { email: uniformFallbackEmail };
 });
 
 /**
@@ -481,16 +653,63 @@ exports.resolveAdminLogin = regionalFunctions.https.onCall(async (data, context)
  * Secure server-side HTTPS Callable Cloud Function for Admin Password Recovery.
  * Resolves Admin ID to registered external email and triggers Firebase password reset email.
  * Always returns a generic confirmation response to prevent account enumeration.
+ * 
+ * Security Protections:
+ * - IP rate limiting (max 5 requests / 15 minutes, with isolated per-id fallback) prevents service abuse.
+ * - Account rate limiting (max 3 emails / 1 hour) prevents email flooding attacks against administrators.
+ * - Generic confirmation response regardless of account existence or status.
  */
 exports.requestAdminPasswordReset = regionalFunctions.https.onCall(async (data, context) => {
-  const adminId = data && data.adminId ? String(data.adminId).trim().toLowerCase() : null;
   const genericResponse = {
     success: true,
     message: "If an active administrator account exists, a password reset email has been sent."
   };
 
-  if (!adminId) {
+  const rawAdminId = data && data.adminId ? String(data.adminId).trim() : "";
+  if (!rawAdminId || rawAdminId.length > 100) {
     return genericResponse;
+  }
+  const adminId = rawAdminId.toLowerCase();
+
+  // 1. IP-level Rate Limiting: max 5 requests per 15 minutes
+  const clientIp = getClientIp(context);
+  let ipRateLimitKey;
+  if (clientIp) {
+    const ipHash = crypto.createHash("sha256").update(clientIp).digest("hex").substring(0, 16);
+    ipRateLimitKey = `pwd_reset_ip_${ipHash}`;
+  } else {
+    const idHash = crypto.createHash("sha256").update(adminId).digest("hex").substring(0, 16);
+    ipRateLimitKey = `pwd_reset_id_${idHash}`;
+  }
+
+  try {
+    const ipCheck = await checkRateLimit(ipRateLimitKey, 5, 15 * 60 * 1000);
+    if (!ipCheck.allowed) {
+      console.warn(`[requestAdminPasswordReset] IP rate limit exceeded (key=${ipRateLimitKey})`);
+      throw new functions.https.HttpsError(
+        "resource-exhausted",
+        "Too many password reset requests. Please try again later."
+      );
+    }
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    console.error("[requestAdminPasswordReset] Rate limit check error:", err);
+  }
+
+  // 2. Account-level Rate Limiting: max 3 reset emails per 1 hour per adminId
+  // Protects against flooding an administrator's inbox
+  const idHash = crypto.createHash("sha256").update(adminId).digest("hex").substring(0, 16);
+  const idRateLimitKey = `pwd_reset_acc_${idHash}`;
+
+  try {
+    const idCheck = await checkRateLimit(idRateLimitKey, 3, 60 * 60 * 1000);
+    if (!idCheck.allowed) {
+      console.warn(`[requestAdminPasswordReset] Account rate limit exceeded for ${adminId}. Suppressing email.`);
+      // Return generic response without sending email to prevent email flooding
+      return genericResponse;
+    }
+  } catch (err) {
+    console.error("[requestAdminPasswordReset] Account rate limit check error:", err);
   }
 
   try {
@@ -517,7 +736,11 @@ exports.requestAdminPasswordReset = regionalFunctions.https.onCall(async (data, 
       return genericResponse;
     }
 
-    const targetEmail = userData.email ? String(userData.email).trim() : (adminId.includes("@") ? adminId : null);
+    // Support verified external recoveryEmail field:
+    // If recoveryEmail is present and valid, use it for dispatching the password reset link.
+    // Otherwise fallback to external registered email if available.
+    const rawTarget = userData.recoveryEmail || userData.email || (adminId.includes("@") ? adminId : null);
+    const targetEmail = rawTarget ? String(rawTarget).trim() : null;
     if (!targetEmail || targetEmail.endsWith("@collegebus.internal")) {
       console.log(`[requestAdminPasswordReset] Target email is internal or empty: ${targetEmail}`);
       return genericResponse;
@@ -538,7 +761,7 @@ exports.requestAdminPasswordReset = regionalFunctions.https.onCall(async (data, 
  * Hardened with App Check and role verification.
  */
 exports.resetDriverPassword = regionalFunctions
-  .runWith({ enforceAppCheck: true })
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
   .https.onCall(async (data, context) => {
     return processResetDriverPassword(data, context);
   });
@@ -1132,7 +1355,6 @@ async function processCreateTemporaryAssignment(data, callerUid, db = admin.fire
     replacementDriverId: String(replacement.customId || replacementDriverUid).trim(),
     replacementDriverUid: String(replacementDriverUid).trim(),
     replacementDriverName: String(replacement.name || "Driver").trim(),
-    replacementDriverPhone: replacement.phoneNumber || null,
     reason,
     startAt,
     endAt,
@@ -1277,47 +1499,114 @@ async function processCancelTemporaryAssignment(assignmentId, callerUid, db = ad
 }
 
 /**
- * HTTPS Callable Cloud Function for creating a temporary driver replacement.
+ * Verifies that the request context has a cryptographically validated App Check token.
  */
-exports.createTemporaryAssignment = regionalFunctions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Authentication is required.");
+function verifyAppCheck(context) {
+  const isAppCheckValid = Boolean(context && context.app && typeof context.app.appId === "string" && context.app.appId.trim().length > 0);
+  if (!isAppCheckValid) {
+    if (!ENFORCE_APP_CHECK) {
+      console.warn("[AppCheck Monitoring] Allowing unverified callable while ENFORCE_APP_CHECK=false.");
+      return;
+    }
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "App Check verification failed. This request must originate from an App Check verified client."
+    );
   }
-  try {
-    return await processCreateTemporaryAssignment(data, context.auth.uid, admin.firestore(), admin.database());
-  } catch (err) {
-    console.error("[createTemporaryAssignment] Error:", err.message);
-    throw new functions.https.HttpsError("invalid-argument", err.message);
-  }
-});
+}
+
+/**
+ * HTTPS Callable Cloud Function for creating a temporary driver replacement.
+ * Hardened with App Check and authentication verification.
+ */
+exports.createTemporaryAssignment = regionalFunctions
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
+  .https.onCall(async (data, context) => {
+    verifyAppCheck(context);
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Authentication is required.");
+    }
+    try {
+      return await processCreateTemporaryAssignment(data, context.auth.uid, admin.firestore(), admin.database());
+    } catch (err) {
+      if (err instanceof functions.https.HttpsError) throw err;
+      console.error("[createTemporaryAssignment] Error:", err.message);
+      throw new functions.https.HttpsError("invalid-argument", err.message);
+    }
+  });
 
 /**
  * HTTPS Callable Cloud Function for cancelling a temporary driver replacement.
+ * Hardened with App Check and authentication verification.
  */
-exports.cancelTemporaryAssignment = regionalFunctions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Authentication is required.");
-  }
-  const assignmentId = data && data.assignmentId ? String(data.assignmentId).trim() : null;
-  try {
-    return await processCancelTemporaryAssignment(assignmentId, context.auth.uid, admin.firestore(), admin.database());
-  } catch (err) {
-    console.error("[cancelTemporaryAssignment] Error:", err.message);
-    throw new functions.https.HttpsError("invalid-argument", err.message);
-  }
-});
+exports.cancelTemporaryAssignment = regionalFunctions
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
+  .https.onCall(async (data, context) => {
+    verifyAppCheck(context);
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Authentication is required.");
+    }
+    const assignmentId = data && data.assignmentId ? String(data.assignmentId).trim() : null;
+    try {
+      return await processCancelTemporaryAssignment(assignmentId, context.auth.uid, admin.firestore(), admin.database());
+    } catch (err) {
+      if (err instanceof functions.https.HttpsError) throw err;
+      console.error("[cancelTemporaryAssignment] Error:", err.message);
+      throw new functions.https.HttpsError("invalid-argument", err.message);
+    }
+  });
 
 /**
- * HTTPS Callable Cloud Function for resolving the authoritative effective driver.
+ * Pure testable logic for getEffectiveDriver callable.
+ * Enforces authentication, active staff role (ADMIN or DRIVER), and strips phone PII.
  */
-exports.getEffectiveDriver = regionalFunctions.https.onCall(async (data, context) => {
+async function processGetEffectiveDriver(data, context, db = admin.firestore()) {
+  verifyAppCheck(context);
+  if (!context || !context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Authentication is required.");
+  }
+
+  const callerDoc = await db.collection("users").doc(context.auth.uid).get();
+  if (!callerDoc.exists) {
+    throw new functions.https.HttpsError("permission-denied", "Caller authorization profile not found.");
+  }
+  const caller = callerDoc.data() || {};
+  if (caller.active !== true || (caller.role !== "ADMIN" && caller.role !== "DRIVER")) {
+    throw new functions.https.HttpsError("permission-denied", "Only active staff members may resolve effective operators.");
+  }
+
   const busId = data && data.busId ? String(data.busId).trim() : null;
   const currentTime = data && data.currentTime ? Number(data.currentTime) : Date.now();
   if (!busId) {
     throw new functions.https.HttpsError("invalid-argument", "Bus ID is required.");
   }
-  return await getEffectiveDriver(busId, currentTime, admin.firestore());
-});
+
+  const resolved = await getEffectiveDriver(busId, currentTime, db);
+  if (!resolved) return null;
+
+  return {
+    busId: resolved.busId,
+    isTemporary: resolved.isTemporary,
+    driverId: resolved.driverId,
+    driverName: resolved.driverName,
+    effectiveDriverUid: resolved.effectiveDriverUid,
+    effectiveDriverName: resolved.effectiveDriverName,
+    startAt: resolved.startAt,
+    endAt: resolved.endAt,
+    temporaryAssignmentId: resolved.temporaryAssignmentId,
+    operatorEpoch: resolved.operatorEpoch
+  };
+}
+
+/**
+ * HTTPS Callable Cloud Function for resolving the authoritative effective driver.
+ * Hardened with App Check and authenticated staff verification.
+ */
+exports.getEffectiveDriver = regionalFunctions
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
+  .https.onCall(async (data, context) => {
+    return await processGetEffectiveDriver(data, context, admin.firestore());
+  });
 
 /**
  * Firestore Trigger on temporary_assignments/{assignmentId}
@@ -1592,7 +1881,9 @@ exports.isDuplicateWrite = isDuplicateWrite;
 exports.processStudentFallbackWrite = processStudentFallbackWrite;
 exports.DRIVER_STALE_THRESHOLD_MS = DRIVER_STALE_THRESHOLD_MS;
 exports.STUDENT_STALE_THRESHOLD_MS = STUDENT_STALE_THRESHOLD_MS;
-exports.getEffectiveDriver = getEffectiveDriver;
+exports.resolveEffectiveDriver = getEffectiveDriver;
+exports.processGetEffectiveDriver = processGetEffectiveDriver;
+exports.syncPublicDriverDirectory = syncPublicDriverDirectory;
 exports.processCreateTemporaryAssignment = processCreateTemporaryAssignment;
 exports.processCancelTemporaryAssignment = processCancelTemporaryAssignment;
 
@@ -1612,13 +1903,13 @@ exports.processCancelTemporaryAssignment = processCancelTemporaryAssignment;
 async function processSubmitStopCoordinates(data, context, db = admin.firestore()) {
   // 1. App Check Enforcement
   // Enforces that the request originates from an authentic App Check verified client.
-  // In automated test environments without live tokens, bypass if context.app is explicitly mock-provided or process.env.BYPASS_APP_CHECK_FOR_TESTS === 'true'.
-  const isAppCheckValid = context && context.app && context.app.appId;
-  const bypassForTests = process.env.BYPASS_APP_CHECK_FOR_TESTS === "true";
+  // Context MUST contain a valid decoded App Check token with a non-empty appId.
+  // Merely supplying an X-Firebase-AppCheck header is strictly rejected.
+  const isAppCheckValid = Boolean(context && context.app && typeof context.app.appId === "string" && context.app.appId.trim().length > 0);
 
-  if (!isAppCheckValid && !bypassForTests) {
+  if (!isAppCheckValid) {
     throw new functions.https.HttpsError(
-      "failed-precondition",
+      "unauthenticated",
       "App Check verification failed. All student submissions must originate from an App Check verified client."
     );
   }
@@ -1727,7 +2018,7 @@ async function processSubmitStopCoordinates(data, context, db = admin.firestore(
     accuracyMeters: validatedAccuracy,
     source: rawSource,
     status: "PENDING", // STRICTLY FORCED
-    submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+    submittedAt: FieldValue.serverTimestamp(),
     existingLatitude: typeof targetStop.latitude === "number" ? targetStop.latitude : null,
     existingLongitude: typeof targetStop.longitude === "number" ? targetStop.longitude : null,
     studentNotes: studentNotes || null,
@@ -1814,7 +2105,7 @@ async function processReviewStopCoordinateSubmission(data, context, db = admin.f
       throw new functions.https.HttpsError("not-found", `Stop ${stopId} not found in route ${routeId}.`);
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
 
     if (action === "APPROVE") {
       const adjustedLat = data && typeof data.adjustedLatitude === "number" && !isNaN(data.adjustedLatitude)
@@ -1876,12 +2167,13 @@ async function processReviewStopCoordinateSubmission(data, context, db = admin.f
 
 // HTTPS Callable exports with App Check configuration
 exports.submitStopCoordinates = regionalFunctions
-  .runWith({ enforceAppCheck: true })
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
   .https.onCall(async (data, context) => {
     return processSubmitStopCoordinates(data, context);
   });
 
 exports.reviewStopCoordinateSubmission = regionalFunctions
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
   .https.onCall(async (data, context) => {
     return processReviewStopCoordinateSubmission(data, context);
   });
@@ -2044,34 +2336,141 @@ async function syncAssignmentToRtdb({ busId, driverUid, driverName, previousDriv
     }
   }
 
-  // 3. Update RTDB /bus_operators/{busId} preserving temporary replacement fields
+  // 3. Update RTDB /bus_operators/{busId} preserving temporary replacement fields atomically
   try {
     const opRef = rtdb.ref(`bus_operators/${busId}`);
-    const snap = await opRef.get();
-    const existing = snap.val() || {};
+    let committedVersion = ver;
 
-    const updatePayload = {
-      busId: busId,
-      permanentDriverUid: driverUid || null,
-      assignmentVersion: ver,
-      operatorEpoch: now
-    };
+    if (typeof opRef.transaction === "function") {
+      const txResult = await opRef.transaction((existing) => {
+        const current = existing || {};
+        const currentVersion = Number(current.assignmentVersion) || 0;
 
-    if (existing.hasTemporary === true) {
-      updatePayload.hasTemporary = true;
-      updatePayload.temporaryDriverUid = existing.temporaryDriverUid || null;
-      updatePayload.startAt = existing.startAt || 0;
-      updatePayload.endAt = existing.endAt || 0;
-      if (existing.temporaryAssignmentId) {
-        updatePayload.temporaryAssignmentId = existing.temporaryAssignmentId;
+        // Discard stale out-of-order write
+        if (ver > 0 && ver < currentVersion) {
+          return; // Abort transaction without updating
+        }
+
+        // Monotonic progression
+        committedVersion = Math.max(ver, currentVersion + 1);
+
+        const updatePayload = {
+          busId: busId,
+          permanentDriverUid: driverUid || null,
+          assignmentVersion: committedVersion,
+          operatorEpoch: now
+        };
+
+        if (current.hasTemporary === true) {
+          updatePayload.hasTemporary = true;
+          updatePayload.temporaryDriverUid = current.temporaryDriverUid || null;
+          updatePayload.startAt = current.startAt || 0;
+          updatePayload.endAt = current.endAt || 0;
+          if (current.temporaryAssignmentId) {
+            updatePayload.temporaryAssignmentId = current.temporaryAssignmentId;
+          }
+        }
+
+        return updatePayload;
+      });
+
+      console.log(`[syncAssignmentToRtdb] Atomically synced RTDB bus_operators/${busId} (permDriver=${driverUid}, ver=${committedVersion})`);
+      return { success: txResult ? txResult.committed : true, version: committedVersion };
+    } else {
+      const snap = await opRef.get();
+      const existing = snap.val() || {};
+      const currentVersion = Number(existing.assignmentVersion) || 0;
+
+      if (ver > 0 && ver < currentVersion) {
+        console.warn(`[syncAssignmentToRtdb] Skipping stale write for ${busId} (ver ${ver} < current ${currentVersion})`);
+        return { success: false, version: currentVersion };
       }
-    }
 
-    await opRef.update(updatePayload);
-    console.log(`[syncAssignmentToRtdb] Synced RTDB bus_operators/${busId} (permDriver=${driverUid}, ver=${ver})`);
+      committedVersion = Math.max(ver, currentVersion + 1);
+
+      const updatePayload = {
+        busId: busId,
+        permanentDriverUid: driverUid || null,
+        assignmentVersion: committedVersion,
+        operatorEpoch: now
+      };
+
+      if (existing.hasTemporary === true) {
+        updatePayload.hasTemporary = true;
+        updatePayload.temporaryDriverUid = existing.temporaryDriverUid || null;
+        updatePayload.startAt = existing.startAt || 0;
+        updatePayload.endAt = existing.endAt || 0;
+        if (existing.temporaryAssignmentId) {
+          updatePayload.temporaryAssignmentId = existing.temporaryAssignmentId;
+        }
+      }
+
+      await opRef.update(updatePayload);
+      console.log(`[syncAssignmentToRtdb] Synced RTDB bus_operators/${busId} (permDriver=${driverUid}, ver=${committedVersion})`);
+      return { success: true, version: committedVersion };
+    }
   } catch (e) {
     console.error(`[syncAssignmentToRtdb] Error updating RTDB bus_operators/${busId}:`, e.message);
     throw e;
+  }
+}
+
+/**
+ * Idempotently synchronizes a driver's public presence in 'public_driver_directory'.
+ * 
+ * Fields published (strictly minimal, privacy-conscious):
+ * - driverId: string (custom staff ID or UID)
+ * - driverName: string (display name)
+ * - assignedBusId: string | null (only if the assigned bus is active)
+ * - active: boolean (true)
+ * - updatedAt: number (timestamp)
+ * 
+ * Privacy invariants:
+ * - Personal emails, phone numbers, Auth UIDs, credentials, and metadata are NEVER written.
+ * - Inactive or deleted drivers are removed from the collection.
+ */
+async function syncPublicDriverDirectory(driverUid, db = admin.firestore()) {
+  if (!driverUid) return;
+  const safeDriverUid = String(driverUid).trim();
+  const dirRef = db.collection("public_driver_directory").doc(safeDriverUid);
+
+  try {
+    const userDoc = await db.collection("users").doc(safeDriverUid).get();
+    if (!userDoc.exists) {
+      // Driver was deleted: remove public directory record
+      await dirRef.delete().catch(() => {});
+      return;
+    }
+
+    const userData = userDoc.data() || {};
+    if (userData.role !== "DRIVER" || userData.active !== true) {
+      // Inactive or not a driver: remove public directory record
+      await dirRef.delete().catch(() => {});
+      return;
+    }
+
+    const assignedBusId = userData.assignedBusId ? String(userData.assignedBusId).trim() : null;
+    let isBusActive = false;
+
+    if (assignedBusId) {
+      const busDoc = await db.collection("buses").doc(assignedBusId).get();
+      if (busDoc.exists && busDoc.data().active !== false) {
+        isBusActive = true;
+      }
+    }
+
+    const publicEntry = {
+      driverId: userData.customId || safeDriverUid,
+      driverName: userData.name || "Driver",
+      assignedBusId: isBusActive ? assignedBusId : null,
+      active: true,
+      updatedAt: Date.now()
+    };
+
+    await dirRef.set(publicEntry);
+    console.log(`[syncPublicDriverDirectory] Synced public entry for driver ${safeDriverUid} (bus=${publicEntry.assignedBusId})`);
+  } catch (err) {
+    console.error(`[syncPublicDriverDirectory] Failed to sync driver ${safeDriverUid}:`, err.message);
   }
 }
 
@@ -2174,6 +2573,9 @@ async function processCreateDriverAccount(data, context, dependencies = {}) {
       }
     }
 
+    // Synchronize to public driver directory
+    await syncPublicDriverDirectory(newUid, db);
+
     console.log(`[createDriverAccount] Successfully created driver ${newUid} (${cleanId})`);
     return {
       success: true,
@@ -2224,6 +2626,8 @@ async function processSetBusDriverAssignment(data, context, dependencies = {}) {
   let assignedDriverName = null;
   let previousDriverId = null;
   let newBusVersion = 1;
+  let transferredFromBusId = null;
+  let transferredFromBusVersion = 0;
 
   // Atomic Firestore Transaction
   await db.runTransaction(async (transaction) => {
@@ -2258,22 +2662,42 @@ async function processSetBusDriverAssignment(data, context, dependencies = {}) {
 
       // Move scenario: If driver is currently assigned to a different bus, clear old bus
       if (driverData.assignedBusId && driverData.assignedBusId !== busId) {
+        transferredFromBusId = driverData.assignedBusId;
         const oldBusRef = db.collection("buses").doc(driverData.assignedBusId);
         const oldBusDoc = await transaction.get(oldBusRef);
         if (oldBusDoc.exists) {
-          const oldBusVer = (oldBusDoc.data().assignmentVersion || 0) + 1;
+          transferredFromBusVersion = (oldBusDoc.data().assignmentVersion || 0) + 1;
           transaction.update(oldBusRef, {
             driverId: null,
             driverName: null,
-            assignmentVersion: oldBusVer,
+            assignmentVersion: transferredFromBusVersion,
             assignmentEpoch: now,
             rtdbSyncStatus: "PENDING"
           });
         }
       }
 
-      // Replace scenario: If this bus already had a different driver, unassign previous driver
+      // Replace scenario: If this bus already had a different driver, enforce explicit confirmation & conflict checks
       if (previousDriverId && previousDriverId !== driverUid) {
+        const confirmReplacement = Boolean(data && (data.confirmReplacement || data.confirmReplaceDriver));
+        if (!confirmReplacement) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            `Bus '${busId}' already has an assigned driver ('${busData.driverName || previousDriverId}'). Explicit confirmation is required to replace the existing driver.`
+          );
+        }
+
+        // Stale Client Detection: verify expected previous driver matches authoritative Firestore state
+        if (data && data.expectedPreviousDriverId !== undefined && data.expectedPreviousDriverId !== null) {
+          const expectedPrev = String(data.expectedPreviousDriverId).trim();
+          if (expectedPrev !== previousDriverId) {
+            throw new functions.https.HttpsError(
+              "failed-precondition",
+              `Assignment conflict: Bus '${busId}' is currently assigned to '${busData.driverName || previousDriverId}', not '${expectedPrev}'. Please refresh before confirming replacement.`
+            );
+          }
+        }
+
         const prevDriverRef = db.collection("users").doc(previousDriverId);
         transaction.update(prevDriverRef, {
           assignedBusId: null,
@@ -2317,6 +2741,26 @@ async function processSetBusDriverAssignment(data, context, dependencies = {}) {
 
   // Post-Transaction RTDB Sync with retry
   if (rtdb) {
+    // If a driver was transferred from oldBusId, sync oldBusId to RTDB as well
+    if (transferredFromBusId) {
+      try {
+        await syncAssignmentToRtdb({
+          busId: transferredFromBusId,
+          driverUid: null,
+          driverName: "",
+          epoch: now,
+          version: transferredFromBusVersion
+        }, rtdb);
+        await db.collection("buses").doc(transferredFromBusId).update({
+          rtdbSyncStatus: "SYNCED",
+          rtdbSyncError: null,
+          rtdbSyncLastAttempt: now
+        }).catch(() => {});
+      } catch (oldBusErr) {
+        console.warn(`[setBusDriverAssignment] RTDB sync delayed for transferred-from bus ${transferredFromBusId}:`, oldBusErr.message);
+      }
+    }
+
     try {
       await syncAssignmentToRtdb({
         busId,
@@ -2340,6 +2784,14 @@ async function processSetBusDriverAssignment(data, context, dependencies = {}) {
         rtdbSyncLastAttempt: now
       }).catch(() => {});
     }
+  }
+
+  // Synchronize affected driver(s) to public directory
+  if (driverUid) {
+    await syncPublicDriverDirectory(driverUid, db);
+  }
+  if (previousDriverId && previousDriverId !== driverUid) {
+    await syncPublicDriverDirectory(previousDriverId, db);
   }
 
   return {
@@ -2395,13 +2847,14 @@ async function processToggleDriverActiveStatus(data, context, dependencies = {})
     // Admin confirmed unassignment on deactivation
     unassignedBusId = driverData.assignedBusId;
     const busRef = db.collection("buses").doc(unassignedBusId);
+    let newBusVersion = 1;
     await db.runTransaction(async (transaction) => {
       const bDoc = await transaction.get(busRef);
-      const bVer = bDoc.exists ? (bDoc.data().assignmentVersion || 0) + 1 : 1;
+      newBusVersion = bDoc.exists ? (bDoc.data().assignmentVersion || 0) + 1 : 1;
       transaction.update(busRef, {
         driverId: null,
         driverName: null,
-        assignmentVersion: bVer,
+        assignmentVersion: newBusVersion,
         assignmentEpoch: now,
         rtdbSyncStatus: "SYNCED"
       });
@@ -2417,12 +2870,22 @@ async function processToggleDriverActiveStatus(data, context, dependencies = {})
         driverUid: null,
         previousDriverUid: driverUid,
         epoch: now,
-        version: 1
+        version: newBusVersion
       }, rtdb).catch(() => {});
     }
   } else {
     // Normal active toggle without bus conflict
-    await driverRef.update({ active: active });
+    // If activating, verify driverData.assignedBusId is not stale or pointing to another driver's bus
+    if (active && driverData.assignedBusId) {
+      const busSnap = await db.collection("buses").doc(driverData.assignedBusId).get();
+      if (!busSnap.exists || busSnap.data().driverId !== driverUid) {
+        await driverRef.update({ active: true, assignedBusId: null });
+      } else {
+        await driverRef.update({ active: true });
+      }
+    } else {
+      await driverRef.update({ active: active });
+    }
   }
 
   // Synchronize RTDB user authorization
@@ -2439,6 +2902,9 @@ async function processToggleDriverActiveStatus(data, context, dependencies = {})
   } catch (authErr) {
     console.warn(`[toggleDriverActiveStatus] Auth updateUser warning for ${driverUid}:`, authErr.message);
   }
+
+  // Synchronize to public directory (removes or disables public record)
+  await syncPublicDriverDirectory(driverUid, db);
 
   console.log(`[toggleDriverActiveStatus] Driver ${driverUid} active status set to ${active}`);
   return {
@@ -2514,6 +2980,11 @@ async function processToggleBusActiveStatus(data, context, dependencies = {}) {
   } else {
     // Normal active toggle without driver conflict
     await busRef.update({ active: active });
+  }
+
+  // If a driver was detached due to bus deactivation, sync their public directory status
+  if (detachedDriverId) {
+    await syncPublicDriverDirectory(detachedDriverId, db);
   }
 
   console.log(`[toggleBusActiveStatus] Bus ${busId} active status set to ${active}`);
@@ -2622,6 +3093,9 @@ async function processUpdateDriverStaffProfile(data, context, dependencies = {})
     }
   }
 
+  // Synchronize to public directory (updates name/phone in public directory)
+  await syncPublicDriverDirectory(driverUid, db);
+
   console.log(`[updateDriverStaffProfile] Driver ${driverUid} profile updated (Staff ID: ${cleanId})`);
   return {
     success: true,
@@ -2721,8 +3195,37 @@ async function processOnBusAssignmentWritten(change, context, dependencies = {})
 
   const incomingVersion = Number(after.assignmentVersion) || 0;
   const now = Date.now();
+  const targetDriver = after.active === false ? null : (after.driverId || null);
 
-  // 3. Out-of-order & duplicate event check against RTDB
+  // 3. Authoritative Firestore check: verify whether this trigger event has already been superseded
+  if (db) {
+    try {
+      const currentSnap = await db.collection("buses").doc(busId).get();
+      if (currentSnap && currentSnap.exists) {
+        const currentData = currentSnap.data() || {};
+        const currentFirestoreVersion = Number(currentData.assignmentVersion) || 0;
+        const currentFirestoreDriver = currentData.active === false ? null : (currentData.driverId || null);
+
+        // A. If Firestore document has already advanced past this event's version:
+        if (incomingVersion > 0 && incomingVersion < currentFirestoreVersion) {
+          console.warn(`[onBusAssignmentWritten] Discarding stale event for ${busId}: incoming v${incomingVersion} < current Firestore v${currentFirestoreVersion}`);
+          return null;
+        }
+
+        // B. For legacy Android writes (incomingVersion <= 0) or unversioned writes:
+        // If current Firestore document has a different driver than this event's after.driverId,
+        // it means a newer write has already modified this bus in Firestore! Discard this stale event.
+        if (incomingVersion <= 0 && currentFirestoreDriver !== targetDriver) {
+          console.warn(`[onBusAssignmentWritten] Discarding stale legacy event for ${busId}: event driver (${targetDriver}) != current Firestore driver (${currentFirestoreDriver})`);
+          return null;
+        }
+      }
+    } catch (e) {
+      console.warn(`[onBusAssignmentWritten] Warning checking current Firestore state for ${busId}:`, e.message);
+    }
+  }
+
+  // 4. Out-of-order & duplicate event check against RTDB
   if (rtdb) {
     try {
       const opSnap = await rtdb.ref(`bus_operators/${busId}`).get();
@@ -2737,23 +3240,34 @@ async function processOnBusAssignmentWritten(change, context, dependencies = {})
 
       // Skip duplicate idempotent write
       const currentPerm = opVal.permanentDriverUid || null;
-      const targetDriver = after.active === false ? null : (after.driverId || null);
       if (incomingVersion > 0 && incomingVersion === currentRtdbVersion && currentPerm === targetDriver) {
         console.log(`[onBusAssignmentWritten] Duplicate event for ${busId} (v${incomingVersion}). Skipping.`);
         return null;
       }
 
-      // 4. Legacy Android write detection: if after.assignmentVersion was not set by Android
+      // Concurrency check against RTDB & Firestore:
+      // If RTDB currently holds a driver different from targetDriver, re-verify with Firestore
+      // in case a concurrent write (e.g. Trigger B) committed while this trigger was in flight
+      if (currentPerm && currentPerm !== targetDriver) {
+        const freshSnap = await db.collection("buses").doc(busId).get();
+        if (freshSnap.exists) {
+          const freshData = freshSnap.data() || {};
+          const freshDriver = freshData.active === false ? null : (freshData.driverId || null);
+          if (freshDriver !== targetDriver) {
+            console.warn(`[onBusAssignmentWritten] Aborting superseded write for ${busId}: current Firestore driver (${freshDriver}) != event driver (${targetDriver})`);
+            return null;
+          }
+        }
+      }
+
+      // 5. Legacy Android write detection: if after.assignmentVersion was not set by Android
       let effectiveVersion = incomingVersion;
       if (incomingVersion <= 0 || incomingVersion <= currentRtdbVersion) {
         effectiveVersion = currentRtdbVersion + 1;
-        await db.collection("buses").doc(busId).update({
-          assignmentVersion: effectiveVersion,
-          rtdbSyncStatus: "SYNCED"
-        }).catch(err => console.warn(`[onBusAssignmentWritten] Warning updating bus version for ${busId}:`, err.message));
       }
 
-      // 5. Execute authoritative RTDB sync
+      // 5. Execute authoritative RTDB sync FIRST before updating Firestore version
+      // This prevents a re-entrant trigger invocation from finding stale RTDB state
       await syncAssignmentToRtdb({
         busId,
         driverUid: targetDriver,
@@ -2763,18 +3277,100 @@ async function processOnBusAssignmentWritten(change, context, dependencies = {})
         version: effectiveVersion
       }, rtdb);
 
-      // Reconcile new driver profile if assigned
+      // 6. Post-sync Authoritative Convergence Check:
+      // Verify whether Firestore was updated while syncAssignmentToRtdb was in flight
+      const postSnap = await db.collection("buses").doc(busId).get();
+      if (postSnap.exists) {
+        const postData = postSnap.data() || {};
+        const authoritativeDriver = postData.active === false ? null : (postData.driverId || null);
+        if (authoritativeDriver !== targetDriver) {
+          console.warn(`[onBusAssignmentWritten] Concurrency race detected for ${busId}: in-flight driver (${targetDriver}) superseded by authoritative Firestore driver (${authoritativeDriver}). Re-converging RTDB.`);
+          const reconvergeVersion = Math.max(effectiveVersion, Number(postData.assignmentVersion) || 0) + 1;
+
+          // Re-sync RTDB with the authoritative driver, explicitly clearing targetDriver
+          await syncAssignmentToRtdb({
+            busId,
+            driverUid: authoritativeDriver,
+            driverName: postData.driverName || "",
+            previousDriverUid: targetDriver,
+            epoch: Date.now(),
+            version: reconvergeVersion
+          }, rtdb);
+
+          // Clear targetDriver's erroneous authorization in both Firestore and RTDB
+          if (targetDriver) {
+            await db.collection("users").doc(targetDriver).update({ assignedBusId: null }).catch(() => {});
+            await rtdb.ref(`users/${targetDriver}`).update({ assignedBusId: null }).catch(() => {});
+          }
+
+          // Ensure authoritative driver is correctly authorized in both Firestore and RTDB
+          if (authoritativeDriver) {
+            await db.collection("users").doc(authoritativeDriver).update({ assignedBusId: busId }).catch(() => {});
+            await rtdb.ref(`users/${authoritativeDriver}`).update({ assignedBusId: busId, active: true, role: "DRIVER" }).catch(() => {});
+          }
+
+          await db.collection("buses").doc(busId).update({
+            assignmentVersion: reconvergeVersion,
+            rtdbSyncStatus: "SYNCED",
+            rtdbSyncError: null,
+            rtdbSyncLastAttempt: Date.now()
+          }).catch(() => {});
+
+          return { success: true, busId, version: reconvergeVersion, convergedTo: authoritativeDriver };
+        }
+      }
+
+      // 7. Cross-Bus Collision Safeguard:
+      // If legacy Android assigned this driver to busId while they were still assigned to another bus,
+      // unassign the driver from the other bus in both Firestore and RTDB
+      if (targetDriver) {
+        const conflictBuses = await db.collection("buses")
+          .where("driverId", "==", targetDriver)
+          .get()
+          .catch(() => ({ docs: [] }));
+
+        for (const cDoc of conflictBuses.docs) {
+          if (cDoc.id !== busId) {
+            const cBusId = cDoc.id;
+            const cVer = (cDoc.data().assignmentVersion || 0) + 1;
+            console.log(`[onBusAssignmentWritten] Resolving cross-bus collision: Unassigning ${targetDriver} from ${cBusId}`);
+            await cDoc.ref.update({
+              driverId: null,
+              driverName: null,
+              assignmentVersion: cVer,
+              rtdbSyncStatus: "SYNCED"
+            }).catch(() => {});
+            await syncAssignmentToRtdb({
+              busId: cBusId,
+              driverUid: null,
+              previousDriverUid: targetDriver,
+              epoch: now,
+              version: cVer
+            }, rtdb).catch(() => {});
+          }
+        }
+      }
+
+      // 8. Reconcile driver profile in Firestore
       if (targetDriver) {
         await db.collection("users").doc(targetDriver).update({
           assignedBusId: busId
         }).catch(() => {});
       }
-      // Reconcile previous driver profile if unassigned
       if (before && before.driverId && before.driverId !== targetDriver) {
         await db.collection("users").doc(before.driverId).update({
           assignedBusId: null
         }).catch(() => {});
       }
+
+      // 9. Update Firestore bus document AFTER RTDB has successfully committed
+      // Any subsequent re-entrant trigger event will find RTDB matching and exit as duplicate
+      await db.collection("buses").doc(busId).update({
+        assignmentVersion: effectiveVersion,
+        rtdbSyncStatus: "SYNCED",
+        rtdbSyncError: null,
+        rtdbSyncLastAttempt: now
+      }).catch(err => console.warn(`[onBusAssignmentWritten] Warning updating bus version for ${busId}:`, err.message));
 
     } catch (e) {
       console.error(`[onBusAssignmentWritten] Error reconciling ${busId}:`, e.message);
@@ -2854,14 +3450,26 @@ async function processDeleteDriverAccount(data, context, dependencies = {}) {
       throw new functions.https.HttpsError("permission-denied", "Administrator accounts cannot be deleted via the driver management endpoint.");
     }
 
-    // 1. Unassign from assigned bus
+    // 1. Unassign from assigned bus with monotonic versioning
     if (targetData.assignedBusId) {
       const busId = targetData.assignedBusId;
-      await db.collection("buses").doc(busId).update({
-        driverId: null,
-        driverName: null,
-        rtdbSyncStatus: "SYNCED"
-      }).catch(() => {});
+      const busRef = db.collection("buses").doc(busId);
+      let busVer = 1;
+      await db.runTransaction(async (transaction) => {
+        const bDoc = await transaction.get(busRef);
+        if (bDoc.exists) {
+          busVer = (bDoc.data().assignmentVersion || 0) + 1;
+          transaction.update(busRef, {
+            driverId: null,
+            driverName: null,
+            assignmentVersion: busVer,
+            assignmentEpoch: Date.now(),
+            rtdbSyncStatus: "SYNCED"
+          });
+        }
+      }).catch((err) => {
+        console.warn(`[deleteDriverAccount] Transaction warning unassigning bus ${busId}:`, err.message);
+      });
 
       if (rtdb) {
         await syncAssignmentToRtdb({
@@ -2869,7 +3477,7 @@ async function processDeleteDriverAccount(data, context, dependencies = {}) {
           driverUid: null,
           previousDriverUid: driverUid,
           epoch: Date.now(),
-          version: 1
+          version: busVer
         }, rtdb).catch(() => {});
       }
     }
@@ -2877,14 +3485,52 @@ async function processDeleteDriverAccount(data, context, dependencies = {}) {
     // Unassign from any other bus if driverId matches
     const busesSnap = await db.collection("buses").where("driverId", "==", driverUid).get();
     for (const bDoc of busesSnap.docs) {
-      await bDoc.ref.update({ driverId: null, driverName: null }).catch(() => {});
-      if (rtdb) {
-        await syncAssignmentToRtdb({ busId: bDoc.id, driverUid: null, previousDriverUid: driverUid }, rtdb).catch(() => {});
+      if (bDoc.id !== targetData.assignedBusId) {
+        let otherVer = (bDoc.data().assignmentVersion || 0) + 1;
+        await bDoc.ref.update({
+          driverId: null,
+          driverName: null,
+          assignmentVersion: otherVer,
+          assignmentEpoch: Date.now(),
+          rtdbSyncStatus: "SYNCED"
+        }).catch(() => {});
+        if (rtdb) {
+          await syncAssignmentToRtdb({
+            busId: bDoc.id,
+            driverUid: null,
+            previousDriverUid: driverUid,
+            version: otherVer
+          }, rtdb).catch(() => {});
+        }
       }
     }
 
-    // 2. Delete Firestore users document
+    // Clean up temporary bus swap authorization if driver was active in a temporary swap
+    if (rtdb) {
+      try {
+        const busOpsSnap = await rtdb.ref("bus_operators").get();
+        const hasData = busOpsSnap && (typeof busOpsSnap.exists === "function" ? busOpsSnap.exists() : Boolean(busOpsSnap.val()));
+        if (hasData) {
+          const ops = busOpsSnap.val() || {};
+          for (const [bId, opData] of Object.entries(ops)) {
+            if (opData && opData.temporaryDriverUid === driverUid) {
+              console.log(`[deleteDriverAccount] Revoking temporary driver authorization for deleted driver ${driverUid} on ${bId}`);
+              await rtdb.ref(`bus_operators/${bId}`).update({
+                hasTemporary: false,
+                temporaryDriverUid: null,
+                temporaryAssignmentId: null
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch (swapErr) {
+        console.warn(`[deleteDriverAccount] RTDB temporary swap check warning:`, swapErr.message);
+      }
+    }
+
+    // 2. Delete Firestore users document and public directory entry
     await db.collection("users").doc(driverUid).delete().catch(() => {});
+    await db.collection("public_driver_directory").doc(driverUid).delete().catch(() => {});
   }
 
   // 3. Remove RTDB user node
@@ -2911,37 +3557,37 @@ async function processDeleteDriverAccount(data, context, dependencies = {}) {
 // =========================================================================
 
 exports.createDriverAccount = regionalFunctions
-  .runWith({ enforceAppCheck: true })
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
   .https.onCall(async (data, context) => {
     return processCreateDriverAccount(data, context);
   });
 
 exports.setBusDriverAssignment = regionalFunctions
-  .runWith({ enforceAppCheck: true })
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
   .https.onCall(async (data, context) => {
     return processSetBusDriverAssignment(data, context);
   });
 
 exports.toggleDriverActiveStatus = regionalFunctions
-  .runWith({ enforceAppCheck: true })
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
   .https.onCall(async (data, context) => {
     return processToggleDriverActiveStatus(data, context);
   });
 
 exports.toggleBusActiveStatus = regionalFunctions
-  .runWith({ enforceAppCheck: true })
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
   .https.onCall(async (data, context) => {
     return processToggleBusActiveStatus(data, context);
   });
 
 exports.updateDriverStaffProfile = regionalFunctions
-  .runWith({ enforceAppCheck: true })
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
   .https.onCall(async (data, context) => {
     return processUpdateDriverStaffProfile(data, context);
   });
 
 exports.reconcileBusRtdb = regionalFunctions
-  .runWith({ enforceAppCheck: true })
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
   .https.onCall(async (data, context) => {
     return processReconcileBusRtdb(data, context);
   });
@@ -2952,6 +3598,415 @@ exports.onBusAssignmentWritten = regionalFunctions.firestore
     return processOnBusAssignmentWritten(change, context);
   });
 
+/**
+ * 10. reconcileOperationalRtdb
+ * Automated scheduled worker running every 5 minutes.
+ * Scans for buses with FAILED or stale PENDING RTDB synchronization,
+ * verifies authoritative Firestore state, applies idempotent sync,
+ * preserves active temporary replacements, and records recovery status.
+ */
+async function processReconcileOperationalRtdb(dependencies = {}) {
+  const db = dependencies.db || admin.firestore();
+  const rtdb = dependencies.rtdb || admin.database();
+
+  const now = Date.now();
+  const staleThresholdMs = 60 * 1000; // 60 seconds
+
+  // Query buses with FAILED, stale PENDING, or absent/null sync status
+  const failedBusesSnap = await db.collection("buses").where("rtdbSyncStatus", "==", "FAILED").get();
+  const pendingBusesSnap = await db.collection("buses").where("rtdbSyncStatus", "==", "PENDING").get();
+
+  // In Cloud Firestore, where("field", "==", null) DOES NOT match documents where the field is missing.
+  // To discover older/legacy bus records with assigned drivers where rtdbSyncStatus is absent or null,
+  // we query all buses with assigned drivers (driverId != null) and evaluate !rtdbSyncStatus in memory.
+  const assignedBusesSnap = await db.collection("buses").where("driverId", "!=", null).get().catch(() => ({ docs: [] }));
+
+  const candidatesMap = new Map();
+  failedBusesSnap.docs.forEach(doc => candidatesMap.set(doc.id, doc));
+  pendingBusesSnap.docs.forEach(doc => {
+    const data = doc.data() || {};
+    const lastAttempt = Number(data.rtdbSyncLastAttempt) || Number(data.assignmentEpoch) || 0;
+    if (now - lastAttempt > staleThresholdMs) {
+      candidatesMap.set(doc.id, doc);
+    }
+  });
+  if (assignedBusesSnap && assignedBusesSnap.docs) {
+    assignedBusesSnap.docs.forEach(doc => {
+      const data = doc.data() || {};
+      // Matches both completely missing field (undefined) and explicitly null field
+      if (!data.rtdbSyncStatus) {
+        candidatesMap.set(doc.id, doc);
+      }
+    });
+  }
+
+  const results = {
+    totalEvaluated: candidatesMap.size,
+    repaired: 0,
+    errors: 0,
+    details: []
+  };
+
+  for (const [busId, busDoc] of candidatesMap) {
+    try {
+      // 1. Fresh document read prevents overwriting newer assignments committed while waiting
+      const freshSnap = await db.collection("buses").doc(busId).get();
+      if (!freshSnap.exists) continue;
+      const busData = freshSnap.data() || {};
+
+      // If document was already synced or assignment epoch is newer than run start, skip
+      if (busData.rtdbSyncStatus === "SYNCED" || Number(busData.assignmentEpoch) > now) {
+        console.log(`[reconcileOperationalRtdb] Skipping ${busId}: already synced or updated by newer assignment.`);
+        continue;
+      }
+
+      // Check max retry count to prevent endless thrashing on permanently invalid records
+      const retryCount = (Number(busData.rtdbSyncRetryCount) || 0) + 1;
+      if (retryCount > 5) {
+        await busDoc.ref.update({
+          rtdbSyncStatus: "PERMANENTLY_FAILED",
+          rtdbSyncError: `Exceeded max recovery attempts (5). Requires manual admin intervention.`,
+          rtdbSyncLastAttempt: now,
+          rtdbSyncRetryCount: retryCount
+        });
+        results.errors++;
+        results.details.push({ busId, status: "PERMANENTLY_FAILED", error: "Exceeded max attempts" });
+        continue;
+      }
+
+      const targetDriver = busData.active === false ? null : (busData.driverId || null);
+
+      // Read current RTDB state
+      const opSnap = await rtdb.ref(`bus_operators/${busId}`).get();
+      const opVal = opSnap.val() || {};
+      const currentRtdbVersion = Number(opVal.assignmentVersion) || 0;
+      const busVersion = Number(busData.assignmentVersion) || 0;
+
+      // Ensure monotonic version progression
+      const nextVersion = Math.max(busVersion, currentRtdbVersion) + 1;
+
+      // Authoritative sync preserving temporary swap
+      const syncRes = await syncAssignmentToRtdb({
+        busId,
+        driverUid: targetDriver,
+        driverName: busData.driverName || "",
+        epoch: now,
+        version: nextVersion
+      }, rtdb);
+
+      const effectiveVersion = (syncRes && syncRes.version) ? syncRes.version : nextVersion;
+
+      // Reconcile driver profile in RTDB and Firestore if assigned
+      if (targetDriver) {
+        await db.collection("users").doc(targetDriver).update({
+          assignedBusId: busId
+        }).catch(() => {});
+        await rtdb.ref(`users/${targetDriver}`).update({
+          assignedBusId: busId,
+          active: true,
+          role: "DRIVER"
+        }).catch(() => {});
+      }
+
+      // Mark bus document SYNCED
+      await busDoc.ref.update({
+        assignmentVersion: effectiveVersion,
+        rtdbSyncStatus: "SYNCED",
+        rtdbSyncError: null,
+        rtdbSyncLastAttempt: now,
+        rtdbSyncRetryCount: 0
+      });
+
+      results.repaired++;
+      results.details.push({ busId, status: "REPAIRED", version: effectiveVersion });
+      console.log(`[reconcileOperationalRtdb] Repaired RTDB sync for ${busId} to version ${effectiveVersion}`);
+    } catch (e) {
+      results.errors++;
+      results.details.push({ busId, status: "FAILED", error: e.message });
+      console.error(`[reconcileOperationalRtdb] Failed repairing ${busId}:`, e.message);
+      const busData = busDoc.data() || {};
+      const retryCount = (Number(busData.rtdbSyncRetryCount) || 0) + 1;
+      await busDoc.ref.update({
+        rtdbSyncError: e.message,
+        rtdbSyncLastAttempt: now,
+        rtdbSyncRetryCount: retryCount
+      }).catch(() => {});
+    }
+  }
+
+  return results;
+}
+
+/**
+ * 11. registerBusAccount
+ * Atomic bus registration enforcing uniqueness of busNumber and registrationNumber
+ * across Firestore collections and index documents within an atomic transaction.
+ */
+async function processRegisterBusAccount(data, context, dependencies = {}) {
+  const db = dependencies.db || admin.firestore();
+
+  await verifyActiveAdmin(context, db);
+
+  const rawBusNum = data && data.busNumber ? String(data.busNumber).trim() : "";
+  const rawReg = data && data.registrationNumber ? String(data.registrationNumber).trim().toUpperCase() : "";
+  const rawCap = data && data.capacity !== undefined ? Number(data.capacity) : 50;
+  const rawRouteId = data && data.routeId ? String(data.routeId).trim() : null;
+
+  if (!rawBusNum) {
+    throw new functions.https.HttpsError("invalid-argument", "Bus number is required.");
+  }
+  if (!/^[a-zA-Z0-9_-]{1,10}$/.test(rawBusNum)) {
+    throw new functions.https.HttpsError("invalid-argument", "Bus number must be 1-10 alphanumeric characters (e.g. 01, 25, B-01).");
+  }
+
+  if (!rawReg) {
+    throw new functions.https.HttpsError("invalid-argument", "Registration number is required.");
+  }
+  if (rawReg.length < 5 || rawReg.length > 20) {
+    throw new functions.https.HttpsError("invalid-argument", "Registration number must be between 5 and 20 characters (e.g. KA-34-A-1234).");
+  }
+
+  if (isNaN(rawCap) || rawCap < 1 || rawCap > 120 || !Number.isInteger(rawCap)) {
+    throw new functions.https.HttpsError("invalid-argument", "Bus seating capacity must be a whole number between 1 and 120.");
+  }
+
+  const paddedNum = /^\d+$/.test(rawBusNum) ? rawBusNum.padStart(2, "0") : rawBusNum;
+  const busId = rawBusNum.toUpperCase().startsWith("BUS-") ? rawBusNum.toUpperCase() : `BUS-${paddedNum}`;
+  const now = Date.now();
+
+  const busRef = db.collection("buses").doc(busId);
+  const busNumIndexRef = db.collection("bus_number_index").doc(rawBusNum.toUpperCase());
+  const regIndexRef = db.collection("bus_registration_index").doc(rawReg);
+
+  // Pre-transaction check for legacy documents without index entries
+  const existingNumSnap = await db.collection("buses").where("busNumber", "==", rawBusNum).limit(1).get().catch(() => ({ empty: true }));
+  if (!existingNumSnap.empty) {
+    const existingDoc = existingNumSnap.docs ? existingNumSnap.docs[0] : null;
+    if (existingDoc && existingDoc.id !== busId) {
+      throw new functions.https.HttpsError("already-exists", `A bus with bus number '${rawBusNum}' already exists.`);
+    }
+  }
+
+  const existingRegSnap = await db.collection("buses").where("registrationNumber", "==", rawReg).limit(1).get().catch(() => ({ empty: true }));
+  if (!existingRegSnap.empty) {
+    const existingDoc = existingRegSnap.docs ? existingRegSnap.docs[0] : null;
+    if (existingDoc && existingDoc.id !== busId) {
+      throw new functions.https.HttpsError("already-exists", `A bus with registration number '${rawReg}' already exists.`);
+    }
+  }
+
+  // Validate routeId existence and active status if initial route provided
+  if (rawRouteId) {
+    const routeSnap = await db.collection("routes").doc(rawRouteId).get();
+    if (!routeSnap.exists) {
+      throw new functions.https.HttpsError("not-found", `Route '${rawRouteId}' does not exist.`);
+    }
+    const routeData = routeSnap.data() || {};
+    if (routeData.active === false) {
+      throw new functions.https.HttpsError("failed-precondition", `Cannot assign deactivated route '${rawRouteId}'.`);
+    }
+  }
+
+  await db.runTransaction(async (transaction) => {
+    // 1. Check primary bus document
+    const busDoc = await transaction.get(busRef);
+    if (busDoc.exists) {
+      throw new functions.https.HttpsError("already-exists", `Bus with ID '${busId}' already exists.`);
+    }
+
+    // 2. Check bus number index document
+    const busNumDoc = await transaction.get(busNumIndexRef);
+    if (busNumDoc.exists) {
+      throw new functions.https.HttpsError("already-exists", `A bus with bus number '${rawBusNum}' already exists.`);
+    }
+
+    // 3. Check registration number index document
+    const regDoc = await transaction.get(regIndexRef);
+    if (regDoc.exists) {
+      throw new functions.https.HttpsError("already-exists", `A bus with registration number '${rawReg}' already exists.`);
+    }
+
+    const busRecord = {
+      busNumber: rawBusNum,
+      registrationNumber: rawReg,
+      capacity: rawCap,
+      active: true,
+      routeId: rawRouteId,
+      driverId: null,
+      driverName: null,
+      assignmentVersion: 0,
+      assignmentEpoch: now,
+      rtdbSyncStatus: "SYNCED",
+      rtdbSyncError: null,
+      rtdbSyncLastAttempt: now,
+      rtdbSyncRetryCount: 0,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    // Atomically set bus document and both index entries
+    transaction.set(busRef, busRecord);
+    transaction.set(busNumIndexRef, { busId, busNumber: rawBusNum, createdAt: now });
+    transaction.set(regIndexRef, { busId, registrationNumber: rawReg, createdAt: now });
+  });
+
+  console.log(`[registerBusAccount] Successfully registered bus ${busId} (${rawReg})`);
+  return {
+    success: true,
+    busId,
+    busNumber: rawBusNum,
+    registrationNumber: rawReg,
+    capacity: rawCap,
+    active: true,
+    routeId: rawRouteId
+  };
+}
+
+/**
+ * 12. updateBusDetails
+ * Updates bus registration number, capacity, and route assignment atomically.
+ * Maintains registration number unique index entries and safely handles legacy buses.
+ */
+async function processUpdateBusDetails(data, context, dependencies = {}) {
+  const db = dependencies.db || admin.firestore();
+
+  await verifyActiveAdmin(context, db);
+
+  const busId = data && data.busId ? String(data.busId).trim() : null;
+  if (!busId) {
+    throw new functions.https.HttpsError("invalid-argument", "Bus ID is required.");
+  }
+
+  const busRef = db.collection("buses").doc(busId);
+  const now = Date.now();
+
+  const rawReg = data.registrationNumber !== undefined ? String(data.registrationNumber).trim().toUpperCase() : undefined;
+  const rawCap = data.capacity !== undefined ? Number(data.capacity) : undefined;
+  const rawRouteId = data.routeId !== undefined ? (data.routeId ? String(data.routeId).trim() : null) : undefined;
+
+  if (rawReg !== undefined) {
+    if (!rawReg || rawReg.length < 5 || rawReg.length > 20) {
+      throw new functions.https.HttpsError("invalid-argument", "Registration number must be between 5 and 20 characters (e.g. KA-34-A-1234).");
+    }
+  }
+
+  if (rawCap !== undefined) {
+    if (isNaN(rawCap) || rawCap < 1 || rawCap > 120 || !Number.isInteger(rawCap)) {
+      throw new functions.https.HttpsError("invalid-argument", "Bus seating capacity must be a whole number between 1 and 120.");
+    }
+  }
+
+  // Pre-transaction check for legacy buses if registration number is changing
+  if (rawReg) {
+    const existingRegSnap = await db.collection("buses").where("registrationNumber", "==", rawReg).limit(1).get().catch(() => ({ empty: true }));
+    if (!existingRegSnap.empty) {
+      const existingDoc = existingRegSnap.docs ? existingRegSnap.docs[0] : null;
+      if (existingDoc && existingDoc.id !== busId) {
+        throw new functions.https.HttpsError("already-exists", `Registration number '${rawReg}' is already used by another bus.`);
+      }
+    }
+  }
+
+  // Validate routeId existence and active status if route is being updated
+  if (rawRouteId) {
+    const routeSnap = await db.collection("routes").doc(rawRouteId).get();
+    if (!routeSnap.exists) {
+      throw new functions.https.HttpsError("not-found", `Route '${rawRouteId}' does not exist.`);
+    }
+    const routeData = routeSnap.data() || {};
+    if (routeData.active === false) {
+      throw new functions.https.HttpsError("failed-precondition", `Cannot assign deactivated route '${rawRouteId}'.`);
+    }
+  }
+
+  await db.runTransaction(async (transaction) => {
+    const busDoc = await transaction.get(busRef);
+    if (!busDoc.exists) {
+      throw new functions.https.HttpsError("not-found", `Bus '${busId}' does not exist.`);
+    }
+
+    const currentData = busDoc.data() || {};
+    const updates = { updatedAt: now };
+
+    if (rawReg !== undefined && rawReg !== currentData.registrationNumber) {
+      const newRegIndexRef = db.collection("bus_registration_index").doc(rawReg);
+      const newRegDoc = await transaction.get(newRegIndexRef);
+
+      if (newRegDoc.exists) {
+        const ownerBusId = newRegDoc.data() ? newRegDoc.data().busId : null;
+        if (ownerBusId && ownerBusId !== busId) {
+          throw new functions.https.HttpsError("already-exists", `Registration number '${rawReg}' is already used by another bus.`);
+        }
+      }
+
+      // If bus had an old registration number, release the old index if owned by this bus
+      const oldReg = currentData.registrationNumber ? String(currentData.registrationNumber).trim().toUpperCase() : null;
+      if (oldReg && oldReg !== rawReg) {
+        const oldRegIndexRef = db.collection("bus_registration_index").doc(oldReg);
+        const oldRegDoc = await transaction.get(oldRegIndexRef);
+        if (oldRegDoc.exists && oldRegDoc.data() && oldRegDoc.data().busId === busId) {
+          transaction.delete(oldRegIndexRef);
+        }
+      }
+
+      // Reserve new registration index
+      transaction.set(newRegIndexRef, { busId, registrationNumber: rawReg, createdAt: now });
+      updates.registrationNumber = rawReg;
+    }
+
+    if (rawCap !== undefined) {
+      updates.capacity = rawCap;
+    }
+
+    if (rawRouteId !== undefined) {
+      updates.routeId = rawRouteId;
+    }
+
+    transaction.update(busRef, updates);
+  });
+
+  console.log(`[updateBusDetails] Successfully updated bus ${busId}`);
+  return { success: true, busId };
+}
+
+exports.registerBusAccount = regionalFunctions
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
+  .https.onCall(async (data, context) => {
+    return processRegisterBusAccount(data, context);
+  });
+
+exports.updateBusDetails = regionalFunctions
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
+  .https.onCall(async (data, context) => {
+    return processUpdateBusDetails(data, context);
+  });
+
+exports.reconcileOperationalRtdb = regionalFunctions.pubsub
+  .schedule("every 5 minutes")
+  .onRun(async (context) => {
+    return processReconcileOperationalRtdb();
+  });
+
+/**
+ * Firestore background trigger on /users/{userId}.
+ * Automatically synchronizes driver state to 'public_driver_directory' whenever
+ * a user document is created, updated, or deleted.
+ */
+exports.onUserWritten = regionalFunctions.firestore
+  .document("users/{userId}")
+  .onWrite(async (change, context) => {
+    const userId = context.params.userId;
+    const afterData = change.after.exists ? change.after.data() : null;
+    const beforeData = change.before.exists ? change.before.data() : null;
+    const isDriverAfter = afterData && afterData.role === "DRIVER";
+    const isDriverBefore = beforeData && beforeData.role === "DRIVER";
+
+    if (isDriverAfter || isDriverBefore) {
+      await syncPublicDriverDirectory(userId);
+    }
+    return null;
+  });
+
 // Export business logic handlers and helpers for automated test harness
 exports.processCreateDriverAccount = processCreateDriverAccount;
 exports.processSetBusDriverAssignment = processSetBusDriverAssignment;
@@ -2960,9 +4015,16 @@ exports.processToggleBusActiveStatus = processToggleBusActiveStatus;
 exports.processUpdateDriverStaffProfile = processUpdateDriverStaffProfile;
 exports.processReconcileBusRtdb = processReconcileBusRtdb;
 exports.processOnBusAssignmentWritten = processOnBusAssignmentWritten;
+exports.processReconcileOperationalRtdb = processReconcileOperationalRtdb;
 exports.processResetDriverPassword = processResetDriverPassword;
 exports.processDeleteDriverAccount = processDeleteDriverAccount;
+exports.processRegisterBusAccount = processRegisterBusAccount;
+exports.processUpdateBusDetails = processUpdateBusDetails;
 exports.validateDriverProfileInputs = validateDriverProfileInputs;
 exports.mapStaffEmail = mapStaffEmail;
 exports.syncAssignmentToRtdb = syncAssignmentToRtdb;
+exports.syncPublicDriverDirectory = syncPublicDriverDirectory;
+exports.checkRateLimit = checkRateLimit;
+exports.getClientIp = getClientIp;
+exports.isPrivateOrInternalIp = isPrivateOrInternalIp;
 

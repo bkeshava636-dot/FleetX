@@ -1,0 +1,17 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "build_fleet_seed.js",
+  "scripts": {
+    "test:emulator": "node test_rules_emulator.js",
+    "test": "node_modules\\.bin\\firebase.cmd emulators:exec --project fleetx-emulator \"npm run test:emulator\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "firebase-tools": "^13.31.0"
+  }
+}

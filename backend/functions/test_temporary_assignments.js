@@ -26,7 +26,7 @@
 
 const assert = require("assert");
 const {
-  getEffectiveDriver,
+  resolveEffectiveDriver: getEffectiveDriver,
   processCreateTemporaryAssignment,
   processCancelTemporaryAssignment
 } = require("./index");
