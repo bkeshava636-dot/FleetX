@@ -111,6 +111,8 @@ export const AdminDashboard: React.FC = () => {
           subtitle={isLoading ? 'Connecting...' : `${stats?.activeBuses ?? 0} active in service`}
           icon={Bus}
           color="blue"
+          linkTo="/admin/fleet"
+          linkLabel="Manage Fleet"
           isLoading={isLoading}
         />
 
@@ -145,6 +147,8 @@ export const AdminDashboard: React.FC = () => {
           subtitle="Verified driver profiles"
           icon={Users}
           color="emerald"
+          linkTo="/admin/drivers"
+          linkLabel="Manage Drivers"
           isLoading={isLoading}
         />
       </div>

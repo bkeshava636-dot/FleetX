@@ -3,17 +3,17 @@ import { getAuth, connectAuthEmulator, Auth } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, Firestore } from 'firebase/firestore';
 import { getDatabase, connectDatabaseEmulator, Database } from 'firebase/database';
 import { getFunctions, connectFunctionsEmulator, Functions } from 'firebase/functions';
-import { initializeAppCheck, ReCaptchaV3Provider, AppCheck } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, AppCheck } from 'firebase/app-check';
+import { getValidatedFirebaseConfig, validateMapsConfig } from './envValidator';
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '***REMOVED***',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'college-bus-tracker-prod.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'college-bus-tracker-prod',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'college-bus-tracker-prod.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '1060047769100',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:1060047769100:android:e5aba5fc13ce18c72c6829',
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || 'https://college-bus-tracker-prod-default-rtdb.firebaseio.com',
-};
+// Strictly validate environment configuration (no hardcoded production fallbacks!)
+const firebaseConfig = getValidatedFirebaseConfig(import.meta.env);
+
+// Validate Google Maps independently (warning only, non-blocking for headless routes)
+const mapsValidation = validateMapsConfig(import.meta.env);
+if (!mapsValidation.isValid && mapsValidation.warning) {
+  console.warn(`[FleetX Google Maps] ${mapsValidation.warning}`);
+}
 
 // Initialize or reuse Firebase App instance
 const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -26,24 +26,25 @@ const functions: Functions = getFunctions(app, 'asia-south1'); // Project region
 // App Check initialization (Protects public student submission writes against scraping & bots)
 let appCheck: AppCheck | null = null;
 const appCheckKey = import.meta.env.VITE_FIREBASE_APP_CHECK_KEY;
+const debugToken = import.meta.env.VITE_FIREBASE_APP_CHECK_DEBUG_TOKEN;
 
 if (typeof window !== 'undefined') {
-  // 1. Development-Only Debug Token
-  // Strictly enabled ONLY during local development (import.meta.env.DEV) to allow emulator & localhost testing without reCAPTCHA friction.
-  // In production builds, this branch is statically evaluated to false and eliminated by bundler minification.
-  if (import.meta.env.DEV && !import.meta.env.PROD) {
+  // 1. Development & Staging Debug Token Support
+  const isStaging = import.meta.env.VITE_APP_ENV === 'staging';
+  if (import.meta.env.DEV || (isStaging && debugToken)) {
     const globalWithDebug = window as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean | string };
     if (globalWithDebug.FIREBASE_APPCHECK_DEBUG_TOKEN === undefined) {
-      globalWithDebug.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-      console.info('[Firebase AppCheck] Local development debug token enabled.');
+      globalWithDebug.FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken || true;
+      console.info('[Firebase AppCheck] App Check debug token enabled.');
     }
   }
 
-  // 2. Production reCAPTCHA v3 Provider
-  if (appCheckKey) {
+  // 2. App Check Provider Initialization
+  const effectiveKey = appCheckKey || (debugToken ? 'debug-key-placeholder' : null);
+  if (effectiveKey) {
     try {
       appCheck = initializeAppCheck(app, {
-        provider: new ReCaptchaV3Provider(appCheckKey),
+        provider: new ReCaptchaEnterpriseProvider(effectiveKey),
         isTokenAutoRefreshEnabled: true,
       });
     } catch (err) {

@@ -11,6 +11,8 @@ export const AdminLayout: React.FC = () => {
   const getPageTitle = (pathname: string): string => {
     if (pathname.includes('/admin/submissions')) return 'Stop Coordinate Submissions';
     if (pathname.includes('/admin/routes')) return 'Routes & Bus Stops';
+    if (pathname.includes('/admin/fleet')) return 'Fleet Management';
+    if (pathname.includes('/admin/drivers')) return 'Driver Management';
     if (pathname === '/admin' || pathname === '/admin/') return 'Transport Dashboard Overview';
     return 'FleetX Management';
   };

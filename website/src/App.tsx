@@ -12,6 +12,8 @@ const AdminLayout = lazy(() => import('./layouts/AdminLayout'));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const StopCoordinateSubmissions = lazy(() => import('./pages/admin/StopCoordinateSubmissions'));
 const RoutesAndStops = lazy(() => import('./pages/admin/RoutesAndStops'));
+const FleetManagement = lazy(() => import('./pages/admin/FleetManagement'));
+const DriverManagement = lazy(() => import('./pages/admin/DriverManagement'));
 const LiveFleetTracking = lazy(() => import('./pages/admin/LiveFleetTracking'));
 const ProtectedRoute = lazy(() => import('./components/admin/ProtectedRoute').then((m) => ({ default: m.ProtectedRoute })));
 
@@ -55,6 +57,8 @@ export const App: React.FC = () => {
             <Route index element={<AdminDashboard />} />
             <Route path="submissions" element={<StopCoordinateSubmissions />} />
             <Route path="routes" element={<RoutesAndStops />} />
+            <Route path="fleet" element={<FleetManagement />} />
+            <Route path="drivers" element={<DriverManagement />} />
             <Route path="live-tracking" element={<LiveFleetTracking />} />
           </Route>
         </Route>
