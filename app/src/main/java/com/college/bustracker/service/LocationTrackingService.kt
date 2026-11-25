@@ -37,6 +37,7 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,6 +71,12 @@ class LocationTrackingService : Service() {
             val prefs = context.getSharedPreferences(PREFS_PERSISTENT_TRACKING, Context.MODE_PRIVATE)
             return prefs.getBoolean(KEY_IS_SESSION_ACTIVE, false)
         }
+
+        fun isCallbackValidForSession(
+            isSessionActive: Boolean,
+            callbackGeneration: Long,
+            currentGeneration: Long
+        ): Boolean = isSessionActive && callbackGeneration == currentGeneration
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
@@ -110,6 +117,11 @@ class LocationTrackingService : Service() {
     private var lastSubmittedBreadcrumbs: List<LatLng> = emptyList()
     @Volatile
     private var breadcrumbOwnerGeneration: Long = 0L
+    @Volatile
+    private var isTrackingSessionActive: Boolean = false
+    @Volatile
+    private var activeSessionGeneration: Long = 0L
+    private var currentLocationCancellationSource: CancellationTokenSource? = null
     private val checkpointLock = Any()
     @Volatile
     private var isCheckpointingDisabled = false
@@ -622,6 +634,10 @@ class LocationTrackingService : Service() {
             }
             TrackingServiceHelper.ACTION_START_TRACKING, null -> {
                 isExplicitStop = false
+                currentLocationCancellationSource?.cancel()
+                currentLocationCancellationSource = null
+                activeSessionGeneration++
+                isTrackingSessionActive = true
                 synchronized(checkpointLock) {
                     isCheckpointingDisabled = false
                 }
@@ -1152,25 +1168,42 @@ class LocationTrackingService : Service() {
 
         // 3. Immediate query for existing fresh location to avoid startup latency
         try {
+            val requestGeneration = activeSessionGeneration
+            currentLocationCancellationSource?.cancel()
+            val cancellationSource = CancellationTokenSource()
+            currentLocationCancellationSource = cancellationSource
+
             fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
                 if (loc != null) {
+                    if (!isCallbackValidForSession(isTrackingSessionActive, requestGeneration, activeSessionGeneration)) {
+                        Log.d(TAG, "[LOCATION-SERVICE] Ignoring stale lastLocation callback (gen=$requestGeneration)")
+                        return@addOnSuccessListener
+                    }
                     val age = System.currentTimeMillis() - loc.time
                     if (age < 120_000L) {
                         Log.i(TAG, "[LOCATION-SERVICE] Immediate lastLocation available (age=${age}ms): lat=${loc.latitude}, lng=${loc.longitude}")
-                        onNewLocation(loc)
+                        onNewLocation(loc, requestGeneration)
                     }
                 }
             }
-            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null).addOnSuccessListener { loc ->
+            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellationSource.token).addOnSuccessListener { loc ->
                 if (loc != null) {
+                    if (!isCallbackValidForSession(isTrackingSessionActive, requestGeneration, activeSessionGeneration)) {
+                        Log.d(TAG, "[LOCATION-SERVICE] Ignoring stale getCurrentLocation callback (gen=$requestGeneration)")
+                        return@addOnSuccessListener
+                    }
                     Log.i(TAG, "[LOCATION-SERVICE] Immediate getCurrentLocation fix received: lat=${loc.latitude}, lng=${loc.longitude}")
-                    onNewLocation(loc)
+                    onNewLocation(loc, requestGeneration)
                 }
             }
         } catch (ignored: Exception) {}
     }
 
-    private fun onNewLocation(location: Location) {
+    private fun onNewLocation(location: Location, expectedGeneration: Long = activeSessionGeneration) {
+        if (!isCallbackValidForSession(isTrackingSessionActive, expectedGeneration, activeSessionGeneration)) {
+            Log.d(TAG, "[LOCATION-SERVICE] Discarding location callback for inactive/stale session (active=$isTrackingSessionActive, gen=$expectedGeneration/$activeSessionGeneration)")
+            return
+        }
         val callbackGeneration = breadcrumbOwnerGeneration
         if (!AutoTrackingScheduler.isDriverLoggedIn(this)) {
             Log.w(TAG, "[LOCATION-SERVICE] TRACKING_STOPPED: Driver is logged out during location callback. Stopping tracking.")
@@ -1606,8 +1639,13 @@ class LocationTrackingService : Service() {
     }
 
     private fun stopTrackingSession(isExplicitUserStop: Boolean = true) {
+        isTrackingSessionActive = false
+        activeSessionGeneration++
+        currentLocationCancellationSource?.cancel()
+        currentLocationCancellationSource = null
+
         val nowIso = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-        Log.i(TAG, "[AUTO-TRACE] $nowIso stopTrackingSession started: bus=$activeBusId, explicitUserStop=$isExplicitUserStop")
+        Log.i(TAG, "[AUTO-TRACE] $nowIso stopTrackingSession started: bus=$activeBusId, explicitUserStop=$isExplicitUserStop, gen=$activeSessionGeneration")
         releaseWakeLock()
         hasLoggedFirstLocation = false
         operatingWindowWatchdogJob?.cancel()

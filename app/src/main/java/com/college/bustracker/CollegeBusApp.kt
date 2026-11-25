@@ -12,6 +12,8 @@ import com.college.bustracker.data.repository.RouteRepository
 import com.college.bustracker.data.repository.TrackingRepository
 import com.college.bustracker.util.NetworkMonitor
 import com.college.bustracker.util.OsmConfigHelper
+import com.google.firebase.FirebaseApp
+import com.google.firebase.appcheck.FirebaseAppCheck
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -73,6 +75,17 @@ class CollegeBusApp : Application() {
 
         // 2. Setup Notification Channels
         createNotificationChannels()
+
+        // 2b. Initialize Firebase, verify environment isolation, and install App Check
+        val firebaseApp = FirebaseApp.initializeApp(this) ?: FirebaseApp.getInstance()
+        val actualProjectId = firebaseApp.options.projectId
+        if (actualProjectId != BuildConfig.EXPECTED_FIREBASE_PROJECT_ID) {
+            throw IllegalStateException(
+                "Firebase environment mismatch: build flavor '${BuildConfig.FIREBASE_ENV}' " +
+                    "expected '${BuildConfig.EXPECTED_FIREBASE_PROJECT_ID}' but initialized '$actualProjectId'."
+            )
+        }
+        AppCheckProviderHelper.install(FirebaseAppCheck.getInstance())
 
         // 3. Initialize Repositories
         authRepository = AuthRepository(this)

@@ -19,21 +19,36 @@ android {
         versionCode = 10045
         versionName = "1.0.45"
 
-        val mapsApiKey = run {
-            val gsFile = file("google-services.json")
-            if (gsFile.exists()) {
-                val content = gsFile.readText()
-                val regex = """"current_key"\s*:\s*"([^"]+)"""".toRegex()
-                regex.find(content)?.groupValues?.get(1) ?: ""
-            } else {
-                ""
-            }
-        }
-        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    flavorDimensions += "environment"
+    productFlavors {
+        fun extractMapsApiKey(gsFile: File): String {
+            if (!gsFile.exists()) return ""
+            val regex = """"current_key"\s*:\s*"([^"]+)"""".toRegex()
+            return regex.find(gsFile.readText())?.groupValues?.get(1) ?: ""
+        }
+
+        create("staging") {
+            dimension = "environment"
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            resValue("string", "app_name", "FleetX Staging")
+            buildConfigField("String", "FIREBASE_ENV", "\"staging\"")
+            buildConfigField("String", "EXPECTED_FIREBASE_PROJECT_ID", "\"college-bus-tracker-staging\"")
+            manifestPlaceholders["MAPS_API_KEY"] = extractMapsApiKey(file("src/staging/google-services.json"))
+        }
+
+        create("prod") {
+            dimension = "environment"
+            buildConfigField("String", "FIREBASE_ENV", "\"prod\"")
+            buildConfigField("String", "EXPECTED_FIREBASE_PROJECT_ID", "\"college-bus-tracker-prod\"")
+            val prodGs = file("src/prod/google-services.json").takeIf { it.exists() } ?: file("google-services.json")
+            manifestPlaceholders["MAPS_API_KEY"] = extractMapsApiKey(prodGs)
         }
     }
 
@@ -71,17 +86,14 @@ android {
                     ?: props.getProperty("RELEASE_STORE_PASSWORD")
                     ?: (project.findProperty("MYAPP_RELEASE_STORE_PASSWORD") as String?)
                     ?: System.getenv("RELEASE_STORE_PASSWORD")
-                    ?: "DqkbM7cUFha7iyIJqi1S6JPoBoupN87vA9#"
                 keyAlias = props.getProperty("keyAlias")
                     ?: props.getProperty("RELEASE_KEY_ALIAS")
                     ?: (project.findProperty("MYAPP_RELEASE_KEY_ALIAS") as String?)
                     ?: System.getenv("RELEASE_KEY_ALIAS")
-                    ?: "fleetx-pilot"
                 keyPassword = props.getProperty("keyPassword")
                     ?: props.getProperty("RELEASE_KEY_PASSWORD")
                     ?: (project.findProperty("MYAPP_RELEASE_KEY_PASSWORD") as String?)
                     ?: System.getenv("RELEASE_KEY_PASSWORD")
-                    ?: "DqkbM7cUFha7iyIJqi1S6JPoBoupN87vA9#"
             }
         }
     }
@@ -95,10 +107,14 @@ android {
                 "proguard-rules.pro"
             )
             val releaseConfig = signingConfigs.getByName("release")
-            signingConfig = if (releaseConfig.storeFile != null) {
+            val hasSigningCreds = releaseConfig.storeFile != null &&
+                !releaseConfig.storePassword.isNullOrBlank() &&
+                !releaseConfig.keyAlias.isNullOrBlank() &&
+                !releaseConfig.keyPassword.isNullOrBlank()
+            signingConfig = if (hasSigningCreds) {
                 releaseConfig
             } else {
-                throw GradleException("FATAL: Release keystore file not found! Release APKs must be signed with the production FleetX key.")
+                throw GradleException("FATAL: Release signing keystore or credentials missing! Provide keystore.properties, ~/.secrets/keystore.properties, or RELEASE_STORE_* env vars.")
             }
         }
         debug {
@@ -158,6 +174,10 @@ dependencies {
     implementation(libs.firebase.messaging.ktx)
     implementation(libs.firebase.functions.ktx)
     implementation(libs.firebase.storage.ktx)
+    implementation(libs.firebase.appcheck.ktx)
+    implementation(libs.firebase.appcheck.playintegrity)
+    debugImplementation(libs.firebase.appcheck.debug)
+    "stagingImplementation"(libs.firebase.appcheck.debug)
 
     // Location & Maps
     implementation(libs.play.services.location)

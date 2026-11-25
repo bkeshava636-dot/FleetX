@@ -19,6 +19,14 @@ import java.time.format.DateTimeFormatter
 
 class AutoTrackingScheduler {
 
+    enum class SchedulerAction {
+        NO_OP,
+        START_AUTO,
+        STOP_DRIVER_LOGGED_OUT,
+        STOP_AUTO_DISABLED,
+        STOP_OUTSIDE_WINDOW
+    }
+
     companion object {
         private const val TAG = "AutoTrackingScheduler"
         const val PREF_FILE = "auto_tracking_prefs"
@@ -176,6 +184,52 @@ class AutoTrackingScheduler {
         }
 
         /**
+         * Pure decision logic for scheduled auto-tracking checks.
+         * Actual driver logout stops both AUTO and MANUAL sessions.
+         * Auto-tracking disabled or outside-window checks only stop AUTO sessions,
+         * never an active MANUAL dispatch session.
+         */
+        fun evaluateSchedulerDecision(
+            isDriverActive: Boolean,
+            isAutoEnabled: Boolean,
+            isTrackingRunning: Boolean,
+            isPersistentSessionActive: Boolean,
+            savedMode: String,
+            isOperatingNow: Boolean,
+            isWindowOverriddenOff: Boolean
+        ): SchedulerAction {
+            if (!isDriverActive) {
+                return if (isTrackingRunning || isPersistentSessionActive) {
+                    SchedulerAction.STOP_DRIVER_LOGGED_OUT
+                } else {
+                    SchedulerAction.NO_OP
+                }
+            }
+
+            val isManualSession = (isTrackingRunning || isPersistentSessionActive) &&
+                savedMode.equals("MANUAL", ignoreCase = true)
+
+            if (!isAutoEnabled) {
+                if (isManualSession) return SchedulerAction.NO_OP
+                return if (isTrackingRunning) SchedulerAction.STOP_AUTO_DISABLED else SchedulerAction.NO_OP
+            }
+
+            if (isOperatingNow) {
+                return if (!isTrackingRunning && !isWindowOverriddenOff) {
+                    SchedulerAction.START_AUTO
+                } else {
+                    SchedulerAction.NO_OP
+                }
+            }
+
+            if (isManualSession) {
+                return SchedulerAction.NO_OP
+            }
+
+            return if (isTrackingRunning) SchedulerAction.STOP_OUTSIDE_WINDOW else SchedulerAction.NO_OP
+        }
+
+        /**
          * Checks the current schedule and operating window, starting or stopping tracking
          * as appropriate. Also detects if device Location Services are turned off and alerts driver.
          */
@@ -185,10 +239,36 @@ class AutoTrackingScheduler {
             val isEnabled = prefs.getBoolean(KEY_AUTO_ENABLED, false)
             val isDriverActive = isDriverLoggedIn(context)
 
-            if (!isEnabled || !isDriverActive) {
-                if (TrackingServiceHelper.isTracking.value) {
-                    Log.i(TAG, "[AUTO-TRACK] $nowIso Stopping driver tracking: auto-tracking disabled ($isEnabled) or driver logged out ($isDriverActive)")
+            val persistentPrefs = context.getSharedPreferences(
+                LocationTrackingService.PREFS_PERSISTENT_TRACKING,
+                Context.MODE_PRIVATE
+            )
+            val isPersistentSessionActive = persistentPrefs.getBoolean(
+                LocationTrackingService.KEY_IS_SESSION_ACTIVE,
+                false
+            )
+            val savedMode = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_MODE, "AUTO") ?: "AUTO"
+            val isTrackingRunning = TrackingServiceHelper.isTracking.value
+
+            if (!isDriverActive) {
+                if (isTrackingRunning || isPersistentSessionActive) {
+                    Log.i(TAG, "[AUTO-TRACK] $nowIso Stopping driver tracking: driver logged out ($isDriverActive)")
                     TrackingServiceHelper.stopTracking(context, "DRIVER_LOGGED_OUT", "AutoTrackingScheduler")
+                }
+                return
+            }
+
+            val isManualSession = (isTrackingRunning || isPersistentSessionActive) &&
+                savedMode.equals("MANUAL", ignoreCase = true)
+
+            if (!isEnabled) {
+                if (isManualSession) {
+                    Log.d(TAG, "[AUTO-TRACK] $nowIso Auto-tracking disabled, but preserving active MANUAL tracking session")
+                    return
+                }
+                if (isTrackingRunning) {
+                    Log.i(TAG, "[AUTO-TRACK] $nowIso Stopping AUTO tracking: auto-tracking preference disabled")
+                    TrackingServiceHelper.stopTracking(context, "AUTO_TRACKING_DISABLED", "AutoTrackingScheduler")
                 }
                 return
             }
@@ -255,8 +335,10 @@ class AutoTrackingScheduler {
                     context = context,
                     reason = "Outside operating window"
                 )
-                if (TrackingServiceHelper.isTracking.value) {
-                    Log.i(TAG, "[AUTO-TRACK] $nowIso Stopping driver tracking: outside operating window")
+                if (isManualSession) {
+                    Log.d(TAG, "[AUTO-TRACK] $nowIso Outside operating window, but preserving active MANUAL tracking session")
+                } else if (TrackingServiceHelper.isTracking.value) {
+                    Log.i(TAG, "[AUTO-TRACK] $nowIso Stopping AUTO tracking: outside operating window")
                     TrackingServiceHelper.stopTracking(context, "OUTSIDE_OPERATING_WINDOW", "AutoTrackingScheduler")
                 }
                 DriverScheduleReceiver.dismissLocationDisabledNotification(context)

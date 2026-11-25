@@ -87,13 +87,29 @@ class AdminAuthSecurityTest {
     @Test
     fun test02_studentCannotReadArbitraryDriverProfiles() {
         val rulesContent = File("C:/Users/bhrao/college_bus_tracker/backend/firestore.rules").readText()
-        // Rules only allow reading drivers if role == 'DRIVER' AND active == true
+        val usersBlock = rulesContent.substringAfter("match /users/{userId} {")
+            .substringBefore("}")
+
+        // Private /users profiles require authentication and self-or-admin access
         assertTrue(
-            rulesContent.contains("resource.data.role == 'DRIVER' && resource.data.active == true")
+            "Private /users must restrict read to self or admin",
+            usersBlock.contains("allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());")
         )
-        // Inactive drivers cannot be read publicly
         assertFalse(
-            rulesContent.contains("resource.data.role == 'DRIVER' && resource.data.active == false")
+            "Private /users must never allow public unauthenticated reads",
+            usersBlock.contains("allow read: if true")
+        )
+
+        // Public driver info is served strictly through /public_driver_directory
+        val directoryBlock = rulesContent.substringAfter("match /public_driver_directory/{driverId} {")
+            .substringBefore("}")
+        assertTrue(
+            "Public driver directory must allow student read",
+            directoryBlock.contains("allow read: if true;")
+        )
+        assertTrue(
+            "Public driver directory writes must be admin-only",
+            directoryBlock.contains("allow write: if isAdmin();")
         )
     }
 

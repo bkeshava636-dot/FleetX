@@ -25,10 +25,47 @@ import com.google.android.gms.location.LocationResult
  */
 class GmsLocationResurrectionReceiver : BroadcastReceiver() {
 
+    enum class WatchdogAction {
+        IGNORE,
+        STOP_OUTSIDE_WINDOW,
+        RESURRECT,
+        HEALTHY
+    }
+
     companion object {
         const val TAG = "GmsResurrection"
         const val ACTION_GMS_LOCATION_TICK = "com.college.bustracker.ACTION_GMS_LOCATION_TICK"
         const val REQUEST_CODE_GMS_PIGGYBACK = 8888
+
+        /**
+         * Pure decision logic for GMS hardware watchdog ticks.
+         * Enforces operating windows and holidays strictly for AUTO sessions while
+         * preserving active MANUAL dispatch sessions outside scheduled hours.
+         */
+        fun evaluateWatchdogDecision(
+            isDriverLoggedIn: Boolean,
+            isPersistentSessionActive: Boolean,
+            isAutoEnabled: Boolean,
+            savedMode: String,
+            isWithinWindow: Boolean,
+            isServiceRunning: Boolean
+        ): WatchdogAction {
+            if (!isDriverLoggedIn) {
+                return WatchdogAction.IGNORE
+            }
+
+            val isManualSession = isPersistentSessionActive && savedMode.equals("MANUAL", ignoreCase = true)
+            if (!isManualSession && !isWithinWindow) {
+                return WatchdogAction.STOP_OUTSIDE_WINDOW
+            }
+
+            val shouldBeTracking = isPersistentSessionActive || isAutoEnabled
+            if (!shouldBeTracking) {
+                return WatchdogAction.IGNORE
+            }
+
+            return if (isServiceRunning) WatchdogAction.HEALTHY else WatchdogAction.RESURRECT
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
@@ -38,44 +75,49 @@ class GmsLocationResurrectionReceiver : BroadcastReceiver() {
         val result = LocationResult.extractResult(intent ?: return)
         val location = result?.lastLocation
 
-        // Pre-check 1: Is driver logged in?
-        if (!AutoTrackingScheduler.isDriverLoggedIn(context)) {
-            Log.d(TAG, "[GMS_WATCHDOG] Driver not logged in; ignoring GMS location tick")
-            return
-        }
-
-        // Pre-check 2: Is tracking preference enabled?
+        val isLoggedIn = AutoTrackingScheduler.isDriverLoggedIn(context)
         val prefs = context.getSharedPreferences(AutoTrackingScheduler.PREF_FILE, Context.MODE_PRIVATE)
         val isAutoEnabled = prefs.getBoolean(AutoTrackingScheduler.KEY_AUTO_ENABLED, false)
 
         val persistentPrefs = context.getSharedPreferences(LocationTrackingService.PREFS_PERSISTENT_TRACKING, Context.MODE_PRIVATE)
         val isPersistentSessionActive = persistentPrefs.getBoolean(LocationTrackingService.KEY_IS_SESSION_ACTIVE, false)
+        val savedMode = persistentPrefs.getString(LocationTrackingService.KEY_SAVED_MODE, "AUTO") ?: "AUTO"
 
         val schedule = AutoTrackingScheduler.getSavedSchedule(context)
         val isWorkingDay = CollegeCalendarService.isWorkingDay()
         val isHoliday = CollegeCalendarService.isHoliday()
         val isWithinWindow = ScheduleHelper.isWithinOperatingWindow(schedule) && isWorkingDay && !isHoliday
+        val isServiceRunning = TrackingServiceHelper.isTracking.value
 
-        if (!isWithinWindow) {
-            Log.d(TAG, "[GMS_WATCHDOG] Outside operating window or holiday; ignoring tick and clearing stale persistent session")
-            persistentPrefs.edit().putBoolean(LocationTrackingService.KEY_IS_SESSION_ACTIVE, false).apply()
-            if (TrackingServiceHelper.isTracking.value) {
-                TrackingServiceHelper.stopTracking(context, "OUTSIDE_OPERATING_WINDOW", "GmsLocationResurrection")
+        when (
+            evaluateWatchdogDecision(
+                isDriverLoggedIn = isLoggedIn,
+                isPersistentSessionActive = isPersistentSessionActive,
+                isAutoEnabled = isAutoEnabled,
+                savedMode = savedMode,
+                isWithinWindow = isWithinWindow,
+                isServiceRunning = isServiceRunning
+            )
+        ) {
+            WatchdogAction.IGNORE -> {
+                Log.d(TAG, "[GMS_WATCHDOG] Ignoring tick (loggedIn=$isLoggedIn, persistent=$isPersistentSessionActive, auto=$isAutoEnabled, mode=$savedMode)")
+                return
             }
-            return
-        }
-
-        val shouldBeTracking = isPersistentSessionActive || isAutoEnabled
-
-        if (!shouldBeTracking) {
-            Log.d(TAG, "[GMS_WATCHDOG] No active session and auto-tracking disabled; ignoring tick")
-            return
-        }
-
-        // Pre-check 3: Is LocationTrackingService already running?
-        if (TrackingServiceHelper.isTracking.value) {
-            Log.d(TAG, "[GMS_WATCHDOG] Tracking service is healthy and running. Location fix: lat=${location?.latitude}, lon=${location?.longitude}")
-            return
+            WatchdogAction.STOP_OUTSIDE_WINDOW -> {
+                Log.d(TAG, "[GMS_WATCHDOG] Outside operating window or holiday for AUTO mode; clearing stale persistent session")
+                persistentPrefs.edit().putBoolean(LocationTrackingService.KEY_IS_SESSION_ACTIVE, false).apply()
+                if (isServiceRunning) {
+                    TrackingServiceHelper.stopTracking(context, "OUTSIDE_OPERATING_WINDOW", "GmsLocationResurrection")
+                }
+                return
+            }
+            WatchdogAction.HEALTHY -> {
+                Log.d(TAG, "[GMS_WATCHDOG] Tracking service is healthy and running (mode=$savedMode). Location fix: lat=${location?.latitude}, lon=${location?.longitude}")
+                return
+            }
+            WatchdogAction.RESURRECT -> {
+                // Proceed to resurrect tracking service below
+            }
         }
 
         // Service died while it should be tracking! Perform hardware resurrection!

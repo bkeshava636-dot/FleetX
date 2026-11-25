@@ -10,6 +10,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
@@ -121,6 +122,96 @@ class BusRepository(
         private const val PREFS_CACHE = "firestore_cache_metadata"
         private const val KEY_LAST_BUS_SYNC_MS = "last_bus_sync_ms"
         private const val CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes stale-while-revalidate
+
+        internal data class BusDeserializationBatch(
+            val buses: List<Bus>,
+            val receivedCount: Int,
+            val rejectedReasons: Map<String, String>
+        )
+
+        /**
+         * Defensively deserializes a Firestore bus document map into [Bus].
+         * Falls back to [docId] when `busId` is missing/blank and converts
+         * missing or explicitly null optional fields (`routeId`, `driverId`, `driverName`)
+         * safely instead of failing Kotlin non-null `copy()` checks.
+         */
+        internal fun deserializeBusData(
+            docId: String,
+            data: Map<String, Any?>?
+        ): Result<Bus> {
+            if (data == null) {
+                return Result.failure(IllegalArgumentException("Document data is null"))
+            }
+            val busId = (data["busId"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+                ?: docId.trim()
+            if (busId.isBlank()) {
+                return Result.failure(IllegalArgumentException("Missing required field: busId"))
+            }
+            val busNumber = (data["busNumber"] as? String)?.trim() ?: ""
+            if (busNumber.isBlank()) {
+                return Result.failure(IllegalArgumentException("Missing required display field: busNumber"))
+            }
+            val registrationNumber = (data["registrationNumber"] as? String)?.trim() ?: ""
+            val routeId = (data["routeId"] as? String)?.trim() ?: ""
+            val driverId = (data["driverId"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+            val driverName = (data["driverName"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+            val capacity = (data["capacity"] as? Number)?.toInt() ?: 50
+            val active = (data["active"] as? Boolean) ?: true
+
+            return Result.success(
+                Bus(
+                    busId = busId,
+                    busNumber = busNumber,
+                    registrationNumber = registrationNumber,
+                    routeId = routeId,
+                    driverId = driverId,
+                    driverName = driverName,
+                    capacity = capacity,
+                    active = active
+                )
+            )
+        }
+
+        internal fun deserializeBus(doc: DocumentSnapshot): Bus? {
+            return deserializeBusData(doc.id, doc.data).getOrElse { e ->
+                Log.w(TAG, "FIRESTORE_BUS_REJECTED: docId=${doc.id}, reason=${e.message}")
+                null
+            }
+        }
+
+        internal fun deserializeBusBatch(
+            docs: List<Pair<String, Map<String, Any?>?>>
+        ): BusDeserializationBatch {
+            val validBuses = mutableListOf<Bus>()
+            val rejected = linkedMapOf<String, String>()
+            for ((docId, data) in docs) {
+                val result = deserializeBusData(docId, data)
+                result.fold(
+                    onSuccess = { validBuses.add(it) },
+                    onFailure = { err -> rejected[docId] = err.message ?: "Unknown error" }
+                )
+            }
+            return BusDeserializationBatch(
+                buses = validBuses.sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber })),
+                receivedCount = docs.size,
+                rejectedReasons = rejected
+            )
+        }
+
+        private fun deserializeBuses(source: String, docs: List<DocumentSnapshot>): List<Bus> {
+            val batch = deserializeBusBatch(docs.map { it.id to it.data })
+            for ((docId, reason) in batch.rejectedReasons) {
+                Log.w(TAG, "FIRESTORE_BUS_REJECTED: source=$source, docId=$docId, reason=$reason")
+            }
+            val summary = "FIRESTORE_BUS_DESERIALIZE: source=$source, received=${batch.receivedCount}, " +
+                "deserialized=${batch.buses.size}, rejected=${batch.rejectedReasons.size}"
+            if (batch.rejectedReasons.isNotEmpty()) {
+                Log.w(TAG, summary)
+            } else {
+                Log.d(TAG, summary)
+            }
+            return batch.buses
+        }
     }
 
     /**
@@ -179,16 +270,7 @@ class BusRepository(
             try {
                 val cacheSnap = firestore.collection("buses").get(Source.CACHE).await()
                 if (cacheSnap != null && !cacheSnap.isEmpty) {
-                    val list = cacheSnap.documents.mapNotNull { doc ->
-                        try {
-                            doc.toObject(Bus::class.java)?.let { bus ->
-                                bus.copy(busId = bus.busId.ifBlank { doc.id })
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed deserializing cached bus ${doc.id}: ${e.message}")
-                            null
-                        }
-                    }.sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
+                    val list = deserializeBuses("CACHE", cacheSnap.documents)
                     if (list.isNotEmpty()) {
                         _localBuses.value = list
                         trySend(list)
@@ -208,16 +290,7 @@ class BusRepository(
                     firestore.collection("buses").get(Source.SERVER).await()
                 }
                 if (serverSnap != null) {
-                    val list = serverSnap.documents.mapNotNull { doc ->
-                        try {
-                            doc.toObject(Bus::class.java)?.let { bus ->
-                                bus.copy(busId = bus.busId.ifBlank { doc.id })
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed deserializing server bus ${doc.id}: ${e.message}")
-                            null
-                        }
-                    }.sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
+                    val list = deserializeBuses("SERVER", serverSnap.documents)
                     if (list.isNotEmpty()) {
                         _localBuses.value = list
                         prefs?.edit()?.putLong(KEY_LAST_BUS_SYNC_MS, now)?.apply()
@@ -242,16 +315,7 @@ class BusRepository(
         val registration = if (forceRefresh) {
             firestore.collection("buses").addSnapshotListener { snapshot, error ->
                 if (error == null && snapshot != null) {
-                    val list = snapshot.documents.mapNotNull { doc ->
-                        try {
-                            doc.toObject(Bus::class.java)?.let { bus ->
-                                bus.copy(busId = bus.busId.ifBlank { doc.id })
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed deserializing real-time bus ${doc.id}: ${e.message}")
-                            null
-                        }
-                    }.sortedWith(compareBy({ it.numericBusNumber }, { it.busNumber }))
+                    val list = deserializeBuses("LISTENER", snapshot.documents)
                     _localBuses.value = list
                     trySend(list)
                 }
@@ -298,12 +362,12 @@ class BusRepository(
     }
 
     /**
-     * Real-time stream of active DRIVER accounts from Firestore /users.
-     * Strictly filters for role == "DRIVER" and active == true.
+     * Real-time stream of active DRIVER accounts from Firestore /public_driver_directory.
+     * Uses the privacy-safe public driver directory so unauthenticated students can view
+     * assigned driver names and bus assignments without accessing private /users profiles or PII.
      */
     fun getDriversFlow(): Flow<List<UserProfile>> = callbackFlow {
-        val registration = firestore.collection("users")
-            .whereEqualTo("role", "DRIVER")
+        val registration = firestore.collection("public_driver_directory")
             .whereEqualTo("active", true)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) {
@@ -312,20 +376,18 @@ class BusRepository(
                 }
                 val drivers = snapshot.documents.mapNotNull { doc ->
                     val uid = doc.id
-                    val customId = doc.getString("customId") ?: ""
-                    val name = doc.getString("name") ?: customId.ifBlank { "Driver" }
-                    val email = doc.getString("email") ?: ""
+                    val customId = doc.getString("driverId") ?: doc.getString("customId") ?: uid
+                    val name = doc.getString("driverName") ?: doc.getString("name") ?: customId.ifBlank { "Driver" }
                     val assignedBusId = doc.getString("assignedBusId")
-                    val phoneNumber = doc.getString("phoneNumber")
                     val active = doc.getBoolean("active") ?: true
                     UserProfile(
                         uid = uid,
                         customId = customId,
                         name = name,
-                        email = email,
+                        email = "",
                         role = UserRole.DRIVER,
                         assignedBusId = assignedBusId,
-                        phoneNumber = phoneNumber,
+                        phoneNumber = null,
                         active = active
                     )
                 }

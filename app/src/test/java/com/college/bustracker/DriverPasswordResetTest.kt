@@ -340,17 +340,25 @@ class DriverPasswordResetTest {
         assertTrue("index.js must exist", functionsFile.exists())
         val functionsContent = functionsFile.readText()
 
-        // Extract resetDriverPassword implementation block
-        val resetDriverFunc = functionsContent.substringAfter("exports.resetDriverPassword =")
-            .substringBefore("exports.")
+        // Extract exports.resetDriverPassword wrapper and delegated processResetDriverPassword implementation
+        val resetDriverWrapper = functionsContent.substringAfter("exports.resetDriverPassword =")
+            .substringBefore("// =========================================================================")
+        assertTrue(
+            "exports.resetDriverPassword must delegate to processResetDriverPassword",
+            resetDriverWrapper.contains("processResetDriverPassword(data, context)")
+        )
+
+        val resetDriverFunc = functionsContent.substringAfter("async function processResetDriverPassword")
+            .substringBefore("async function processDeleteDriverAccount")
         assertFalse(
             "Cloud Function resetDriverPassword must not write password to Firestore document",
             resetDriverFunc.contains("update({ password") || resetDriverFunc.contains("set({ password")
         )
-        // Must use admin.auth().updateUser
+        // Must use Firebase Admin Auth updateUser (via injected auth or admin.auth())
         assertTrue(
-            "Cloud Function must use admin.auth().updateUser for password updates",
-            resetDriverFunc.contains("admin.auth().updateUser")
+            "Cloud Function must default to admin.auth() and call auth.updateUser for password updates",
+            resetDriverFunc.contains("dependencies.auth || admin.auth()") &&
+                resetDriverFunc.contains("auth.updateUser(driverUid, { password: newPassword })")
         )
     }
 
