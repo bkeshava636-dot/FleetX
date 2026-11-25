@@ -72,7 +72,11 @@
     "bus_beacons": {
       ".read": true,
       "$busId": {
-        ".write": true
+        ".write": "newData.val() == null || (newData.hasChildren(['sourceId', 'leaseExpiresAt', 'updatedAt']))",
+        ".validate": "newData.val() == null || (newData.child('sourceId').isString() && newData.child('sourceId').val().length > 0 && newData.child('sourceId').val().length <= 64 && newData.child('leaseExpiresAt').isNumber() && newData.child('updatedAt').isNumber() && (!newData.child('stopOrder').exists() || newData.child('stopOrder').isNumber()) && (!newData.child('accuracy').exists() || (newData.child('accuracy').isNumber() && newData.child('accuracy').val() >= 0)))",
+        "$other": {
+          ".validate": "$other == 'sourceId' || $other == 'leaseExpiresAt' || $other == 'updatedAt' || $other == 'stopOrder' || $other == 'accuracy'"
+        }
       }
     },
     "bus_travel_paths": {

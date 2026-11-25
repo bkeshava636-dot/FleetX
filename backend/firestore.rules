@@ -28,17 +28,41 @@ service cloud.firestore {
     }
 
     // Users collection: users can read their own profile; admins can manage all;
-    // Public/student read is allowed strictly for active DRIVER profiles (for student dashboard driver info).
+    // Direct unauthenticated read of full driver profiles is removed to prevent PII exposure.
     match /users/{userId} {
-      allow read: if (isAuthenticated() && (request.auth.uid == userId || isAdmin()))
-                  || (resource.data.role == 'DRIVER' && resource.data.active == true);
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
       allow write: if isAdmin();
     }
 
-    // Buses: Public read (Students have NO login); only Admins can create/edit/delete
-    match /buses/{busId} {
+    // Public Driver Directory: Restricted minimal driver information (name, assignedBusId).
+    // Students have no login, so this collection allows unauthenticated read.
+    // Writes are strictly restricted to active Admins.
+    match /public_driver_directory/{driverId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // Buses: Public read (Students have NO login);
+    // Direct client creates/updates restricted to active Admins.
+    // Overwrite prevention: create is strictly denied if the document already exists.
+    match /buses/{busId} {
+      allow read: if true;
+      allow create: if isAdmin() && !exists(/databases/$(database)/documents/buses/$(busId));
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Bus Number and Registration Indexes: Only accessible by active Admins
+    match /bus_number_index/{indexId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && !exists(/databases/$(database)/documents/bus_number_index/$(indexId));
+      allow update, delete: if isAdmin();
+    }
+
+    match /bus_registration_index/{indexId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && !exists(/databases/$(database)/documents/bus_registration_index/$(indexId));
+      allow update, delete: if isAdmin();
     }
 
     // Routes & Stops: Public read (Students have NO login); only Admins can create/edit/delete
@@ -94,31 +118,12 @@ service cloud.firestore {
     }
 
     // Temporary Assignments: Public read so students see effective driver;
-    // Drivers can create/cancel/update only for their permanently assigned bus;
-    // Admins have full creation and management access.
+    // All creation, cancellation, and modifications MUST be routed through trusted Cloud Functions
+    // (createTemporaryAssignment, cancelTemporaryAssignment) to enforce overlap checks and RTDB sync.
+    // Direct client writes are restricted exclusively to active Admins.
     match /temporary_assignments/{assignmentId} {
       allow read: if true;
-      allow create: if isAdmin() || (
-        isDriver() &&
-        request.resource.data.busId == getDriverAssignedBusId() &&
-        request.resource.data.permanentDriverUid == request.auth.uid &&
-        request.resource.data.replacementDriverUid != request.auth.uid &&
-        request.resource.data.createdByUid == request.auth.uid &&
-        request.resource.data.createdByRole == 'DRIVER'
-      );
-      allow update: if isAdmin() || (
-        isDriver() &&
-        resource.data.permanentDriverUid == request.auth.uid &&
-        resource.data.busId == getDriverAssignedBusId() &&
-        (resource.data.status != 'CANCELLED' && resource.data.cancelledAt == null) &&
-        request.resource.data.status == 'CANCELLED' &&
-        request.resource.data.cancelledByUid == request.auth.uid &&
-        request.resource.data.cancelledByRole == 'DRIVER' &&
-        request.resource.data.busId == resource.data.busId &&
-        request.resource.data.permanentDriverUid == resource.data.permanentDriverUid &&
-        request.resource.data.replacementDriverUid == resource.data.replacementDriverUid
-      );
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     // Announcements: Public read (Students and Drivers see announcements without login / with auth);
@@ -130,8 +135,24 @@ service cloud.firestore {
 
     // Student Feedback & Issue Reports: Anyone (students have no login) can submit feedback or reports;
     // Admins can read, review, and delete feedback.
+    // Strict schema validation enforces allowed fields, field types, string size bounds, and initial status 'NEW'.
     match /student_feedback/{feedbackId} {
-      allow create: if true;
+      allow create: if request.resource.data.keys().hasOnly([
+          'feedbackId', 'feedbackType', 'busId', 'routeId', 'category',
+          'subject', 'description', 'studentName', 'studentContact', 'timestamp', 'status'
+        ]) &&
+        request.resource.data.feedbackId == feedbackId &&
+        request.resource.data.feedbackId is string && request.resource.data.feedbackId.size() <= 64 &&
+        request.resource.data.feedbackType in ['APP', 'BUS'] &&
+        request.resource.data.busId is string && request.resource.data.busId.size() <= 64 &&
+        request.resource.data.routeId is string && request.resource.data.routeId.size() <= 64 &&
+        request.resource.data.category is string && request.resource.data.category.size() <= 100 &&
+        request.resource.data.subject is string && request.resource.data.subject.size() <= 200 &&
+        request.resource.data.description is string && request.resource.data.description.size() <= 2000 &&
+        request.resource.data.studentName is string && request.resource.data.studentName.size() <= 100 &&
+        request.resource.data.studentContact is string && request.resource.data.studentContact.size() <= 100 &&
+        request.resource.data.timestamp is int &&
+        request.resource.data.status == 'NEW';
       allow read, update, delete: if isAdmin();
     }
 
@@ -229,6 +250,12 @@ service cloud.firestore {
     match /stop_location_submissions/{submissionId} {
       allow read, update, delete: if isAdmin();
       allow create: if false; // Deny direct client writes; must use submitStopCoordinates Cloud Function
+    }
+
+    // Security Rate Limits: Internal backend collection for server-side rate limiting.
+    // Direct client read and write access is completely denied.
+    match /security_rate_limits/{docId} {
+      allow read, write: if false;
     }
   }
 }

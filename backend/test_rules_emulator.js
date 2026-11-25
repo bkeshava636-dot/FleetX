@@ -4,8 +4,16 @@ const path = require("path");
 
 const DB_HOST = process.env.FIREBASE_DATABASE_EMULATOR_HOST || "127.0.0.1:9000";
 const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || "127.0.0.1:9099";
-const PROJECT_ID = "college-bus-tracker-prod";
-const NS = "college-bus-tracker-prod-default-rtdb";
+const PROJECT_ID = process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || "demo-fleetx";
+const NS = process.env.FIREBASE_DATABASE_NAME || `${PROJECT_ID}-default-rtdb`;
+
+// Strict anti-production safeguard: Never allow running against remote or production endpoints
+if (!DB_HOST.includes("127.0.0.1") && !DB_HOST.includes("localhost")) {
+  throw new Error("CRITICAL SAFETY BLOCK: Refusing to execute emulator test script against non-local DB host: " + DB_HOST);
+}
+if (!AUTH_HOST.includes("127.0.0.1") && !AUTH_HOST.includes("localhost")) {
+  throw new Error("CRITICAL SAFETY BLOCK: Refusing to execute emulator test script against non-local Auth host: " + AUTH_HOST);
+}
 
 console.log("==================================================");
 console.log("FIREBASE EMULATOR - DATABASE RULES VERIFICATION");
@@ -281,8 +289,45 @@ async function run() {
     true
   );
 
+  // Scenario H: Malicious / invalid write to bus_beacons (arbitrary unknown keys or missing required fields) is DENIED
+  await testRestWrite(
+    "Scenario H: Malicious write with arbitrary keys to bus_beacons is DENIED",
+    "bus_beacons/BUS-01",
+    {
+      sourceId: "attacker_source",
+      maliciousPayload: "huge_payload_data",
+      randomData: 12345
+    },
+    null,
+    false
+  );
+
+  // Scenario I: Legitimate student lease acquisition write to bus_beacons is ALLOWED
+  await testRestWrite(
+    "Scenario I: Legitimate student lease write to bus_beacons is ALLOWED",
+    "bus_beacons/BUS-01",
+    {
+      sourceId: "student_uuid_001",
+      stopOrder: 3,
+      accuracy: 12.5,
+      leaseExpiresAt: now + 45000,
+      updatedAt: now
+    },
+    null,
+    true
+  );
+
+  // Scenario J: Student lease release (null write) to bus_beacons is ALLOWED
+  await testRestWrite(
+    "Scenario J: Student lease release (null write) to bus_beacons is ALLOWED",
+    "bus_beacons/BUS-01",
+    null,
+    null,
+    true
+  );
+
   console.log("\n==================================================");
-  console.log("ALL 7 EMULATOR SECURITY SCENARIOS PASSED!");
+  console.log("ALL 10 EMULATOR SECURITY SCENARIOS PASSED!");
   console.log("==================================================");
   process.exit(0);
 }
