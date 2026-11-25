@@ -1,7 +1,7 @@
 {
-  "versionCode": 10045,
-  "versionName": "1.0.45",
-  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.45/FleetX-v1.0.45.apk",
+  "versionCode": 10046,
+  "versionName": "1.0.46",
+  "downloadUrl": "https://github.com/bkeshava636-dot/FleetX/releases/download/v1.0.46/FleetX-v1.0.46.apk",
   "sha256": "ae253509f8e6d657f1987fd2136119fb5215555e62d65d00a99b17b6a44badcf",
   "releaseNotes": "• Boarding stop selection now stays saved when closing and reopening the app.\n• Full route and stop schedules added for all 25 college buses.\n• Faster app startup and improved offline responsiveness.",
   "publishedAt": "2026-11-23T18:03:20Z"
