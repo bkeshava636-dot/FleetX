@@ -12,7 +12,8 @@ app/google-services.json
 *.pfx
 *.jks
 *.keystore
-!app/keystore/fleetx_release.jks
+app/keystore/*.jks
+app/keystore/*.keystore
 key.properties
 signing.properties
 keystore.properties

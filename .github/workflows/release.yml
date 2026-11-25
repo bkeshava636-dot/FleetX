@@ -45,21 +45,32 @@ jobs:
           python -c "import os; open('app/google-services.json', 'w', encoding='utf-8').write(os.environ['GOOGLE_SERVICES_JSON_CONTENT'])"
           echo "SUCCESS: Injected google-services.json from GitHub Secrets"
 
-      - name: Verify FleetX Production Keystore Presence
+      - name: Decode FleetX Production Keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          if [ -f "app/keystore/fleetx_release.jks" ]; then
-            echo "SUCCESS: FleetX production keystore is present at app/keystore/fleetx_release.jks"
-          else
-            echo "ERROR: app/keystore/fleetx_release.jks missing!"
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ] || [ -z "$RELEASE_STORE_PASSWORD" ] || [ -z "$RELEASE_KEY_ALIAS" ] || [ -z "$RELEASE_KEY_PASSWORD" ]; then
+            echo "ERROR: Missing required release signing GitHub Secrets (RELEASE_KEYSTORE_BASE64, RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD)."
             exit 1
           fi
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "${{ runner.temp }}/fleetx_release.jks"
+          chmod 600 "${{ runner.temp }}/fleetx_release.jks"
+          echo "SUCCESS: Decoded production keystore to temporary runner storage."
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease --stacktrace
+      - name: Build Production Release APK
+        env:
+          RELEASE_STORE_FILE: ${{ runner.temp }}/fleetx_release.jks
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: ./gradlew assembleProdRelease --stacktrace
 
       - name: Verify Release APK Production Signature
         run: |
-          APK_PATH=$(find app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
+          APK_PATH=$(find app/build/outputs/apk/prod/release/ -name "*.apk" | head -n 1)
           echo "Checking APK at: $APK_PATH"
           APKSIGNER=$(find "${ANDROID_HOME}/build-tools" -name "apksigner" | sort -V | tail -n 1)
           echo "Using apksigner at: $APKSIGNER"
@@ -81,7 +92,7 @@ jobs:
           fi
           
           # Find generated APK
-          APK_PATH=$(find app/build/outputs/apk/ -name "*.apk" | head -n 1)
+          APK_PATH=$(find app/build/outputs/apk/prod/release/ -name "*.apk" | head -n 1)
           if [ -z "$APK_PATH" ]; then
             echo "Error: No APK found after build."
             exit 1
@@ -120,6 +131,7 @@ jobs:
           SHA256: ${{ steps.apk_info.outputs.sha256 }}
           VERSION_CODE: ${{ steps.apk_info.outputs.version_code }}
           FILE_SIZE: ${{ steps.apk_info.outputs.file_size }}
+          RELEASES_REPO: bkeshava636-dot/FleetX
         run: |
           python3 .github/scripts/generate_release_notes.py
 
@@ -139,3 +151,24 @@ jobs:
             checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update version.json on main branch
+        env:
+          TAG_NAME: ${{ steps.apk_info.outputs.tag_name }}
+        run: |
+          cp release-version.json "${{ runner.temp }}/version.json"
+          git fetch origin main
+          git checkout -B main origin/main
+          cp "${{ runner.temp }}/version.json" version.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add version.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): update version.json for ${TAG_NAME} [skip ci]"
+            git push origin main
+          fi
+
+      - name: Clean Up Temporary Signing Files
+        if: always()
+        run: |
+          rm -f "${{ runner.temp }}/fleetx_release.jks" cert_info.txt

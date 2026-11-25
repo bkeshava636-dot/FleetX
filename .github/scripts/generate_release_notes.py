@@ -68,5 +68,19 @@ SHA-256: {sha256}
         json.dump(manifest, f, indent=2)
     print("Generated update-manifest.json")
 
+    # 4. Format release-version.json for FleetX/main/version.json
+    releases_repo = os.environ.get("RELEASES_REPO", "bkeshava636-dot/FleetX")
+    version_payload = {
+        "versionCode": int(version_code),
+        "versionName": version_name,
+        "downloadUrl": f"https://github.com/{releases_repo}/releases/download/{tag_name}/{apk_name}",
+        "sha256": sha256,
+        "releaseNotes": release_notes.strip(),
+        "publishedAt": now_iso
+    }
+    with open("release-version.json", "w", encoding="utf-8") as f:
+        json.dump(version_payload, f, indent=2)
+    print("Generated release-version.json")
+
 if __name__ == "__main__":
     main()
