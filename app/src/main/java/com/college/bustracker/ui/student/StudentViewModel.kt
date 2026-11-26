@@ -93,6 +93,8 @@ class StudentViewModel : ViewModel() {
     private val _activeSwapForStudent = MutableStateFlow<BusSwap?>(null)
     val activeSwapForStudent: StateFlow<BusSwap?> = _activeSwapForStudent.asStateFlow()
 
+    private val _assignedDriverPhone = MutableStateFlow<String?>(null)
+
     private val _activeSwapsForBus = MutableStateFlow<List<BusSwap>>(emptyList())
     val activeSwapsForBus: StateFlow<List<BusSwap>> = _activeSwapsForBus.asStateFlow()
 
@@ -301,6 +303,23 @@ class StudentViewModel : ViewModel() {
             }
         }
 
+        // Collect per-bus active driver contact phone for the selected/swapped bus
+        viewModelScope.launch {
+            combine(_selectedBus, _activeSwapForStudent) { bus, swap ->
+                if (bus == null) ""
+                else if (swap != null && swap.status == "ACTIVE" &&
+                    swap.originalBusId.equals(bus.busId, ignoreCase = true) &&
+                    swap.replacementBusId.isNotBlank()
+                ) swap.replacementBusId else bus.busId
+            }.flatMapLatest { effectiveBusId ->
+                if (effectiveBusId.isBlank()) flowOf(null)
+                else busRepo.getAssignedDriverContactFlow(effectiveBusId)
+            }.collect { phone ->
+                _assignedDriverPhone.value = phone
+                updateDriverDisplayInfo()
+            }
+        }
+
         // Ticker for stale timer and relative time formatting
         viewModelScope.launch {
             var previousState = TrackingDisplayState.INACTIVE
@@ -497,7 +516,8 @@ class StudentViewModel : ViewModel() {
             allBuses = _buses.value,
             allDrivers = _drivers.value,
             activeTemporaryAssignment = _activeTemporaryAssignment.value,
-            nowMillis = tempAssignRepo.getEstimatedServerTime()
+            nowMillis = tempAssignRepo.getEstimatedServerTime(),
+            assignedDriverPhone = _assignedDriverPhone.value
         )
     }
 

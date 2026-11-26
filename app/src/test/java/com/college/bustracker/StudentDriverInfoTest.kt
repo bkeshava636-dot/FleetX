@@ -227,4 +227,49 @@ class StudentDriverInfoTest {
         assertEquals("Driver Two", info2.driverName)
         assertEquals("222", info2.phoneNumber)
     }
+
+    // =========================================================================
+    // 9. PER-BUS PUBLIC CONTACT FALLBACK (PRIVACY-SAFE v1.0.46+)
+    // =========================================================================
+
+    @Test
+    fun testPerBusAssignedDriverPhoneRestoresCallButtonWhenDirectoryOmitsPhone() {
+        val bus = Bus(busId = "BUS-25", busNumber = "BUS 25", driverId = "DRV-1", driverName = "Bullappa", active = true)
+        val publicDirDriver = UserProfile(
+            uid = "DRV-1",
+            name = "Bullappa",
+            role = UserRole.DRIVER,
+            assignedBusId = "BUS-25",
+            phoneNumber = null,
+            active = true
+        )
+
+        val info = DriverInfoLogic.resolveDriver(
+            selectedBus = bus,
+            activeSwap = null,
+            allBuses = listOf(bus),
+            allDrivers = listOf(publicDirDriver),
+            assignedDriverPhone = "+91 9876543210"
+        )
+
+        assertEquals("Bullappa", info.driverName)
+        assertEquals("+91 9876543210", info.phoneNumber)
+        assertTrue(info.isAssigned)
+    }
+
+    @Test
+    fun testUnassignedBusNeverExposesAssignedDriverPhone() {
+        val bus = Bus(busId = "BUS-99", busNumber = "BUS 99", driverId = null, driverName = null, active = true)
+
+        val info = DriverInfoLogic.resolveDriver(
+            selectedBus = bus,
+            activeSwap = null,
+            allBuses = listOf(bus),
+            allDrivers = emptyList(),
+            assignedDriverPhone = "+91 9876543210"
+        )
+
+        assertFalse(info.isAssigned)
+        assertNull(info.phoneNumber)
+    }
 }

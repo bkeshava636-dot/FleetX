@@ -21,7 +21,8 @@ object DriverInfoLogic {
         allBuses: List<Bus>,
         allDrivers: List<UserProfile>,
         activeTemporaryAssignment: TemporaryAssignment? = null,
-        nowMillis: Long = System.currentTimeMillis()
+        nowMillis: Long = System.currentTimeMillis(),
+        assignedDriverPhone: String? = null
     ): DriverDisplayInfo {
         if (selectedBus == null) {
             return DriverDisplayInfo(
@@ -56,7 +57,8 @@ object DriverInfoLogic {
             return DriverDisplayInfo(
                 busTitle = displayBusTitle,
                 driverName = activeTemporaryAssignment.replacementDriverName.ifBlank { "Driver" },
-                phoneNumber = activeTemporaryAssignment.replacementDriverPhone?.takeIf { it.isNotBlank() },
+                phoneNumber = activeTemporaryAssignment.replacementDriverPhone?.takeIf { it.isNotBlank() }
+                    ?: assignedDriverPhone?.takeIf { it.isNotBlank() },
                 isAssigned = true,
                 isReplacement = true
             )
@@ -76,7 +78,8 @@ object DriverInfoLogic {
                 DriverDisplayInfo(
                     busTitle = displayBusTitle,
                     driverName = matchingDriver.name.ifBlank { "Driver" },
-                    phoneNumber = matchingDriver.phoneNumber?.takeIf { it.isNotBlank() },
+                    phoneNumber = matchingDriver.phoneNumber?.takeIf { it.isNotBlank() }
+                        ?: assignedDriverPhone?.takeIf { it.isNotBlank() },
                     isAssigned = true,
                     isReplacement = isSwapActive
                 )
@@ -85,7 +88,7 @@ object DriverInfoLogic {
                 DriverDisplayInfo(
                     busTitle = displayBusTitle,
                     driverName = targetBus!!.driverName!!,
-                    phoneNumber = null,
+                    phoneNumber = assignedDriverPhone?.takeIf { it.isNotBlank() },
                     isAssigned = true,
                     isReplacement = isSwapActive
                 )

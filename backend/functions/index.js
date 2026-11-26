@@ -1623,14 +1623,14 @@ exports.onTemporaryAssignmentWritten = regionalFunctions.firestore
     const rtdb = admin.database();
     if (!after || after.cancelledAt != null || after.status === "CANCELLED") {
       // Deleted or cancelled
-      return rtdb.ref(`bus_operators/${busId}`).update({
+      await rtdb.ref(`bus_operators/${busId}`).update({
         hasTemporary: false,
         temporaryDriverUid: null,
         cancelledAt: Date.now(),
         operatorEpoch: Date.now()
       });
     } else {
-      return rtdb.ref(`bus_operators/${busId}`).set({
+      await rtdb.ref(`bus_operators/${busId}`).set({
         busId,
         permanentDriverUid: after.permanentDriverUid || "",
         temporaryDriverUid: after.replacementDriverUid || "",
@@ -1641,6 +1641,8 @@ exports.onTemporaryAssignmentWritten = regionalFunctions.firestore
         operatorEpoch: after.operatorEpoch || Date.now()
       });
     }
+    await syncBusDriverContact(busId, admin.firestore()).catch(() => {});
+    return null;
   });
 
 /**
@@ -1884,6 +1886,7 @@ exports.STUDENT_STALE_THRESHOLD_MS = STUDENT_STALE_THRESHOLD_MS;
 exports.resolveEffectiveDriver = getEffectiveDriver;
 exports.processGetEffectiveDriver = processGetEffectiveDriver;
 exports.syncPublicDriverDirectory = syncPublicDriverDirectory;
+exports.syncBusDriverContact = syncBusDriverContact;
 exports.processCreateTemporaryAssignment = processCreateTemporaryAssignment;
 exports.processCancelTemporaryAssignment = processCancelTemporaryAssignment;
 
@@ -2471,6 +2474,81 @@ async function syncPublicDriverDirectory(driverUid, db = admin.firestore()) {
     console.log(`[syncPublicDriverDirectory] Synced public entry for driver ${safeDriverUid} (bus=${publicEntry.assignedBusId})`);
   } catch (err) {
     console.error(`[syncPublicDriverDirectory] Failed to sync driver ${safeDriverUid}:`, err.message);
+  }
+}
+
+/**
+ * Synchronizes a single bus's public driver contact document (`public_bus_contacts/{busId}`).
+ * Stores ONLY `{ busId, driverName, phoneNumber, isTemporary, active, updatedAt }` for the
+ * currently effective active driver (never email, uid, or customId).
+ * Deletes the document whenever the bus is inactive, unassigned, or the driver is inactive/has no phone.
+ */
+async function syncBusDriverContact(busId, db = admin.firestore(), nowMs = Date.now()) {
+  const cleanBusId = String(busId || "").trim();
+  if (!cleanBusId) return { busId: "", status: "SKIPPED" };
+
+  const contactRef = db.collection("public_bus_contacts").doc(cleanBusId);
+  try {
+    const busDoc = await db.collection("buses").doc(cleanBusId).get();
+    const busData = busDoc.exists ? (busDoc.data() || {}) : null;
+    if (!busDoc.exists || busData.active === false) {
+      await contactRef.delete().catch(() => {});
+      return { busId: cleanBusId, status: "DELETED" };
+    }
+
+    // 1. Check active non-cancelled temporary assignment first
+    let activeTemp = null;
+    const tempSnap = await db.collection("temporary_assignments")
+      .where("busId", "==", cleanBusId)
+      .where("cancelledAt", "==", null)
+      .get();
+    tempSnap.forEach((doc) => {
+      const data = doc.data() || {};
+      if (data.status === "CANCELLED" || data.cancelledAt != null) return;
+      const start = Number(data.startAt) || 0;
+      const end = Number(data.endAt) || 0;
+      if (nowMs >= start && nowMs < end) {
+        activeTemp = data;
+      }
+    });
+
+    const targetUid = activeTemp
+      ? String(activeTemp.replacementDriverUid || "").trim()
+      : String(busData.driverId || "").trim();
+
+    if (!targetUid) {
+      await contactRef.delete().catch(() => {});
+      return { busId: cleanBusId, status: "DELETED" };
+    }
+
+    const userDoc = await db.collection("users").doc(targetUid).get();
+    const userData = userDoc.exists ? (userDoc.data() || {}) : null;
+    if (!userDoc.exists || userData.role !== "DRIVER" || userData.active !== true) {
+      await contactRef.delete().catch(() => {});
+      return { busId: cleanBusId, status: "DELETED" };
+    }
+
+    const phone = userData.phoneNumber ? String(userData.phoneNumber).trim() : "";
+    if (!phone) {
+      await contactRef.delete().catch(() => {});
+      return { busId: cleanBusId, status: "DELETED" };
+    }
+
+    const fallbackName = activeTemp ? activeTemp.replacementDriverName : busData.driverName;
+    const entry = {
+      busId: cleanBusId,
+      driverName: String(userData.name || fallbackName || "Driver").trim(),
+      phoneNumber: phone,
+      isTemporary: Boolean(activeTemp),
+      active: true,
+      updatedAt: nowMs
+    };
+
+    await contactRef.set(entry);
+    return { busId: cleanBusId, status: "SYNCED", isTemporary: entry.isTemporary };
+  } catch (err) {
+    console.error(`[syncBusDriverContact] Failed to sync ${cleanBusId}:`, err.message);
+    return { busId: cleanBusId, status: "ERROR", error: err.message };
   }
 }
 
@@ -3181,6 +3259,7 @@ async function processOnBusAssignmentWritten(change, context, dependencies = {})
         console.warn(`[onBusAssignmentWritten] Warning on bus delete for ${busId}:`, e.message);
       }
     }
+    await syncBusDriverContact(busId, db).catch(() => {});
     return null;
   }
 
@@ -3372,6 +3451,7 @@ async function processOnBusAssignmentWritten(change, context, dependencies = {})
         rtdbSyncLastAttempt: now
       }).catch(err => console.warn(`[onBusAssignmentWritten] Warning updating bus version for ${busId}:`, err.message));
 
+      await syncBusDriverContact(busId, db).catch(() => {});
     } catch (e) {
       console.error(`[onBusAssignmentWritten] Error reconciling ${busId}:`, e.message);
       await db.collection("buses").doc(busId).update({
@@ -3720,6 +3800,7 @@ async function processReconcileOperationalRtdb(dependencies = {}) {
       results.repaired++;
       results.details.push({ busId, status: "REPAIRED", version: effectiveVersion });
       console.log(`[reconcileOperationalRtdb] Repaired RTDB sync for ${busId} to version ${effectiveVersion}`);
+      await syncBusDriverContact(busId, db).catch(() => {});
     } catch (e) {
       results.errors++;
       results.details.push({ busId, status: "FAILED", error: e.message });
@@ -3732,6 +3813,29 @@ async function processReconcileOperationalRtdb(dependencies = {}) {
         rtdbSyncRetryCount: retryCount
       }).catch(() => {});
     }
+  }
+
+  // Also keep public_bus_contacts synchronized for temporary assignments starting/expiring by wall-clock time
+  try {
+    const contactBuses = new Set();
+    const activeTempSnap = await db.collection("temporary_assignments")
+      .where("cancelledAt", "==", null)
+      .get()
+      .catch(() => ({ docs: [] }));
+    activeTempSnap.docs.forEach((d) => {
+      const bId = d.data() && d.data().busId;
+      if (bId) contactBuses.add(String(bId).trim());
+    });
+    const tempContactsSnap = await db.collection("public_bus_contacts")
+      .where("isTemporary", "==", true)
+      .get()
+      .catch(() => ({ docs: [] }));
+    tempContactsSnap.docs.forEach((d) => contactBuses.add(d.id));
+    for (const bId of contactBuses) {
+      await syncBusDriverContact(bId, db, now).catch(() => {});
+    }
+  } catch (contactErr) {
+    console.warn("[reconcileOperationalRtdb] Contact sync warning:", contactErr.message);
   }
 
   return results;
@@ -4003,6 +4107,21 @@ exports.onUserWritten = regionalFunctions.firestore
 
     if (isDriverAfter || isDriverBefore) {
       await syncPublicDriverDirectory(userId);
+      const affectedBuses = new Set();
+      if (afterData && afterData.assignedBusId) affectedBuses.add(String(afterData.assignedBusId).trim());
+      if (beforeData && beforeData.assignedBusId) affectedBuses.add(String(beforeData.assignedBusId).trim());
+      const tempSnap = await admin.firestore().collection("temporary_assignments")
+        .where("replacementDriverUid", "==", userId)
+        .where("cancelledAt", "==", null)
+        .get()
+        .catch(() => ({ docs: [] }));
+      tempSnap.docs.forEach((d) => {
+        const bId = d.data() && d.data().busId;
+        if (bId) affectedBuses.add(String(bId).trim());
+      });
+      for (const bId of affectedBuses) {
+        await syncBusDriverContact(bId).catch(() => {});
+      }
     }
     return null;
   });
@@ -4024,6 +4143,7 @@ exports.validateDriverProfileInputs = validateDriverProfileInputs;
 exports.mapStaffEmail = mapStaffEmail;
 exports.syncAssignmentToRtdb = syncAssignmentToRtdb;
 exports.syncPublicDriverDirectory = syncPublicDriverDirectory;
+exports.syncBusDriverContact = syncBusDriverContact;
 exports.checkRateLimit = checkRateLimit;
 exports.getClientIp = getClientIp;
 exports.isPrivateOrInternalIp = isPrivateOrInternalIp;

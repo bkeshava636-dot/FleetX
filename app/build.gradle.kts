@@ -16,8 +16,8 @@ android {
         applicationId = "com.college.bustracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10046
-        versionName = "1.0.46"
+        versionCode = 10047
+        versionName = "1.0.47"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

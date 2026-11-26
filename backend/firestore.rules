@@ -42,6 +42,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Public Bus Contacts: Per-bus active driver phone for students (no bulk list, no email, no write).
+    match /public_bus_contacts/{busId} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if false;
+    }
+
     // Buses: Public read (Students have NO login);
     // Direct client creates/updates restricted to active Admins.
     // Overwrite prevention: create is strictly denied if the document already exists.
