@@ -3,6 +3,7 @@ import { getAuth, connectAuthEmulator, Auth } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, Firestore } from 'firebase/firestore';
 import { getDatabase, connectDatabaseEmulator, Database } from 'firebase/database';
 import { getFunctions, connectFunctionsEmulator, Functions } from 'firebase/functions';
+import { getStorage, connectStorageEmulator, FirebaseStorage } from 'firebase/storage';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, AppCheck } from 'firebase/app-check';
 import { getValidatedFirebaseConfig, validateMapsConfig } from './envValidator';
 
@@ -22,6 +23,7 @@ const auth: Auth = getAuth(app);
 const db: Firestore = getFirestore(app);
 const rtdb: Database = getDatabase(app);
 const functions: Functions = getFunctions(app, 'asia-south1'); // Project regional functions are hosted in asia-south1
+const storage: FirebaseStorage = getStorage(app);
 
 // App Check initialization (Protects public student submission writes against scraping & bots)
 let appCheck: AppCheck | null = null;
@@ -67,6 +69,7 @@ if (useEmulator && typeof window !== 'undefined') {
       connectFirestoreEmulator(db, emulatorHost, 8080);
       connectDatabaseEmulator(rtdb, emulatorHost, 9000);
       connectFunctionsEmulator(functions, emulatorHost, 5001);
+      connectStorageEmulator(storage, emulatorHost, 9199);
       globalWithEmulator.__FIREBASE_EMULATOR_ATTACHED__ = true;
       console.info('[Firebase Emulator] Connected successfully.');
     } catch (e) {
@@ -75,4 +78,4 @@ if (useEmulator && typeof window !== 'undefined') {
   }
 }
 
-export { app, auth, db, rtdb, functions, appCheck };
+export { app, auth, db, rtdb, functions, storage, appCheck };

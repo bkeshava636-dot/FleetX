@@ -15,6 +15,7 @@ const RoutesAndStops = lazy(() => import('./pages/admin/RoutesAndStops'));
 const FleetManagement = lazy(() => import('./pages/admin/FleetManagement'));
 const DriverManagement = lazy(() => import('./pages/admin/DriverManagement'));
 const LiveFleetTracking = lazy(() => import('./pages/admin/LiveFleetTracking'));
+const StopRequests = lazy(() => import('./pages/admin/StopRequests'));
 const BusSwaps = lazy(() => import('./pages/admin/BusSwaps'));
 const TemporaryAssignments = lazy(() => import('./pages/admin/TemporaryAssignments'));
 const CollegeCalendar = lazy(() => import('./pages/admin/CollegeCalendar'));
@@ -64,6 +65,7 @@ export const App: React.FC = () => {
           >
             <Route index element={<AdminDashboard />} />
             <Route path="submissions" element={<StopCoordinateSubmissions />} />
+            <Route path="stop-requests" element={<StopRequests />} />
             <Route path="routes" element={<RoutesAndStops />} />
             <Route path="fleet" element={<FleetManagement />} />
             <Route path="drivers" element={<DriverManagement />} />

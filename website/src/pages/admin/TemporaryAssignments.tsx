@@ -50,6 +50,7 @@ export const TemporaryAssignments: React.FC = () => {
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [pendingCancel, setPendingCancel] = useState<TemporaryAssignmentRecord | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const showToast = (type: 'success' | 'error', text: string) => {
@@ -144,6 +145,7 @@ export const TemporaryAssignments: React.FC = () => {
     try {
       await cancelTemporaryAssignmentCallable(assignmentId);
       showToast('success', 'Temporary assignment cancelled and RTDB synced.');
+      setPendingCancel(null);
     } catch (err) {
       showToast(
         'error',
@@ -283,7 +285,7 @@ export const TemporaryAssignments: React.FC = () => {
                       {a.status === 'ACTIVE' ? (
                         <button
                           disabled={cancellingId === a.assignmentId}
-                          onClick={() => handleCancel(a.assignmentId)}
+                          onClick={() => setPendingCancel(a)}
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 font-semibold disabled:opacity-50"
                         >
                           <XCircle className="w-3.5 h-3.5" />
@@ -401,6 +403,54 @@ export const TemporaryAssignments: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Cancel Modal */}
+      {pendingCancel && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-red-50 text-red-600">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Cancel Temporary Assignment?
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  This will end the relief driver assignment immediately and restore the permanent driver in RTDB.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+              <p className="font-semibold text-slate-900">Bus: {pendingCancel.busId}</p>
+              <p className="text-slate-600">
+                {pendingCancel.permanentDriverName || 'Unassigned'} →{' '}
+                {pendingCancel.replacementDriverName}
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1 text-xs">
+              <button
+                type="button"
+                disabled={cancellingId === pendingCancel.assignmentId}
+                onClick={() => setPendingCancel(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 disabled:opacity-50"
+              >
+                Keep Active
+              </button>
+              <button
+                type="button"
+                disabled={cancellingId === pendingCancel.assignmentId}
+                onClick={() => handleCancel(pendingCancel.assignmentId)}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50"
+              >
+                {cancellingId === pendingCancel.assignmentId ? 'Cancelling...' : 'Confirm Cancel'}
+              </button>
+            </div>
           </div>
         </div>
       )}

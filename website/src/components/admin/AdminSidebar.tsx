@@ -41,6 +41,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
   const navItems: NavItem[] = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, isImplemented: true },
     { name: 'Stop Submissions', href: '/admin/submissions', icon: MapPin, isImplemented: true, badge: 'New' },
+    { name: 'Stop Requests', href: '/admin/stop-requests', icon: MapPin, isImplemented: true },
     { name: 'Routes & Stops', href: '/admin/routes', icon: RouteIcon, isImplemented: true },
     { name: 'Fleet Management', href: '/admin/fleet', icon: Bus, isImplemented: true },
     { name: 'Driver Management', href: '/admin/drivers', icon: Users, isImplemented: true },

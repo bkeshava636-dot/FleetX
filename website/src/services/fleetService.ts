@@ -258,18 +258,32 @@ export async function assignBusRoute(busId: string, routeId: string | null): Pro
  */
 export async function assignBusDriver(
   busId: string,
-  driverUid: string
+  driverUid: string,
+  options?: { confirmReplacement?: boolean; expectedPreviousDriverId?: string | null }
 ): Promise<SetBusDriverAssignmentResponse> {
   if (!busId) throw new Error('Bus ID is required.');
   if (!driverUid) throw new Error('Driver UID is required.');
 
-  const callable = httpsCallable<{ busId: string; driverUid: string | null }, SetBusDriverAssignmentResponse>(
+  const callable = httpsCallable<
+    {
+      busId: string;
+      driverUid: string | null;
+      confirmReplacement?: boolean;
+      expectedPreviousDriverId?: string | null;
+    },
+    SetBusDriverAssignmentResponse
+  >(
     functions,
     'setBusDriverAssignment'
   );
 
   try {
-    const res = await callable({ busId, driverUid });
+    const res = await callable({
+      busId,
+      driverUid,
+      confirmReplacement: options?.confirmReplacement,
+      expectedPreviousDriverId: options?.expectedPreviousDriverId
+    });
     return res.data;
   } catch (err: unknown) {
     const error = err as { code?: string; message?: string };
@@ -343,5 +357,28 @@ export async function reconcileBusSync(busId: string): Promise<ReconcileBusRtdbR
     const error = err as { code?: string; message?: string };
     console.error(`[fleetService] Failed reconciling RTDB for bus ${busId}:`, error);
     throw new Error(error.message || 'Failed to reconcile bus operational data.');
+  }
+}
+
+/**
+ * Permanently deletes a bus via backend Cloud Function deleteBusAccount.
+ */
+export async function deleteBus(
+  busId: string
+): Promise<{ success: boolean; busId: string; message?: string }> {
+  if (!busId) throw new Error('Bus ID is required.');
+
+  const callable = httpsCallable<{ busId: string }, { success: boolean; busId: string; message?: string }>(
+    functions,
+    'deleteBusAccount'
+  );
+
+  try {
+    const res = await callable({ busId });
+    return res.data;
+  } catch (err: unknown) {
+    const error = err as { code?: string; message?: string };
+    console.error(`[fleetService] Failed deleting bus ${busId}:`, error);
+    throw new Error(error.message || 'Failed to delete bus.');
   }
 }

@@ -44,6 +44,10 @@ export const BusSwaps: React.FC = () => {
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<{
+    swap: BusSwapRecord;
+    status: 'RESOLVED' | 'CANCELLED';
+  } | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const showToast = (type: 'success' | 'error', text: string) => {
@@ -164,6 +168,7 @@ export const BusSwaps: React.FC = () => {
     try {
       await updateBusSwapStatus(swapId, status, profile?.uid || '');
       showToast('success', `Swap marked as ${status}.`);
+      setPendingAction(null);
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : 'Failed to update swap status.');
     } finally {
@@ -334,7 +339,7 @@ export const BusSwaps: React.FC = () => {
                         <div className="inline-flex items-center gap-2">
                           <button
                             disabled={actionBusyId === swap.swapId}
-                            onClick={() => handleStatusChange(swap.swapId, 'RESOLVED')}
+                            onClick={() => setPendingAction({ swap, status: 'RESOLVED' })}
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold disabled:opacity-50"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
@@ -342,7 +347,7 @@ export const BusSwaps: React.FC = () => {
                           </button>
                           <button
                             disabled={actionBusyId === swap.swapId}
-                            onClick={() => handleStatusChange(swap.swapId, 'CANCELLED')}
+                            onClick={() => setPendingAction({ swap, status: 'CANCELLED' })}
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 font-semibold disabled:opacity-50"
                           >
                             <XCircle className="w-3.5 h-3.5" />
@@ -474,6 +479,77 @@ export const BusSwaps: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Resolve / Cancel Modal */}
+      {pendingAction && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
+            <div className="flex items-start gap-3">
+              <div
+                className={`p-2.5 rounded-xl ${
+                  pendingAction.status === 'RESOLVED'
+                    ? 'bg-emerald-50 text-emerald-600'
+                    : 'bg-red-50 text-red-600'
+                }`}
+              >
+                {pendingAction.status === 'RESOLVED' ? (
+                  <CheckCircle2 className="w-5 h-5" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5" />
+                )}
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  {pendingAction.status === 'RESOLVED' ? 'Resolve Bus Swap?' : 'Cancel Bus Swap?'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  {pendingAction.status === 'RESOLVED'
+                    ? 'This will mark the bus swap as completed and close the active student notice.'
+                    : 'This will cancel the active bus swap and record the cancellation in swap history.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+              <p className="font-semibold text-slate-900">
+                {pendingAction.swap.originalBusId} → {pendingAction.swap.replacementBusId}
+              </p>
+              <p className="text-slate-600">
+                Route: {pendingAction.swap.routeId || 'N/A'}
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1 text-xs">
+              <button
+                type="button"
+                disabled={actionBusyId === pendingAction.swap.swapId}
+                onClick={() => setPendingAction(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 disabled:opacity-50"
+              >
+                Keep Active
+              </button>
+              <button
+                type="button"
+                disabled={actionBusyId === pendingAction.swap.swapId}
+                onClick={() =>
+                  handleStatusChange(pendingAction.swap.swapId, pendingAction.status)
+                }
+                className={`px-4 py-2 rounded-xl text-white font-semibold disabled:opacity-50 ${
+                  pendingAction.status === 'RESOLVED'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                {actionBusyId === pendingAction.swap.swapId
+                  ? 'Updating...'
+                  : pendingAction.status === 'RESOLVED'
+                  ? 'Confirm Resolve'
+                  : 'Confirm Cancel'}
+              </button>
+            </div>
           </div>
         </div>
       )}

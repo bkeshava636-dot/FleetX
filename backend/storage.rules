@@ -1,11 +1,24 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /route_schedules/{allPaths=**} {
-      // Anyone (students, drivers, public) can view timetable PDFs
+    function isActiveAdmin() {
+      return request.auth != null &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.active == true;
+    }
+
+    match /route_schedules/{fileName} {
+      // Anyone (students, drivers, public) can view published timetable PDFs
       allow read: if true;
-      // Admins can upload, replace, or delete timetable PDFs
-      allow write: if request.auth != null;
+      // Only active Admins can upload or replace PDFs (max 15 MB, application/pdf)
+      allow create, update: if isActiveAdmin() &&
+        fileName.matches('^.+\\.pdf$') &&
+        request.resource != null &&
+        request.resource.size > 0 &&
+        request.resource.size <= 15 * 1024 * 1024 &&
+        request.resource.contentType == 'application/pdf';
+      // Only active Admins can delete timetable PDFs
+      allow delete: if isActiveAdmin();
     }
   }
 }

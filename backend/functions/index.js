@@ -4311,6 +4311,116 @@ async function processUpdateBusDetails(data, context, dependencies = {}) {
   return { success: true, busId };
 }
 
+/**
+ * 13. deleteBusAccount
+ * Safely deletes a bus document, its uniqueness index entries, public contact doc,
+ * and RTDB operational nodes after verifying no driver, active swap, or active/upcoming
+ * temporary assignment is attached to it.
+ */
+async function processDeleteBusAccount(data, context, dependencies = {}) {
+  const db = dependencies.db || admin.firestore();
+  const rtdb = dependencies.rtdb !== undefined ? dependencies.rtdb : admin.database();
+
+  verifyAppCheck(context);
+  await verifyActiveAdmin(context, db);
+
+  const busId = data && data.busId ? String(data.busId).trim() : null;
+  if (!busId) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid busId must be provided.");
+  }
+
+  const busRef = db.collection("buses").doc(busId);
+  const busDoc = await busRef.get();
+  if (!busDoc.exists) {
+    throw new functions.https.HttpsError("not-found", `Bus '${busId}' does not exist.`);
+  }
+
+  const busData = busDoc.data() || {};
+
+  // 1. Block deletion if a permanent driver is currently assigned
+  if (busData.driverId) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      `Cannot delete bus '${busId}' while driver '${busData.driverName || busData.driverId}' is assigned. Unassign the driver first.`
+    );
+  }
+
+  // 2. Block deletion if the bus is involved in any ACTIVE bus swap
+  const [origSwapsSnap, replSwapsSnap] = await Promise.all([
+    db.collection("bus_swaps").where("originalBusId", "==", busId).where("status", "==", "ACTIVE").limit(1).get(),
+    db.collection("bus_swaps").where("replacementBusId", "==", busId).where("status", "==", "ACTIVE").limit(1).get()
+  ]);
+  if (!origSwapsSnap.empty || !replSwapsSnap.empty) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      `Cannot delete bus '${busId}' while it is part of an active bus swap.`
+    );
+  }
+
+  // 3. Block deletion if the bus has any active or upcoming temporary assignments
+  const now = Date.now();
+  const tempAssignmentsSnap = await db.collection("temporary_assignments")
+    .where("busId", "==", busId)
+    .where("cancelledAt", "==", null)
+    .get();
+  const hasActiveOrUpcomingTemp = tempAssignmentsSnap.docs.some((d) => {
+    const dData = d.data() || {};
+    return Number(dData.endAt) > now;
+  });
+  if (hasActiveOrUpcomingTemp) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      `Cannot delete bus '${busId}' while it has active or upcoming temporary driver assignments.`
+    );
+  }
+
+  // 4. Atomically delete bus document, uniqueness index entries, and public contact doc
+  const busNumKey = busData.busNumber ? String(busData.busNumber).trim().toUpperCase() : null;
+  const regKey = busData.registrationNumber ? String(busData.registrationNumber).trim().toUpperCase() : null;
+  const busNumIndexRef = busNumKey ? db.collection("bus_number_index").doc(busNumKey) : null;
+  const regIndexRef = regKey ? db.collection("bus_registration_index").doc(regKey) : null;
+  const publicContactRef = db.collection("public_bus_contacts").doc(busId);
+
+  await db.runTransaction(async (transaction) => {
+    const freshBusDoc = await transaction.get(busRef);
+    if (!freshBusDoc.exists) {
+      throw new functions.https.HttpsError("not-found", `Bus '${busId}' does not exist.`);
+    }
+    const freshData = freshBusDoc.data() || {};
+    if (freshData.driverId) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        `Cannot delete bus '${busId}' while a driver is assigned. Unassign the driver first.`
+      );
+    }
+
+    const busNumIndexDoc = busNumIndexRef ? await transaction.get(busNumIndexRef) : null;
+    const regIndexDoc = regIndexRef ? await transaction.get(regIndexRef) : null;
+
+    transaction.delete(busRef);
+    transaction.delete(publicContactRef);
+    if (busNumIndexDoc && busNumIndexDoc.exists && (!busNumIndexDoc.data().busId || busNumIndexDoc.data().busId === busId)) {
+      transaction.delete(busNumIndexRef);
+    }
+    if (regIndexDoc && regIndexDoc.exists && (!regIndexDoc.data().busId || regIndexDoc.data().busId === busId)) {
+      transaction.delete(regIndexRef);
+    }
+  });
+
+  // 5. Clean up RTDB operational nodes for this bus
+  if (rtdb) {
+    await Promise.all([
+      rtdb.ref(`live_locations/${busId}`).remove().catch(() => {}),
+      rtdb.ref(`location_sources/${busId}`).remove().catch(() => {}),
+      rtdb.ref(`bus_operators/${busId}`).remove().catch(() => {}),
+      rtdb.ref(`bus_swap_mappings/${busId}`).remove().catch(() => {})
+    ]);
+  }
+
+  console.log(`[deleteBusAccount] Successfully deleted bus ${busId}`);
+  return { success: true, busId, message: `Bus ${busId} deleted successfully.` };
+}
+
 exports.registerBusAccount = regionalFunctions
   .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
   .https.onCall(async (data, context) => {
@@ -4321,6 +4431,12 @@ exports.updateBusDetails = regionalFunctions
   .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
   .https.onCall(async (data, context) => {
     return processUpdateBusDetails(data, context);
+  });
+
+exports.deleteBusAccount = regionalFunctions
+  .runWith({ enforceAppCheck: ENFORCE_APP_CHECK })
+  .https.onCall(async (data, context) => {
+    return processDeleteBusAccount(data, context);
   });
 
 exports.reconcileOperationalRtdb = regionalFunctions.pubsub
@@ -4378,6 +4494,7 @@ exports.processResetDriverPassword = processResetDriverPassword;
 exports.processDeleteDriverAccount = processDeleteDriverAccount;
 exports.processRegisterBusAccount = processRegisterBusAccount;
 exports.processUpdateBusDetails = processUpdateBusDetails;
+exports.processDeleteBusAccount = processDeleteBusAccount;
 exports.validateDriverProfileInputs = validateDriverProfileInputs;
 exports.mapStaffEmail = mapStaffEmail;
 exports.syncAssignmentToRtdb = syncAssignmentToRtdb;

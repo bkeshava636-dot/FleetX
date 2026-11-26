@@ -12,12 +12,24 @@ import {
   Power,
   Edit2,
   Eye,
+  Trash2,
+  UserPlus,
+  X,
+  AlertCircle,
+  Loader2,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { subscribeToBuses, naturalBusSort, reconcileBusSync } from '../../services/fleetService';
+import {
+  subscribeToBuses,
+  naturalBusSort,
+  reconcileBusSync,
+  assignBusDriver,
+  unassignBusDriver
+} from '../../services/fleetService';
 import { subscribeToRoutes } from '../../services/routesService';
-import { BusRecord, RtdbSyncStatus } from '../../types/fleet';
+import { subscribeToDrivers } from '../../services/driverService';
+import { BusRecord, DriverRecord, RtdbSyncStatus } from '../../types/fleet';
 import { Route } from '../../types/admin';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { EmptyState } from '../../components/common/EmptyState';
@@ -26,6 +38,7 @@ import { RegisterBusModal } from '../../components/admin/fleet/RegisterBusModal'
 import { EditBusModal } from '../../components/admin/fleet/EditBusModal';
 import { AssignRouteModal } from '../../components/admin/fleet/AssignRouteModal';
 import { ToggleBusStatusModal } from '../../components/admin/fleet/ToggleBusStatusModal';
+import { DeleteBusModal } from '../../components/admin/fleet/DeleteBusModal';
 import { BusDetailsDrawer } from '../../components/admin/fleet/BusDetailsDrawer';
 
 const ITEMS_PER_PAGE = 10;
@@ -33,6 +46,7 @@ const ITEMS_PER_PAGE = 10;
 export const FleetManagement: React.FC = () => {
   const [buses, setBuses] = useState<BusRecord[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
+  const [drivers, setDrivers] = useState<DriverRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -49,7 +63,15 @@ export const FleetManagement: React.FC = () => {
   const [editBus, setEditBus] = useState<BusRecord | null>(null);
   const [assignRouteBus, setAssignRouteBus] = useState<BusRecord | null>(null);
   const [toggleStatusBus, setToggleStatusBus] = useState<BusRecord | null>(null);
+  const [deleteBusTarget, setDeleteBusTarget] = useState<BusRecord | null>(null);
   const [selectedBusDetails, setSelectedBusDetails] = useState<BusRecord | null>(null);
+
+  // Assign / Change Driver modal state
+  const [assignDriverBus, setAssignDriverBus] = useState<BusRecord | null>(null);
+  const [selectedDriverUid, setSelectedDriverUid] = useState<string>('');
+  const [confirmDriverReplace, setConfirmDriverReplace] = useState<boolean>(false);
+  const [isAssigningDriver, setIsAssigningDriver] = useState<boolean>(false);
+  const [assignDriverError, setAssignDriverError] = useState<string | null>(null);
 
   // Notification Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -87,9 +109,19 @@ export const FleetManagement: React.FC = () => {
       }
     );
 
+    const unsubDrivers = subscribeToDrivers(
+      (driverData) => {
+        setDrivers(driverData);
+      },
+      (err) => {
+        console.warn('[FleetManagement] Driver subscription warning:', err);
+      }
+    );
+
     return () => {
       unsubBuses();
       unsubRoutes();
+      unsubDrivers();
     };
   }, []);
 
@@ -193,6 +225,56 @@ export const FleetManagement: React.FC = () => {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Reconciliation failed.';
       showToast('error', msg);
+    }
+  };
+
+  const openAssignDriverModal = (bus: BusRecord) => {
+    setAssignDriverBus(bus);
+    setSelectedDriverUid(bus.driverId || '');
+    setConfirmDriverReplace(false);
+    setAssignDriverError(null);
+  };
+
+  const handleAssignDriverSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignDriverBus) return;
+    setAssignDriverError(null);
+
+    const isUnassign = !selectedDriverUid;
+    const isReplacingExisting = Boolean(
+      !isUnassign && assignDriverBus.driverId && assignDriverBus.driverId !== selectedDriverUid
+    );
+
+    if (isReplacingExisting && !confirmDriverReplace) {
+      setAssignDriverError('Please confirm replacing the currently assigned driver.');
+      return;
+    }
+
+    setIsAssigningDriver(true);
+    try {
+      if (isUnassign) {
+        if (!assignDriverBus.driverId) {
+          setAssignDriverBus(null);
+          return;
+        }
+        await unassignBusDriver(assignDriverBus.busId);
+        showToast('success', `Unassigned driver from Bus ${assignDriverBus.busNumber}.`);
+      } else {
+        const res = await assignBusDriver(assignDriverBus.busId, selectedDriverUid, {
+          confirmReplacement: isReplacingExisting ? true : undefined,
+          expectedPreviousDriverId: assignDriverBus.driverId || null
+        });
+        showToast(
+          'success',
+          `Assigned ${res.driverName || 'driver'} to Bus ${assignDriverBus.busNumber} (v${res.assignmentVersion}).`
+        );
+      }
+      setAssignDriverBus(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update driver assignment.';
+      setAssignDriverError(msg);
+    } finally {
+      setIsAssigningDriver(false);
     }
   };
 
@@ -580,6 +662,15 @@ export const FleetManagement: React.FC = () => {
                             <RouteIcon className="w-4 h-4" />
                           </button>
 
+                          {/* Assign / Change Driver */}
+                          <button
+                            onClick={() => openAssignDriverModal(bus)}
+                            title={bus.driverId ? 'Change / Unassign Driver' : 'Assign Driver'}
+                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            <UserPlus className="w-4 h-4" />
+                          </button>
+
                           {/* Edit Details */}
                           <button
                             onClick={() => setEditBus(bus)}
@@ -600,6 +691,15 @@ export const FleetManagement: React.FC = () => {
                             }`}
                           >
                             <Power className="w-4 h-4" />
+                          </button>
+
+                          {/* Delete Bus */}
+                          <button
+                            onClick={() => setDeleteBusTarget(bus)}
+                            title="Delete Bus"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -682,6 +782,153 @@ export const FleetManagement: React.FC = () => {
           );
         }}
       />
+
+      <DeleteBusModal
+        isOpen={Boolean(deleteBusTarget)}
+        bus={deleteBusTarget}
+        onClose={() => setDeleteBusTarget(null)}
+        onSuccess={(deleted) => {
+          showToast('success', `Bus ${deleted.busNumber} (${deleted.registrationNumber}) deleted permanently.`);
+        }}
+      />
+
+      {assignDriverBus && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 text-blue-700 rounded-xl">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {assignDriverBus.driverId ? 'Change / Unassign Driver' : 'Assign Driver'}
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Bus {assignDriverBus.busNumber} ({assignDriverBus.registrationNumber})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAssignDriverBus(null)}
+                disabled={isAssigningDriver}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAssignDriverSubmit} className="p-6 space-y-4">
+              {assignDriverError && (
+                <div className="flex items-start gap-3 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-medium">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <span>{assignDriverError}</span>
+                </div>
+              )}
+
+              {!assignDriverBus.active && (
+                <div className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>This bus is inactive. Activate the bus before assigning a driver.</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Select Driver
+                </label>
+                <select
+                  value={selectedDriverUid}
+                  onChange={(e) => {
+                    setSelectedDriverUid(e.target.value);
+                    setConfirmDriverReplace(false);
+                    setAssignDriverError(null);
+                  }}
+                  disabled={isAssigningDriver}
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                >
+                  <option value="">-- Unassign Driver --</option>
+                  {drivers
+                    .filter((d) => d.active || d.uid === assignDriverBus.driverId)
+                    .map((d) => (
+                      <option key={d.uid} value={d.uid} disabled={!d.active}>
+                        {d.name} ({d.customId})
+                        {d.assignedBusId && d.assignedBusId !== assignDriverBus.busId
+                          ? ` — Currently on ${d.assignedBusId}`
+                          : ''}
+                        {!d.active ? ' [Inactive]' : ''}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {selectedDriverUid &&
+                (() => {
+                  const chosen = drivers.find((d) => d.uid === selectedDriverUid);
+                  if (chosen && chosen.assignedBusId && chosen.assignedBusId !== assignDriverBus.busId) {
+                    return (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800">
+                        <strong>Transfer Notice:</strong> {chosen.name} will be unassigned from{' '}
+                        <span className="font-mono">{chosen.assignedBusId}</span> and assigned to Bus{' '}
+                        {assignDriverBus.busNumber}.
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+              {selectedDriverUid &&
+                assignDriverBus.driverId &&
+                assignDriverBus.driverId !== selectedDriverUid && (
+                  <label className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={confirmDriverReplace}
+                      onChange={(e) => setConfirmDriverReplace(e.target.checked)}
+                      disabled={isAssigningDriver}
+                      className="mt-0.5 rounded border-amber-400 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>
+                      Confirm replacing current driver{' '}
+                      <strong>{assignDriverBus.driverName || assignDriverBus.driverId}</strong>.
+                    </span>
+                  </label>
+                )}
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setAssignDriverBus(null)}
+                  disabled={isAssigningDriver}
+                  className="px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    isAssigningDriver ||
+                    (!assignDriverBus.active && Boolean(selectedDriverUid)) ||
+                    selectedDriverUid === (assignDriverBus.driverId || '')
+                  }
+                  className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-sm transition-all"
+                >
+                  {isAssigningDriver ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : selectedDriverUid ? (
+                    'Save Assignment'
+                  ) : (
+                    'Unassign Driver'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <BusDetailsDrawer
         isOpen={Boolean(selectedBusDetails)}
