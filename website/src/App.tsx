@@ -15,6 +15,14 @@ const RoutesAndStops = lazy(() => import('./pages/admin/RoutesAndStops'));
 const FleetManagement = lazy(() => import('./pages/admin/FleetManagement'));
 const DriverManagement = lazy(() => import('./pages/admin/DriverManagement'));
 const LiveFleetTracking = lazy(() => import('./pages/admin/LiveFleetTracking'));
+const BusSwaps = lazy(() => import('./pages/admin/BusSwaps'));
+const TemporaryAssignments = lazy(() => import('./pages/admin/TemporaryAssignments'));
+const CollegeCalendar = lazy(() => import('./pages/admin/CollegeCalendar'));
+const Announcements = lazy(() => import('./pages/admin/Announcements'));
+const StudentManagement = lazy(() => import('./pages/admin/StudentManagement'));
+const AnalyticsReports = lazy(() => import('./pages/admin/AnalyticsReports'));
+const AuditLogs = lazy(() => import('./pages/admin/AuditLogs'));
+const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
 const ProtectedRoute = lazy(() => import('./components/admin/ProtectedRoute').then((m) => ({ default: m.ProtectedRoute })));
 
 export const App: React.FC = () => {
@@ -60,6 +68,14 @@ export const App: React.FC = () => {
             <Route path="fleet" element={<FleetManagement />} />
             <Route path="drivers" element={<DriverManagement />} />
             <Route path="live-tracking" element={<LiveFleetTracking />} />
+            <Route path="bus-swaps" element={<BusSwaps />} />
+            <Route path="temporary-assignments" element={<TemporaryAssignments />} />
+            <Route path="calendar" element={<CollegeCalendar />} />
+            <Route path="announcements" element={<Announcements />} />
+            <Route path="students" element={<StudentManagement />} />
+            <Route path="analytics" element={<AnalyticsReports />} />
+            <Route path="audit" element={<AuditLogs />} />
+            <Route path="settings" element={<AdminSettings />} />
           </Route>
         </Route>
 

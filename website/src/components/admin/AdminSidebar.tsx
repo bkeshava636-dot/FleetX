@@ -45,14 +45,14 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
     { name: 'Fleet Management', href: '/admin/fleet', icon: Bus, isImplemented: true },
     { name: 'Driver Management', href: '/admin/drivers', icon: Users, isImplemented: true },
     { name: 'Live Fleet Tracking', href: '/admin/live-tracking', icon: Radio, isImplemented: true, badge: 'Live' },
-    { name: 'Bus Swaps', href: '/admin/bus-swaps', icon: Repeat, isImplemented: false },
-    { name: 'Temporary Assignments', href: '/admin/temporary-assignments', icon: UserCheck, isImplemented: false },
-    { name: 'College Calendar', href: '/admin/calendar', icon: Calendar, isImplemented: false },
-    { name: 'Announcements', href: '/admin/announcements', icon: Bell, isImplemented: false },
-    { name: 'Student Management', href: '/admin/students', icon: GraduationCap, isImplemented: false },
-    { name: 'Analytics & Reports', href: '/admin/analytics', icon: BarChart3, isImplemented: false },
-    { name: 'Audit Logs', href: '/admin/audit', icon: FileText, isImplemented: false },
-    { name: 'Settings', href: '/admin/settings', icon: Settings, isImplemented: false },
+    { name: 'Bus Swaps', href: '/admin/bus-swaps', icon: Repeat, isImplemented: true },
+    { name: 'Temporary Assignments', href: '/admin/temporary-assignments', icon: UserCheck, isImplemented: true },
+    { name: 'College Calendar', href: '/admin/calendar', icon: Calendar, isImplemented: true },
+    { name: 'Announcements', href: '/admin/announcements', icon: Bell, isImplemented: true },
+    { name: 'Student Management', href: '/admin/students', icon: GraduationCap, isImplemented: true },
+    { name: 'Analytics & Reports', href: '/admin/analytics', icon: BarChart3, isImplemented: true },
+    { name: 'Audit Logs', href: '/admin/audit', icon: FileText, isImplemented: true },
+    { name: 'Settings', href: '/admin/settings', icon: Settings, isImplemented: true },
   ];
 
   return (
