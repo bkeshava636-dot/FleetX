@@ -398,6 +398,38 @@ class BusRepository(
     }
 
     /**
+     * Real-time stream of the currently assigned active driver's contact phone for [busId]
+     * from Firestore /public_bus_contacts/{busId}.
+     * Returns null when unassigned, inactive, or unavailable.
+     */
+    fun getAssignedDriverContactFlow(busId: String): Flow<String?> = callbackFlow {
+        val cleanBusId = busId.trim()
+        if (cleanBusId.isEmpty()) {
+            trySend(null)
+            awaitClose {}
+            return@callbackFlow
+        }
+
+        val registration = firestore.collection("public_bus_contacts")
+            .document(cleanBusId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null || !snapshot.exists()) {
+                    trySend(null)
+                    return@addSnapshotListener
+                }
+                val isActive = snapshot.getBoolean("active") ?: true
+                val phone = if (isActive) {
+                    snapshot.getString("phoneNumber")?.trim()?.takeIf { it.isNotEmpty() }
+                } else {
+                    null
+                }
+                trySend(phone)
+            }
+
+        awaitClose { registration.remove() }
+    }
+
+    /**
      * Creates a new DRIVER account:
      * 1. Validates unique Driver ID, inputs, and normalized phone number.
      * 2. Creates Firebase Auth user using an isolated secondary FirebaseApp so current Admin session stays intact.
