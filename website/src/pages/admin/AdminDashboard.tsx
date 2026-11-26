@@ -11,10 +11,17 @@ import {
   CheckCircle2,
   Users,
   ShieldCheck,
+  Repeat,
+  UserCheck,
 } from 'lucide-react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { subscribeToDashboardMetrics } from '../../services/dashboardService';
+import {
+  subscribeToBusSwaps,
+  subscribeToTemporaryAssignments,
+} from '../../services/operationsService';
 import { DashboardStats } from '../../types/admin';
+import { BusSwapRecord, TemporaryAssignmentRecord } from '../../types/operations';
 import { StatCard } from '../../components/admin/StatCard';
 import { ErrorState } from '../../components/common/ErrorState';
 
@@ -22,6 +29,8 @@ export const AdminDashboard: React.FC = () => {
   const { profile } = useAdminAuth();
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [activeSwaps, setActiveSwaps] = useState<BusSwapRecord[]>([]);
+  const [activeReplacements, setActiveReplacements] = useState<TemporaryAssignmentRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string>('Connecting...');
@@ -43,8 +52,20 @@ export const AdminDashboard: React.FC = () => {
       },
     });
 
+    const unsubSwaps = subscribeToBusSwaps(
+      (items) => setActiveSwaps(items.filter((s) => s.status === 'ACTIVE')),
+      () => {}
+    );
+
+    const unsubReplacements = subscribeToTemporaryAssignments(
+      (items) => setActiveReplacements(items.filter((a) => a.status === 'ACTIVE')),
+      () => {}
+    );
+
     return () => {
       unsubscribe();
+      unsubSwaps();
+      unsubReplacements();
     };
   }, []);
 
@@ -100,6 +121,72 @@ export const AdminDashboard: React.FC = () => {
           message={errorMessage}
           onRetry={() => window.location.reload()}
         />
+      )}
+
+      {/* Active Operational Attention Banners */}
+      {(activeSwaps.length > 0 || activeReplacements.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {activeSwaps.length > 0 && (
+            <Link
+              to="/admin/bus-swaps"
+              className="group flex items-center justify-between gap-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 hover:border-amber-400 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-100 text-amber-700">
+                  <Repeat className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-amber-950">
+                    {activeSwaps.length} Active Bus {activeSwaps.length === 1 ? 'Swap' : 'Swaps'}
+                  </p>
+                  <p className="text-xs text-amber-800 mt-0.5">
+                    {activeSwaps
+                      .slice(0, 3)
+                      .map((s) => `${s.originalBusId} → ${s.replacementBusId}`)
+                      .join(', ')}
+                    {activeSwaps.length > 3 ? ` +${activeSwaps.length - 3} more` : ''}
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-900 group-hover:translate-x-0.5 transition-transform">
+                <span>Manage Swaps</span>
+                <ArrowRight className="w-4 h-4" />
+              </span>
+            </Link>
+          )}
+
+          {activeReplacements.length > 0 && (
+            <Link
+              to="/admin/temporary-assignments"
+              className="group flex items-center justify-between gap-4 p-4 rounded-2xl bg-blue-50 border border-blue-200 hover:border-blue-400 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-blue-950">
+                    {activeReplacements.length} Active Temporary{' '}
+                    {activeReplacements.length === 1 ? 'Replacement' : 'Replacements'}
+                  </p>
+                  <p className="text-xs text-blue-800 mt-0.5">
+                    {activeReplacements
+                      .slice(0, 3)
+                      .map((a) => `${a.busId} (${a.replacementDriverName})`)
+                      .join(', ')}
+                    {activeReplacements.length > 3
+                      ? ` +${activeReplacements.length - 3} more`
+                      : ''}
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-900 group-hover:translate-x-0.5 transition-transform">
+                <span>View Replacements</span>
+                <ArrowRight className="w-4 h-4" />
+              </span>
+            </Link>
+          )}
+        </div>
       )}
 
       {/* Key Metrics Grid */}
@@ -190,6 +277,8 @@ export const AdminDashboard: React.FC = () => {
           subtitle="Proposed stops by drivers"
           icon={AlertTriangle}
           color="amber"
+          linkTo="/admin/stop-requests"
+          linkLabel="Review Requests"
           isLoading={isLoading}
         />
       </div>
@@ -325,7 +414,7 @@ export const AdminDashboard: React.FC = () => {
 
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
             <span>FleetX Transport Management</span>
-            <span className="font-mono">v1.0.45</span>
+            <span className="font-mono">Admin Operations Console</span>
           </div>
         </div>
       </div>

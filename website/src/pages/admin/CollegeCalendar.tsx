@@ -21,6 +21,8 @@ import { CalendarExceptionRecord, CalendarExceptionType } from '../../types/oper
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { EmptyState } from '../../components/common/EmptyState';
 import { ErrorState } from '../../components/common/ErrorState';
+import { MasterTimetablePdfCard } from '../../components/admin/calendar/MasterTimetablePdfCard';
+import { DeleteConfirmModal } from '../../components/admin/routes/DeleteConfirmModal';
 
 export const CollegeCalendar: React.FC = () => {
   const { profile } = useAdminAuth();
@@ -38,6 +40,8 @@ export const CollegeCalendar: React.FC = () => {
   const [name, setName] = useState('');
   const [isSavingException, setIsSavingException] = useState(false);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+  const [pendingDeleteException, setPendingDeleteException] =
+    useState<CalendarExceptionRecord | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const showToast = (type: 'success' | 'error', text: string) => {
@@ -88,13 +92,10 @@ export const CollegeCalendar: React.FC = () => {
     }
   };
 
-  const handleDeleteException = async (date: string) => {
-    try {
-      await deleteCalendarException(date);
-      showToast('success', `Removed exception for ${date}.`);
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : 'Failed to remove exception.');
-    }
+  const handleDeleteException = async () => {
+    if (!pendingDeleteException) return;
+    await deleteCalendarException(pendingDeleteException.date);
+    showToast('success', `Removed exception for ${pendingDeleteException.date}.`);
   };
 
   const handleSaveSchedule = async () => {
@@ -327,9 +328,10 @@ export const CollegeCalendar: React.FC = () => {
                       <td className="py-3 px-4 text-slate-700">{ex.name}</td>
                       <td className="py-3 px-4 text-right">
                         <button
-                          onClick={() => handleDeleteException(ex.date)}
+                          onClick={() => setPendingDeleteException(ex)}
                           className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
                           title="Delete exception"
+                          aria-label={`Delete exception for ${ex.date}`}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -342,6 +344,23 @@ export const CollegeCalendar: React.FC = () => {
           )}
         </div>
       </div>
+
+      <MasterTimetablePdfCard
+        schedule={schedule}
+        updatedBy={profile?.name || profile?.email || 'Admin'}
+        onToast={showToast}
+      />
+
+      <DeleteConfirmModal
+        isOpen={Boolean(pendingDeleteException)}
+        title="Delete Calendar Exception"
+        itemName={pendingDeleteException?.name || ''}
+        itemId={pendingDeleteException?.date}
+        description="Are you sure you want to remove this calendar exception? Buses will revert to the default operating schedule for this date."
+        confirmLabel="Delete Exception"
+        onClose={() => setPendingDeleteException(null)}
+        onConfirm={handleDeleteException}
+      />
     </div>
   );
 };

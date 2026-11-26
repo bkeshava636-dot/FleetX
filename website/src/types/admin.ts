@@ -29,6 +29,8 @@ export interface RouteScheduleWindow {
 export interface RouteSchedule {
   morning: RouteScheduleWindow;
   evening: RouteScheduleWindow;
+  allRoutesPdfUrl?: string | null;
+  allRoutesPdfName?: string | null;
 }
 
 export interface Route {
@@ -39,6 +41,8 @@ export interface Route {
   busId: string;
   stops: BusStop[];
   schedules?: RouteSchedule;
+  schedulePdfUrl?: string | null;
+  schedulePdfName?: string | null;
 }
 
 export interface Bus {

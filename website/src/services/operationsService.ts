@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDocs,
   onSnapshot,
   setDoc,
   updateDoc,
@@ -274,6 +275,8 @@ export const DEFAULT_OPERATING_SCHEDULE: RouteSchedule = {
 export interface RawScheduleDoc {
   morning?: { startTime?: string; endTime?: string; enabled?: boolean };
   evening?: { startTime?: string; endTime?: string; enabled?: boolean };
+  allRoutesPdfUrl?: string | null;
+  allRoutesPdfName?: string | null;
   updatedAt?: unknown;
 }
 
@@ -327,6 +330,8 @@ export function parseOperatingScheduleData(data?: RawScheduleDoc | null): RouteS
       endTime: data.evening?.endTime || '18:00',
       enabled: data.evening?.enabled ?? true,
     },
+    allRoutesPdfUrl: data.allRoutesPdfUrl ?? null,
+    allRoutesPdfName: data.allRoutesPdfName ?? null,
   };
 }
 
@@ -448,15 +453,138 @@ export async function saveOperatingSchedule(
 // 4. Announcements
 // ---------------------------------------------------------------------------
 
+export interface AnnouncementTimingFields {
+  timingBusId?: string | null;
+  timingChangeType?: string | null;
+  previousTime?: string | null;
+  newTime?: string | null;
+  effectiveDate?: string | null;
+  endDate?: string | null;
+  changeReason?: string | null;
+}
+
+export type ExtendedAnnouncementRecord = AnnouncementRecord & AnnouncementTimingFields;
+export type ExtendedCreateAnnouncementInput = CreateAnnouncementInput & AnnouncementTimingFields;
+
+export interface UpdateAnnouncementInput extends Partial<AnnouncementTimingFields> {
+  titleEn?: string;
+  messageEn?: string;
+  titleKn?: string;
+  messageKn?: string;
+  category?: AnnouncementRecord['category'];
+  priority?: AnnouncementRecord['priority'];
+  targetAudience?: AnnouncementRecord['targetAudience'];
+  targetId?: string;
+  targetName?: string;
+  status?: AnnouncementStatus;
+  expiresAt?: number | null;
+}
+
+export function validateAnnouncementInput(
+  input: {
+    titleEn?: string;
+    messageEn?: string;
+    expiresAt?: number | null;
+    targetAudience?: string;
+    targetId?: string;
+  },
+  now: number = Date.now()
+): string | null {
+  if (!input.titleEn || !input.titleEn.trim()) {
+    return 'English title is required.';
+  }
+  if (!input.messageEn || !input.messageEn.trim()) {
+    return 'English message is required.';
+  }
+  if (
+    (input.targetAudience === 'SELECTED_BUS' || input.targetAudience === 'SELECTED_ROUTE') &&
+    (!input.targetId || !input.targetId.trim())
+  ) {
+    return input.targetAudience === 'SELECTED_BUS'
+      ? 'Please select a target bus.'
+      : 'Please select a target route.';
+  }
+  if (input.expiresAt !== undefined && input.expiresAt !== null) {
+    if (!Number.isFinite(input.expiresAt) || input.expiresAt <= now) {
+      return 'Expiry date must be in the future.';
+    }
+  }
+  return null;
+}
+
+export function validateTimingChangeInput(input: {
+  previousTime?: string;
+  newTime?: string;
+  effectiveDate?: string;
+  changeReason?: string;
+}): string | null {
+  if (!input.previousTime || !input.previousTime.trim()) {
+    return 'Previous time is required.';
+  }
+  if (!input.newTime || !input.newTime.trim()) {
+    return 'New time is required.';
+  }
+  if (!input.effectiveDate || !input.effectiveDate.trim()) {
+    return 'Effective date is required.';
+  }
+  if (!input.changeReason || !input.changeReason.trim()) {
+    return 'Reason for timing change is required.';
+  }
+  return null;
+}
+
+export function buildBusTimingAnnouncementContent(input: {
+  timingBusId: string;
+  timingChangeType: string;
+  previousTime: string;
+  newTime: string;
+  effectiveDate: string;
+  endDate?: string | null;
+  changeReason: string;
+}): { titleEn: string; messageEn: string; titleKn: string; messageKn: string } {
+  const isAllBuses = !input.timingBusId || input.timingBusId === 'ALL';
+  const busLabelEn = isAllBuses ? 'All Buses' : `Bus ${input.timingBusId}`;
+  const busLabelKn = isAllBuses ? 'ಎಲ್ಲಾ ಬಸ್‌ಗಳ' : `ಬಸ್ ${input.timingBusId}`;
+  const timingType = input.timingChangeType || 'Morning departure time';
+  const timingTypeKn = timingType.toLowerCase().includes('morning')
+    ? 'ಬೆಳಗಿನ ಹೊರಡುವಿಕೆ'
+    : 'ಸಂಜೆಯ ಹೊರಡುವಿಕೆ';
+  const reason = input.changeReason.trim();
+  const reasonKnMap: Record<string, string> = {
+    'College examination schedule': 'ಕಾಲೇಜು ಪರೀಕ್ಷಾ ವೇಳಾಪಟ್ಟಿ',
+    'Road maintenance / Traffic diversion': 'ರಸ್ತೆ ಕಾಮಗಾರಿ / ಟ್ರಾಫಿಕ್ ಬದಲಾವಣೆ',
+    'Inclement weather': 'ಹವಾಮಾನ ವೈಪರೀತ್ಯ',
+    'Special event / College function': 'ವಿಶೇಷ ಕಾರ್ಯಕ್ರಮ',
+  };
+  const reasonKn = reasonKnMap[reason] || reason;
+  const endDate = (input.endDate || '').trim();
+
+  const titleEn = isAllBuses
+    ? `All Buses Timing Alert: ${timingType}`
+    : `Bus ${input.timingBusId} Timing Alert: ${timingType}`;
+  const messageEn = `Effective ${input.effectiveDate.trim()}, the ${timingType} for ${busLabelEn} has changed from ${input.previousTime.trim()} to ${input.newTime.trim()}.${
+    endDate ? ` Temporary until ${endDate}.` : ''
+  } Reason: ${reason}.`;
+
+  const titleKn = isAllBuses
+    ? `ಎಲ್ಲಾ ಬಸ್‌ಗಳ ಸಮಯ ಬದಲಾವಣೆ: ${timingTypeKn}`
+    : `ಬಸ್ ${input.timingBusId} ಸಮಯ ಬದಲಾವಣೆ: ${timingTypeKn}`;
+  const messageKn = `${input.effectiveDate.trim()} ರಿಂದ ಜಾರಿಗೆ ಬರುವಂತೆ, ${busLabelKn} ${timingTypeKn} ಸಮಯವನ್ನು ${input.previousTime.trim()} ರಿಂದ ${input.newTime.trim()} ಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ.${
+    endDate ? ` ಇದು ${endDate} ವರೆಗೆ ತಾತ್ಕಾಲಿಕವಾಗಿರುತ್ತದೆ.` : ''
+  } ಕಾರಣ: ${reasonKn}.`;
+
+  return { titleEn, messageEn, titleKn, messageKn };
+}
+
 export function subscribeToAnnouncements(
-  onData: (items: AnnouncementRecord[]) => void,
+  onData: (items: ExtendedAnnouncementRecord[]) => void,
   onError: (err: Error) => void
 ): Unsubscribe {
   const q = query(collection(db, 'announcements'), orderBy('createdAt', 'desc'), limit(100));
   return onSnapshot(
     q,
     (snap) => {
-      const items: AnnouncementRecord[] = snap.docs.map((d) => {
+      const items: ExtendedAnnouncementRecord[] = snap.docs.map((d) => {
         const data = d.data();
         return {
           id: data.id || d.id,
@@ -478,6 +606,13 @@ export function subscribeToAnnouncements(
           updatedAt: Number(data.updatedAt) || 0,
           expiresAt: data.expiresAt != null ? Number(data.expiresAt) : null,
           notified: Boolean(data.notified),
+          timingBusId: data.timingBusId ?? null,
+          timingChangeType: data.timingChangeType ?? null,
+          previousTime: data.previousTime ?? null,
+          newTime: data.newTime ?? null,
+          effectiveDate: data.effectiveDate ?? null,
+          endDate: data.endDate ?? null,
+          changeReason: data.changeReason ?? null,
         };
       });
       onData(items);
@@ -486,7 +621,13 @@ export function subscribeToAnnouncements(
   );
 }
 
-export async function createAnnouncement(input: CreateAnnouncementInput): Promise<string> {
+export async function createAnnouncement(
+  input: ExtendedCreateAnnouncementInput
+): Promise<string> {
+  const validationError = validateAnnouncementInput(input);
+  if (validationError) {
+    throw new Error(validationError);
+  }
   const ref = doc(collection(db, 'announcements'));
   const now = Date.now();
   const payload: Record<string, unknown> = {
@@ -510,8 +651,68 @@ export async function createAnnouncement(input: CreateAnnouncementInput): Promis
     expiresAt: input.expiresAt ?? null,
     notified: false,
   };
+  if (input.timingBusId !== undefined) payload.timingBusId = input.timingBusId || null;
+  if (input.timingChangeType !== undefined) payload.timingChangeType = input.timingChangeType || null;
+  if (input.previousTime !== undefined) payload.previousTime = input.previousTime || null;
+  if (input.newTime !== undefined) payload.newTime = input.newTime || null;
+  if (input.effectiveDate !== undefined) payload.effectiveDate = input.effectiveDate || null;
+  if (input.endDate !== undefined) payload.endDate = input.endDate || null;
+  if (input.changeReason !== undefined) payload.changeReason = input.changeReason || null;
   await setDoc(ref, payload);
   return ref.id;
+}
+
+export async function updateAnnouncement(
+  id: string,
+  updates: UpdateAnnouncementInput
+): Promise<void> {
+  const now = Date.now();
+  if (updates.titleEn !== undefined && !updates.titleEn.trim()) {
+    throw new Error('English title is required.');
+  }
+  if (updates.messageEn !== undefined && !updates.messageEn.trim()) {
+    throw new Error('English message is required.');
+  }
+  if (updates.expiresAt !== undefined && updates.expiresAt !== null) {
+    if (!Number.isFinite(updates.expiresAt) || updates.expiresAt <= now) {
+      throw new Error('Expiry date must be in the future.');
+    }
+  }
+  const payload: Record<string, unknown> = {
+    updatedAt: now,
+  };
+  if (updates.titleEn !== undefined) payload.titleEn = updates.titleEn.trim();
+  if (updates.messageEn !== undefined) payload.messageEn = updates.messageEn.trim();
+  if (updates.titleKn !== undefined) payload.titleKn = updates.titleKn.trim();
+  if (updates.messageKn !== undefined) payload.messageKn = updates.messageKn.trim();
+  if (updates.category !== undefined) payload.category = updates.category;
+  if (updates.priority !== undefined) payload.priority = updates.priority;
+  if (updates.targetAudience !== undefined) {
+    payload.targetAudience = updates.targetAudience;
+    const tid = updates.targetId || '';
+    payload.targetBusId = updates.targetAudience === 'SELECTED_BUS' ? tid : '';
+    payload.targetRouteId = updates.targetAudience === 'SELECTED_ROUTE' ? tid : '';
+  }
+  if (updates.targetId !== undefined) payload.targetId = updates.targetId;
+  if (updates.targetName !== undefined) payload.targetName = updates.targetName;
+  if (updates.status !== undefined) payload.status = updates.status;
+  if (updates.expiresAt !== undefined) payload.expiresAt = updates.expiresAt;
+  if (updates.timingBusId !== undefined) payload.timingBusId = updates.timingBusId || null;
+  if (updates.timingChangeType !== undefined) payload.timingChangeType = updates.timingChangeType || null;
+  if (updates.previousTime !== undefined) payload.previousTime = updates.previousTime || null;
+  if (updates.newTime !== undefined) payload.newTime = updates.newTime || null;
+  if (updates.effectiveDate !== undefined) payload.effectiveDate = updates.effectiveDate || null;
+  if (updates.endDate !== undefined) payload.endDate = updates.endDate || null;
+  if (updates.changeReason !== undefined) payload.changeReason = updates.changeReason || null;
+
+  await updateDoc(doc(db, 'announcements', id), payload);
+}
+
+export async function publishAnnouncement(id: string): Promise<void> {
+  await updateDoc(doc(db, 'announcements', id), {
+    status: 'PUBLISHED',
+    updatedAt: Date.now(),
+  });
 }
 
 export async function updateAnnouncementStatus(
@@ -729,33 +930,108 @@ export function subscribeToDriverReplacementHistory(
   );
 }
 
+export interface ClearableHistoryCandidate {
+  historyId?: string;
+  swapId?: string;
+  assignmentId?: string;
+  status?: string;
+  cleared?: boolean;
+  endAt?: number;
+  effectiveUntil?: number;
+  cancelledAt?: number;
+}
+
+/**
+ * Matches Android HistoryRepository.kt eligibility semantics:
+ * - Never clear already-cleared records.
+ * - Never clear status === 'ACTIVE' unless endAt/effectiveUntil > 0 && <= now.
+ * - Non-active (COMPLETED, RESOLVED, CANCELLED, EXPIRED, etc.) are eligible.
+ */
+export function isHistoryRecordEligibleForClear(
+  record: ClearableHistoryCandidate,
+  now: number = Date.now()
+): boolean {
+  if (record.cleared) return false;
+  const status = String(record.status || '').toUpperCase();
+  if (status !== 'ACTIVE') return true;
+  const expiry = Number(record.endAt ?? record.effectiveUntil ?? record.cancelledAt ?? 0);
+  return Number.isFinite(expiry) && expiry > 0 && expiry <= now;
+}
+
+export function filterEligibleHistoryRecords<T extends ClearableHistoryCandidate>(
+  records: T[],
+  now: number = Date.now()
+): T[] {
+  return records.filter((r) => isHistoryRecordEligibleForClear(r, now));
+}
+
 export async function clearHistoryWithAudit(
   type: 'CLEAR_BUS_SWAP_HISTORY' | 'CLEAR_DRIVER_REPLACEMENT_HISTORY',
   historyIds: string[],
   adminUid: string,
   adminName: string
-): Promise<void> {
-  if (historyIds.length === 0) return;
-  const colName =
-    type === 'CLEAR_BUS_SWAP_HISTORY' ? 'bus_swap_history' : 'driver_replacement_history';
+): Promise<number> {
+  if (historyIds.length === 0) return 0;
+  const isSwap = type === 'CLEAR_BUS_SWAP_HISTORY';
+  const colName = isSwap ? 'bus_swap_history' : 'driver_replacement_history';
+  const secondaryColName = isSwap ? 'bus_swaps' : 'temporary_assignments';
+
+  const now = Date.now();
+  const requestedSet = new Set(historyIds);
+
+  const [historySnap, secondarySnap] = await Promise.all([
+    getDocs(collection(db, colName)),
+    getDocs(collection(db, secondaryColName)),
+  ]);
 
   const batch = writeBatch(db);
-  historyIds.forEach((id) => {
-    batch.update(doc(db, colName, id), { cleared: true });
-  });
+  const committedIds = new Set<string>();
+  const linkedSecondaryIds = new Set<string>();
 
-  const now = new Date();
+  for (const d of historySnap.docs) {
+    if (!requestedSet.has(d.id)) continue;
+    const data = d.data();
+    if (!isHistoryRecordEligibleForClear(data as ClearableHistoryCandidate, now)) {
+      continue;
+    }
+    batch.update(doc(db, colName, d.id), { cleared: true, clearedAt: now });
+    const linkedId = isSwap
+      ? String(data.swapId || d.id)
+      : String(data.assignmentId || d.id);
+    committedIds.add(linkedId);
+    linkedSecondaryIds.add(linkedId);
+  }
+
+  for (const d of secondarySnap.docs) {
+    if (!requestedSet.has(d.id) && !linkedSecondaryIds.has(d.id)) continue;
+    const data = d.data();
+    if (!isHistoryRecordEligibleForClear(data as ClearableHistoryCandidate, now)) {
+      continue;
+    }
+    batch.update(doc(db, secondaryColName, d.id), { cleared: true, clearedAt: now });
+    const linkedId = isSwap
+      ? String(data.swapId || d.id)
+      : String(data.assignmentId || d.id);
+    committedIds.add(linkedId);
+  }
+
+  if (committedIds.size === 0) {
+    return 0;
+  }
+
+  const nowDate = new Date(now);
   const auditRef = doc(collection(db, 'history_audit_logs'));
   batch.set(auditRef, {
     auditId: auditRef.id,
     action: type,
     adminUid,
     adminName,
-    timestamp: now.getTime(),
-    dateFormatted: now.toISOString().slice(0, 10),
-    timeFormatted: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-    clearedCount: historyIds.length,
+    timestamp: now,
+    dateFormatted: nowDate.toISOString().slice(0, 10),
+    timeFormatted: nowDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+    clearedCount: committedIds.size,
   });
 
   await batch.commit();
+  return committedIds.size;
 }
