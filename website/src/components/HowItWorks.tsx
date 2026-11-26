@@ -1,97 +1,82 @@
 import React from 'react';
-import { Download, Smartphone, MapPin, CheckCircle, Navigation } from 'lucide-react';
+import { Bell, Bus, ClipboardCheck, Navigation, Route as RouteIcon } from 'lucide-react';
+import { useScrollStagger } from '@/lib/useMotionReveal';
+import { Badge } from './ui/badge';
+
+const STEPS = [
+  {
+    step: '01',
+    title: 'Manage buses and drivers',
+    description: 'Register fleet vehicles and assign verified drivers from the Admin Console.',
+    icon: Bus,
+  },
+  {
+    step: '02',
+    title: 'Configure routes and stops',
+    description: 'Define ordered stops, map coordinates, and publish route timetable PDFs.',
+    icon: RouteIcon,
+  },
+  {
+    step: '03',
+    title: 'Track buses in real time',
+    description: 'Drivers stream live GPS telemetry while students follow their bus on the map.',
+    icon: Navigation,
+  },
+  {
+    step: '04',
+    title: 'Keep students informed',
+    description: 'Publish timing updates, bus swaps, and campus notices directly to riders.',
+    icon: Bell,
+  },
+  {
+    step: '05',
+    title: 'Manage operations',
+    description: 'Review driver stop requests, audit logs, and daily engagement analytics.',
+    icon: ClipboardCheck,
+  },
+];
 
 export const HowItWorks: React.FC = () => {
-  const steps = [
-    {
-      step: '01',
-      title: 'Download FleetX',
-      description: 'Grab the latest verified APK directly from our official GitHub release portal.',
-      icon: Download,
-    },
-    {
-      step: '02',
-      title: 'Open the Application',
-      description: 'Launch FleetX on your Android phone. No lengthy registration forms required for students.',
-      icon: Smartphone,
-    },
-    {
-      step: '03',
-      title: 'Explore Buses & Routes',
-      description: 'Browse the college transit directory to inspect routes, ordered stops, and timetable timings.',
-      icon: MapPin,
-    },
-    {
-      step: '04',
-      title: 'Select Your Bus & Stop',
-      description: 'Choose your regular bus number and primary pickup stop to personalize your tracking view.',
-      icon: CheckCircle,
-    },
-    {
-      step: '05',
-      title: 'Track Live & Check ETAs',
-      description: 'Watch your bus move along the route in real time and catch it right on schedule.',
-      icon: Navigation,
-    },
-  ];
+  const stepsRef = useScrollStagger<HTMLDivElement>('[data-reveal]', 50);
 
   return (
-    <section id="how-it-works" className="py-20 bg-college-surface">
+    <section id="how-it-works" className="py-16 sm:py-20 bg-college-surface">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-        {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-college-primary-container text-college-primary-dark text-xs font-semibold uppercase tracking-wider mb-4">
-            Simple 5-Step Process
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-college-on-surface tracking-tight">
-            How FleetX Works for Students
+        <div className="text-center max-w-2xl mx-auto mb-12">
+          <Badge className="mb-3 uppercase tracking-wider text-[11px]">Workflow</Badge>
+          <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+            How FleetX Works
           </h2>
-          <p className="mt-4 text-base sm:text-lg text-college-on-surface-variant leading-relaxed">
-            From downloading the app to seeing your bus arriving live — designed to be effortless and intuitive.
+          <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed">
+            A connected five-step workflow linking transport administrators, drivers, and students.
           </p>
         </div>
 
-        {/* Steps Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 relative">
-          {steps.map((item, idx) => {
-            const IconComponent = item.icon;
+        <div ref={stepsRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-5">
+          {STEPS.map((item) => {
+            const Icon = item.icon;
             return (
               <div
                 key={item.step}
-                className="relative flex flex-col items-start bg-white p-6 rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow duration-200"
+                data-reveal
+                className="flex flex-col justify-between bg-white p-5 rounded-2xl border border-slate-200/90 shadow-card transition-all duration-200 hover:border-college-primary/30"
               >
-                {/* Step Number Badge */}
-                <div className="flex items-center justify-between w-full mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-college-primary-container/60 text-college-primary flex items-center justify-center font-bold text-sm">
-                    <IconComponent className="w-5 h-5" />
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-9 h-9 rounded-xl bg-college-primary-container/70 text-college-primary flex items-center justify-center">
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <span className="text-xl font-black text-slate-200 select-none">
+                      {item.step}
+                    </span>
                   </div>
-                  <span className="text-2xl font-black text-slate-200 select-none">
-                    {item.step}
-                  </span>
+                  <h3 className="text-sm font-bold text-slate-900 mb-1.5">{item.title}</h3>
+                  <p className="text-xs text-slate-600 leading-relaxed">{item.description}</p>
                 </div>
-
-                {/* Step Title */}
-                <h3 className="text-base font-bold text-college-on-surface mb-2">
-                  {item.title}
-                </h3>
-
-                {/* Step Description */}
-                <p className="text-xs text-college-on-surface-variant leading-relaxed">
-                  {item.description}
-                </p>
-
-                {/* Arrow connector for desktop */}
-                {idx < steps.length - 1 && (
-                  <div className="hidden lg:block absolute -right-3 top-1/2 -translate-y-1/2 z-10 text-slate-300">
-                    →
-                  </div>
-                )}
               </div>
             );
           })}
         </div>
-
       </div>
     </section>
   );

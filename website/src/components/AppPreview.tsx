@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { Smartphone } from 'lucide-react';
+import { useScrollStagger } from '@/lib/useMotionReveal';
 import mapScreenImg from '../assets/screenshots/screen-map-view.jpg';
 import studentHomeImg from '../assets/screenshots/screen-student-home.jpg';
 import scheduleStopsImg from '../assets/screenshots/screen-schedule-stops.jpg';
 import busPassImg from '../assets/screenshots/screen-bus-pass.jpg';
+import { Badge } from './ui/badge';
 
 interface ScreenItem {
   id: string;
@@ -13,120 +16,99 @@ interface ScreenItem {
   image: string;
 }
 
-export const AppPreview: React.FC = () => {
-  const screens: ScreenItem[] = [
-    {
-      id: 'screen-map',
-      title: 'Live Interactive Map',
-      subtitle: 'Real-Time GPS Marker & Route Progress',
-      description:
-        'Students watch the bus moving smoothly in real time across calibrated college route paths with live orientation and current road location.',
-      badge: 'Live Map View',
-      image: mapScreenImg
-    },
-    {
-      id: 'screen-student',
-      title: 'Student Dashboard & Driver Info',
-      subtitle: 'Selected Bus & Dynamic Stop Countdowns',
-      description:
-        'Instant status badges, estimated arrival times, assigned bus details, and one-tap direct calling for your verified college driver.',
-      badge: 'Track Tab',
-      image: studentHomeImg
-    },
-    {
-      id: 'screen-schedule',
-      title: 'Operating Windows & Stops',
-      subtitle: 'Morning & Evening Transit Hours',
-      description:
-        'Complete view of daily operating shifts (07:00–09:00 & 16:20–17:45) and sequence of all 8 route stops from M.G. Point to BITM.',
-      badge: 'Schedule Tab',
-      image: scheduleStopsImg
-    },
-    {
-      id: 'screen-pass',
-      title: 'My Bus Pass Wallet',
-      subtitle: 'Digital Card Scanning & Storage',
-      description:
-        'Scan both sides of your official college pass to show the driver whenever boarding without carrying physical cards.',
-      badge: 'Bus Pass Tab',
-      image: busPassImg
-    }
-  ];
+const SCREENS: ScreenItem[] = [
+  {
+    id: 'screen-map',
+    title: 'Live Interactive Map',
+    subtitle: 'Real-Time GPS & Route Path',
+    description: 'Watch your assigned bus move along calibrated route paths with live orientation.',
+    badge: 'Live Map',
+    image: mapScreenImg,
+  },
+  {
+    id: 'screen-student',
+    title: 'Student Tracking View',
+    subtitle: 'Assigned Bus & Driver Info',
+    description: 'Clear tracking status, assigned driver details, and quick bus overview in one tap.',
+    badge: 'Track Tab',
+    image: studentHomeImg,
+  },
+  {
+    id: 'screen-schedule',
+    title: 'Operating Hours & Stops',
+    subtitle: 'Morning & Evening Shifts',
+    description: 'Inspect campus operating windows and the ordered sequence of route stops.',
+    badge: 'Schedule',
+    image: scheduleStopsImg,
+  },
+  {
+    id: 'screen-pass',
+    title: 'Digital Bus Pass',
+    subtitle: 'Boarding Card Storage',
+    description: 'Store both sides of your college bus pass inside the app for quick boarding checks.',
+    badge: 'Bus Pass',
+    image: busPassImg,
+  },
+];
 
-  const [activeScreenIndex, setActiveScreenIndex] = useState(0);
+export const AppPreview: React.FC = () => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const gridRef = useScrollStagger<HTMLDivElement>('[data-reveal]', 55);
 
   return (
-    <section id="preview" className="py-20 bg-white border-t border-slate-200/80">
+    <section id="preview" className="py-16 sm:py-20 bg-college-surface border-t border-slate-200/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-        {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-college-primary-container text-college-primary-dark text-xs font-semibold uppercase tracking-wider mb-4">
-            Actual Application Interface
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-college-on-surface tracking-tight">
-            Designed for Simplicity and Precision
+        <div className="text-center max-w-2xl mx-auto mb-12">
+          <Badge className="mb-3 uppercase tracking-wider text-[11px]">Product Preview</Badge>
+          <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+            Designed for Clarity on the Move
           </h2>
-          <p className="mt-4 text-base sm:text-lg text-college-on-surface-variant leading-relaxed">
-            Direct captures from the FleetX Android application running in live college transit environments.
+          <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed">
+            Actual captures from the FleetX Android application in live campus transit environments.
           </p>
         </div>
 
-        {/* Horizontal Scroll on Mobile / Grid on Desktop */}
-        <div className="flex md:grid md:grid-cols-2 lg:grid-cols-4 gap-6 overflow-x-auto pb-6 pt-2 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-slate-300">
-          {screens.map((item, idx) => (
-            <div
-              key={item.id}
-              onClick={() => setActiveScreenIndex(idx)}
-              className={`flex-shrink-0 w-[280px] sm:w-[300px] md:w-auto snap-center flex flex-col items-center bg-college-surface p-4 rounded-3xl border transition-all duration-300 cursor-pointer ${
-                activeScreenIndex === idx
-                  ? 'border-college-primary shadow-lg ring-2 ring-college-primary/20'
-                  : 'border-slate-200/90 hover:border-slate-300 shadow-sm'
-              }`}
-            >
-              {/* Phone Frame */}
-              <div className="relative w-full max-w-[240px] rounded-[36px] p-2.5 bg-slate-900 shadow-phone border-2 border-slate-800 mb-4">
-                {/* Punch Hole Camera */}
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 w-3 h-3 bg-black rounded-full border border-slate-800 z-20 flex items-center justify-center">
-                  <div className="w-1 h-1 rounded-full bg-blue-950/80" />
+        <div ref={gridRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
+          {SCREENS.map((item, idx) => {
+            const isActive = activeIndex === idx;
+            return (
+              <button
+                key={item.id}
+                data-reveal
+                type="button"
+                onClick={() => setActiveIndex(idx)}
+                className={`text-left flex flex-col items-center bg-white p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-1 motion-reduce:hover:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  isActive
+                    ? 'border-college-primary shadow-md ring-1 ring-college-primary/20'
+                    : 'border-slate-200/90 hover:border-slate-300 shadow-card'
+                }`}
+              >
+                <div className="relative w-full max-w-[210px] rounded-[30px] p-2 bg-slate-900 shadow-phone border-2 border-slate-800 mb-4">
+                  <div className="rounded-[22px] overflow-hidden bg-white aspect-[9/19.5]">
+                    <img
+                      src={item.image}
+                      alt={item.title}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
                 </div>
 
-                {/* Screenshot inside frame */}
-                <div className="rounded-[28px] overflow-hidden bg-white aspect-[9/19.5] relative">
-                  <img
-                    src={item.image}
-                    alt={item.title}
-                    className="w-full h-full object-cover select-none pointer-events-none"
-                    loading="lazy"
-                  />
+                <div className="text-center px-1">
+                  <Badge className="mb-2 text-[10px]">{item.badge}</Badge>
+                  <h3 className="text-sm font-bold text-slate-900">{item.title}</h3>
+                  <p className="text-xs font-medium text-slate-500 mt-0.5 mb-1.5">{item.subtitle}</p>
+                  <p className="text-xs text-slate-600 leading-relaxed">{item.description}</p>
                 </div>
-              </div>
-
-              {/* Text Info */}
-              <div className="text-center px-2 w-full">
-                <span className="inline-block text-[10px] font-bold text-college-primary uppercase tracking-wider bg-college-primary-container px-2 py-0.5 rounded-full mb-2">
-                  {item.badge}
-                </span>
-                <h3 className="text-base font-bold text-college-on-surface mb-1">
-                  {item.title}
-                </h3>
-                <p className="text-xs font-medium text-slate-500 mb-2">
-                  {item.subtitle}
-                </p>
-                <p className="text-[11px] text-college-on-surface-variant leading-relaxed line-clamp-3">
-                  {item.description}
-                </p>
-              </div>
-            </div>
-          ))}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Caption Banner */}
-        <div className="mt-8 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-          <span>📱</span>
-          <span>Actual screenshots captured on Android devices running FleetX v1.0.45</span>
+        <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500">
+          <Smartphone className="w-3.5 h-3.5 text-slate-400" />
+          <span>Captured on Android devices running FleetX</span>
         </div>
-
       </div>
     </section>
   );
