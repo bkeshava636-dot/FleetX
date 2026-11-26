@@ -266,51 +266,182 @@ export async function deleteCalendarException(dateStr: string): Promise<void> {
   await deleteDoc(doc(db, 'calendar_exceptions', dateStr));
 }
 
+export const DEFAULT_OPERATING_SCHEDULE: RouteSchedule = {
+  morning: { startTime: '07:00', endTime: '09:00', enabled: true },
+  evening: { startTime: '16:00', endTime: '18:00', enabled: true },
+};
+
+export interface RawScheduleDoc {
+  morning?: { startTime?: string; endTime?: string; enabled?: boolean };
+  evening?: { startTime?: string; endTime?: string; enabled?: boolean };
+  updatedAt?: unknown;
+}
+
+/**
+ * Safely parses numeric, Firestore Timestamp, or ISO string timestamps into epoch ms.
+ * Missing, malformed, NaN, or negative values return 0 so they never override valid timestamps.
+ */
+export function parseScheduleTimestampMs(val: unknown): number {
+  if (val == null || typeof val === 'boolean') return 0;
+  if (typeof val === 'number') {
+    return Number.isFinite(val) && val > 0 ? val : 0;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return 0;
+    const asNum = Number(trimmed);
+    if (Number.isFinite(asNum) && asNum > 0) return asNum;
+    const parsedDate = Date.parse(trimmed);
+    return Number.isFinite(parsedDate) && parsedDate > 0 ? parsedDate : 0;
+  }
+  if (typeof val === 'object') {
+    const maybeTs = val as { toMillis?: () => number; seconds?: number; nanoseconds?: number };
+    if (typeof maybeTs.toMillis === 'function') {
+      const ms = maybeTs.toMillis();
+      return Number.isFinite(ms) && ms > 0 ? ms : 0;
+    }
+    if (typeof maybeTs.seconds === 'number' && Number.isFinite(maybeTs.seconds)) {
+      const ns = typeof maybeTs.nanoseconds === 'number' && Number.isFinite(maybeTs.nanoseconds) ? maybeTs.nanoseconds : 0;
+      const ms = maybeTs.seconds * 1000 + Math.floor(ns / 1e6);
+      return Number.isFinite(ms) && ms > 0 ? ms : 0;
+    }
+  }
+  return 0;
+}
+
+export function parseOperatingScheduleData(data?: RawScheduleDoc | null): RouteSchedule {
+  if (!data) {
+    return {
+      morning: { ...DEFAULT_OPERATING_SCHEDULE.morning },
+      evening: { ...DEFAULT_OPERATING_SCHEDULE.evening },
+    };
+  }
+  return {
+    morning: {
+      startTime: data.morning?.startTime || '07:00',
+      endTime: data.morning?.endTime || '09:00',
+      enabled: data.morning?.enabled ?? true,
+    },
+    evening: {
+      startTime: data.evening?.startTime || '16:00',
+      endTime: data.evening?.endTime || '18:00',
+      enabled: data.evening?.enabled ?? true,
+    },
+  };
+}
+
+/**
+ * Resolves the authoritative operating schedule across:
+ * 1. Canonical primary: calendar_exceptions/operating_schedule (used by Android)
+ * 2. Secondary mirror: operating_schedule/global (written by Android)
+ * 3. Legacy website doc: operating_schedule/default (fallback ONLY when canonical & global are absent)
+ *
+ * On equal or missing timestamps, canonical (calendar_exceptions/operating_schedule) deterministically wins.
+ */
+export function selectPreferredOperatingSchedule(docs: {
+  canonical?: (RawScheduleDoc & { exists: boolean }) | null;
+  global?: (RawScheduleDoc & { exists: boolean }) | null;
+  legacyDefault?: (RawScheduleDoc & { exists: boolean }) | null;
+}): RouteSchedule {
+  const canonical = docs.canonical && docs.canonical.exists ? docs.canonical : null;
+  const globalDoc = docs.global && docs.global.exists ? docs.global : null;
+
+  if (canonical && globalDoc) {
+    const canonicalTs = parseScheduleTimestampMs(canonical.updatedAt);
+    const globalTs = parseScheduleTimestampMs(globalDoc.updatedAt);
+    // Canonical deterministically wins ties (canonicalTs >= globalTs)
+    return parseOperatingScheduleData(globalTs > canonicalTs ? globalDoc : canonical);
+  }
+  if (canonical) return parseOperatingScheduleData(canonical);
+  if (globalDoc) return parseOperatingScheduleData(globalDoc);
+  if (docs.legacyDefault && docs.legacyDefault.exists) {
+    return parseOperatingScheduleData(docs.legacyDefault);
+  }
+  return parseOperatingScheduleData(null);
+}
+
 export function subscribeToOperatingSchedule(
   onData: (schedule: RouteSchedule) => void,
   onError: (err: Error) => void
 ): Unsubscribe {
-  return onSnapshot(
-    doc(db, 'operating_schedule', 'default'),
+  const state: {
+    canonical?: RawScheduleDoc & { exists: boolean };
+    global?: RawScheduleDoc & { exists: boolean };
+    legacyDefault?: RawScheduleDoc & { exists: boolean };
+  } = {};
+
+  const emit = () => {
+    onData(selectPreferredOperatingSchedule(state));
+  };
+
+  const unsubCanonical = onSnapshot(
+    doc(db, 'calendar_exceptions', 'operating_schedule'),
     (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        onData({
-          morning: {
-            startTime: data.morning?.startTime || '07:00',
-            endTime: data.morning?.endTime || '09:00',
-            enabled: data.morning?.enabled ?? true,
-          },
-          evening: {
-            startTime: data.evening?.startTime || '16:00',
-            endTime: data.evening?.endTime || '18:00',
-            enabled: data.evening?.enabled ?? true,
-          },
-        });
-      } else {
-        onData({
-          morning: { startTime: '07:00', endTime: '09:00', enabled: true },
-          evening: { startTime: '16:00', endTime: '18:00', enabled: true },
-        });
-      }
+      state.canonical = snap.exists()
+        ? { ...(snap.data() as RawScheduleDoc), exists: true }
+        : { exists: false };
+      emit();
     },
     (err) => onError(err as Error)
   );
+
+  const unsubGlobal = onSnapshot(
+    doc(db, 'operating_schedule', 'global'),
+    (snap) => {
+      state.global = snap.exists()
+        ? { ...(snap.data() as RawScheduleDoc), exists: true }
+        : { exists: false };
+      emit();
+    },
+    () => {
+      // Secondary mirror may be absent or restricted; canonical listener handles errors
+    }
+  );
+
+  const unsubLegacy = onSnapshot(
+    doc(db, 'operating_schedule', 'default'),
+    (snap) => {
+      state.legacyDefault = snap.exists()
+        ? { ...(snap.data() as RawScheduleDoc), exists: true }
+        : { exists: false };
+      emit();
+    },
+    () => {
+      // Legacy doc is optional fallback only
+    }
+  );
+
+  return () => {
+    unsubCanonical();
+    unsubGlobal();
+    unsubLegacy();
+  };
 }
 
 export async function saveOperatingSchedule(
   schedule: RouteSchedule,
   updatedBy: string
 ): Promise<void> {
-  await setDoc(
-    doc(db, 'operating_schedule', 'default'),
-    {
-      ...schedule,
-      updatedAt: Date.now(),
-      updatedBy,
+  const payload = {
+    morning: {
+      startTime: schedule.morning.startTime,
+      endTime: schedule.morning.endTime,
+      enabled: schedule.morning.enabled,
     },
-    { merge: true }
-  );
+    evening: {
+      startTime: schedule.evening.startTime,
+      endTime: schedule.evening.endTime,
+      enabled: schedule.evening.enabled,
+    },
+    updatedAt: Date.now(),
+    updatedBy,
+  };
+
+  // Atomic dual-write to canonical primary (Android) and secondary mirror
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'calendar_exceptions', 'operating_schedule'), payload, { merge: true });
+  batch.set(doc(db, 'operating_schedule', 'global'), payload, { merge: true });
+  await batch.commit();
 }
 
 // ---------------------------------------------------------------------------
