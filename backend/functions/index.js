@@ -28,20 +28,122 @@ function buildBusStopTopic(originalBusId, stopId) {
 }
 
 /**
- * Core business logic for evaluating and sending bus swap notifications.
- * Extracted as a pure testable function taking db and messaging instances.
+ * Synchronizes RTDB /bus_swap_mappings/{originalBusId} for a bus_swaps write event.
+ * Keeps Android and Website-initiated swaps consistent, handles active/resolved/cancelled/expired/deleted
+ * swaps, avoids duplicate writes, and preserves other active swaps on the same originalBusId.
  */
-async function processBusSwapWrite(change, context, db = admin.firestore(), messaging = admin.messaging()) {
+async function syncBusSwapMappingToRtdb(db, rtdb, swapId, beforeData, afterData, now = Date.now()) {
+  if (!rtdb) return { skipped: true, reason: "NO_RTDB" };
+
+  const afterOriginalBusId = afterData ? String(afterData.originalBusId || "").trim() : "";
+  const beforeOriginalBusId = beforeData ? String(beforeData.originalBusId || "").trim() : "";
+  const busIdsToSync = new Set();
+  if (afterOriginalBusId) busIdsToSync.add(afterOriginalBusId);
+  if (beforeOriginalBusId && beforeOriginalBusId !== afterOriginalBusId) {
+    busIdsToSync.add(beforeOriginalBusId);
+  }
+  if (busIdsToSync.size === 0) return { skipped: true, reason: "NO_BUS_ID" };
+
+  const isSwapActiveAndUnexpired = (data) => {
+    if (!data) return false;
+    const status = String(data.status || "ACTIVE").toUpperCase();
+    if (status !== "ACTIVE") return false;
+    if (data.expiresAt != null && Number(data.expiresAt) > 0 && Number(data.expiresAt) <= now) {
+      return false;
+    }
+    return Boolean(String(data.replacementBusId || "").trim());
+  };
+
+  for (const busId of busIdsToSync) {
+    const mappingRef = rtdb.ref(`bus_swap_mappings/${busId}`);
+    let targetSwap = null;
+
+    if (busId === afterOriginalBusId && isSwapActiveAndUnexpired(afterData)) {
+      targetSwap = {
+        swapId: String(afterData.swapId || swapId),
+        originalBusId: busId,
+        replacementBusId: String(afterData.replacementBusId || "").trim(),
+        createdAt: Number(afterData.createdAt) || now
+      };
+    } else if (db && typeof db.collection === "function") {
+      // Check if another active unexpired swap exists for this originalBusId
+      try {
+        const snap = await db.collection("bus_swaps")
+          .where("originalBusId", "==", busId)
+          .where("status", "==", "ACTIVE")
+          .get();
+        const activeDocs = [];
+        snap.forEach((doc) => {
+          const d = doc.data() || {};
+          if (doc.id !== swapId && isSwapActiveAndUnexpired(d)) {
+            activeDocs.push({
+              swapId: String(d.swapId || doc.id),
+              originalBusId: busId,
+              replacementBusId: String(d.replacementBusId || "").trim(),
+              createdAt: Number(d.createdAt) || 0
+            });
+          }
+        });
+        if (activeDocs.length > 0) {
+          activeDocs.sort((a, b) => b.createdAt - a.createdAt);
+          targetSwap = activeDocs[0];
+        }
+      } catch (err) {
+        console.warn(`[syncBusSwapMappingToRtdb] Query warning for ${busId}:`, err.message);
+      }
+    }
+
+    try {
+      const currentSnap = typeof mappingRef.once === "function" ? await mappingRef.once("value") : null;
+      const currentVal = currentSnap && typeof currentSnap.val === "function" ? currentSnap.val() : null;
+
+      if (targetSwap) {
+        const alreadyMatches =
+          currentVal &&
+          currentVal.active === true &&
+          currentVal.originalBusId === targetSwap.originalBusId &&
+          currentVal.replacementBusId === targetSwap.replacementBusId &&
+          currentVal.swapId === targetSwap.swapId;
+
+        if (!alreadyMatches) {
+          await mappingRef.set({
+            originalBusId: targetSwap.originalBusId,
+            replacementBusId: targetSwap.replacementBusId,
+            active: true,
+            swapId: targetSwap.swapId,
+            updatedAt: now
+          });
+        }
+      } else if (currentVal !== null || currentSnap === null) {
+        await mappingRef.remove();
+      }
+    } catch (err) {
+      console.warn(`[syncBusSwapMappingToRtdb] RTDB sync warning for ${busId}:`, err.message);
+    }
+  }
+
+  return { success: true };
+}
+
+/**
+ * Core business logic for evaluating and sending bus swap notifications.
+ * Extracted as a pure testable function taking db, messaging, and optional rtdb instances.
+ */
+async function processBusSwapWrite(change, context, db = admin.firestore(), messaging = admin.messaging(), rtdb = null) {
   const swapId = context && context.params ? context.params.swapId : "unknown";
+  const beforeData = (change.before && change.before.exists) ? change.before.data() : null;
 
   // Document deleted
   if (!change.after || !change.after.exists) {
-    console.log(`[onBusSwapWritten] Swap document ${swapId} deleted. No action required.`);
+    await syncBusSwapMappingToRtdb(db, rtdb, swapId, beforeData, null);
+    console.log(`[onBusSwapWritten] Swap document ${swapId} deleted. RTDB mapping synced.`);
     return null;
   }
 
   const afterData = change.after.data() || {};
-  const beforeData = (change.before && change.before.exists) ? change.before.data() : null;
+
+  // Always synchronize RTDB /bus_swap_mappings/{originalBusId} before any notification early-returns
+  await syncBusSwapMappingToRtdb(db, rtdb, swapId, beforeData, afterData);
 
   const status = String(afterData.status || "ACTIVE").toUpperCase();
   const originalBusId = String(afterData.originalBusId || "").trim();
@@ -301,7 +403,7 @@ async function processBusSwapWrite(change, context, db = admin.firestore(), mess
 exports.onBusSwapWritten = regionalFunctions.firestore
   .document("bus_swaps/{swapId}")
   .onWrite(async (change, context) => {
-    return processBusSwapWrite(change, context, admin.firestore(), admin.messaging());
+    return processBusSwapWrite(change, context, admin.firestore(), admin.messaging(), admin.database());
   });
 
 /**
@@ -1871,6 +1973,7 @@ exports.onLiveLocationWritten = regionalFunctions.database
 exports.sanitizeTopic = sanitizeTopic;
 exports.buildBusStopTopic = buildBusStopTopic;
 exports.processBusSwapWrite = processBusSwapWrite;
+exports.syncBusSwapMappingToRtdb = syncBusSwapMappingToRtdb;
 exports.processAnnouncementWrite = processAnnouncementWrite;
 exports.processBusStartNotification = processBusStartNotification;
 exports.sendPasswordResetEmailViaRest = sendPasswordResetEmailViaRest;
@@ -3838,7 +3941,142 @@ async function processReconcileOperationalRtdb(dependencies = {}) {
     console.warn("[reconcileOperationalRtdb] Contact sync warning:", contactErr.message);
   }
 
+  // Reconcile expired/inactive RTDB bus_swap_mappings/{originalBusId}
+  results.busSwapMappings = await reconcileExpiredBusSwaps({ db, rtdb, now });
+
   return results;
+}
+
+/**
+ * Reconciles RTDB /bus_swap_mappings/{originalBusId} against Firestore bus_swaps.
+ * Removes stale/expired mappings and preserves or promotes other valid active swaps.
+ * Does not modify Firestore or trigger FCM notifications.
+ */
+async function reconcileExpiredBusSwaps({ db = admin.firestore(), rtdb = admin.database(), now = Date.now() } = {}) {
+  const summary = { evaluated: 0, created: 0, removed: 0, replaced: 0, unchanged: 0, errors: 0 };
+  if (!rtdb || typeof rtdb.ref !== "function") return summary;
+
+  let mappingsVal = null;
+  try {
+    const mappingsRef = rtdb.ref("bus_swap_mappings");
+    const snap = typeof mappingsRef.once === "function"
+      ? await mappingsRef.once("value")
+      : (typeof mappingsRef.get === "function" ? await mappingsRef.get() : null);
+    mappingsVal = snap && typeof snap.val === "function" ? snap.val() : null;
+  } catch (err) {
+    console.warn("[reconcileExpiredBusSwaps] Could not read bus_swap_mappings:", err.message);
+    return summary;
+  }
+
+  const mappingsObj = (mappingsVal && typeof mappingsVal === "object") ? mappingsVal : {};
+
+  const isSwapActiveAndUnexpired = (data) => {
+    if (!data) return false;
+    const status = String(data.status || "ACTIVE").toUpperCase();
+    if (status !== "ACTIVE") return false;
+    if (data.expiresAt != null && Number(data.expiresAt) > 0 && Number(data.expiresAt) <= now) {
+      return false;
+    }
+    return Boolean(String(data.replacementBusId || "").trim());
+  };
+
+  // Fetch all ACTIVE Firestore bus_swaps so missing RTDB mappings are also repaired
+  const activeSwapsByBus = new Map();
+  if (db && typeof db.collection === "function") {
+    try {
+      const activeSnap = await db.collection("bus_swaps")
+        .where("status", "==", "ACTIVE")
+        .get();
+      if (activeSnap && typeof activeSnap.forEach === "function") {
+        activeSnap.forEach((doc) => {
+          const d = doc.data() || {};
+          const busId = String(d.originalBusId || "").trim();
+          if (!busId || !isSwapActiveAndUnexpired(d)) return;
+          if (!activeSwapsByBus.has(busId)) activeSwapsByBus.set(busId, []);
+          activeSwapsByBus.get(busId).push({
+            swapId: String(d.swapId || doc.id),
+            originalBusId: busId,
+            replacementBusId: String(d.replacementBusId || "").trim(),
+            createdAt: Number(d.createdAt) || 0
+          });
+        });
+      }
+    } catch (err) {
+      console.warn("[reconcileExpiredBusSwaps] Could not query active bus_swaps:", err.message);
+      summary.errors++;
+    }
+  }
+
+  const allBusIds = new Set([...Object.keys(mappingsObj), ...activeSwapsByBus.keys()]);
+  if (allBusIds.size === 0) return summary;
+
+  for (const originalBusId of allBusIds) {
+    const currentMapping = mappingsObj[originalBusId] && typeof mappingsObj[originalBusId] === "object"
+      ? mappingsObj[originalBusId]
+      : null;
+    summary.evaluated++;
+    try {
+      let validActive = activeSwapsByBus.get(originalBusId) || [];
+      if (validActive.length === 0 && !activeSwapsByBus.has(originalBusId) && db && typeof db.collection === "function") {
+        // Fallback per-bus query for mocks that only support .where("originalBusId", ...)
+        const snap = await db.collection("bus_swaps")
+          .where("originalBusId", "==", originalBusId)
+          .where("status", "==", "ACTIVE")
+          .get();
+        if (snap && typeof snap.forEach === "function") {
+          validActive = [];
+          snap.forEach((doc) => {
+            const d = doc.data() || {};
+            if (isSwapActiveAndUnexpired(d)) {
+              validActive.push({
+                swapId: String(d.swapId || doc.id),
+                originalBusId,
+                replacementBusId: String(d.replacementBusId || "").trim(),
+                createdAt: Number(d.createdAt) || 0
+              });
+            }
+          });
+        }
+      }
+
+      const mappingRef = rtdb.ref(`bus_swap_mappings/${originalBusId}`);
+      if (validActive.length > 0) {
+        validActive.sort((a, b) => b.createdAt - a.createdAt);
+        const target = validActive[0];
+        const matches =
+          currentMapping &&
+          currentMapping.active === true &&
+          currentMapping.originalBusId === target.originalBusId &&
+          currentMapping.replacementBusId === target.replacementBusId &&
+          currentMapping.swapId === target.swapId;
+
+        if (matches) {
+          summary.unchanged++;
+        } else {
+          await mappingRef.set({
+            originalBusId: target.originalBusId,
+            replacementBusId: target.replacementBusId,
+            active: true,
+            swapId: target.swapId,
+            updatedAt: now
+          });
+          if (currentMapping) {
+            summary.replaced++;
+          } else {
+            summary.created++;
+          }
+        }
+      } else if (currentMapping) {
+        await mappingRef.remove();
+        summary.removed++;
+      }
+    } catch (err) {
+      summary.errors++;
+      console.warn(`[reconcileExpiredBusSwaps] Error reconciling ${originalBusId}:`, err.message);
+    }
+  }
+
+  return summary;
 }
 
 /**
@@ -4135,6 +4373,7 @@ exports.processUpdateDriverStaffProfile = processUpdateDriverStaffProfile;
 exports.processReconcileBusRtdb = processReconcileBusRtdb;
 exports.processOnBusAssignmentWritten = processOnBusAssignmentWritten;
 exports.processReconcileOperationalRtdb = processReconcileOperationalRtdb;
+exports.reconcileExpiredBusSwaps = reconcileExpiredBusSwaps;
 exports.processResetDriverPassword = processResetDriverPassword;
 exports.processDeleteDriverAccount = processDeleteDriverAccount;
 exports.processRegisterBusAccount = processRegisterBusAccount;
