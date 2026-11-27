@@ -414,7 +414,13 @@
 
 .admin-theme-fleetx.landing-theme-bw main .bg-white:not(.gm-style *),
 .admin-theme-fleetx.landing-theme-bw main .bg-slate-50:not(.gm-style *),
-.admin-theme-fleetx.landing-theme-bw main .bg-slate-50\/80:not(.gm-style *) {
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-50\/40:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-50\/50:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-50\/60:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-50\/70:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-50\/75:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-50\/80:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-50\/90:not(.gm-style *) {
   background-color: #ffffff !important;
   color: #0a0a0a !important;
 }
@@ -463,20 +469,28 @@
 .admin-theme-fleetx.landing-theme-bw main .text-emerald-500,
 .admin-theme-fleetx.landing-theme-bw main .text-emerald-600,
 .admin-theme-fleetx.landing-theme-bw main .text-emerald-700,
+.admin-theme-fleetx.landing-theme-bw main .text-emerald-800,
 .admin-theme-fleetx.landing-theme-bw main .text-amber-400,
 .admin-theme-fleetx.landing-theme-bw main .text-amber-500,
 .admin-theme-fleetx.landing-theme-bw main .text-amber-600,
 .admin-theme-fleetx.landing-theme-bw main .text-amber-700,
+.admin-theme-fleetx.landing-theme-bw main .text-amber-800,
+.admin-theme-fleetx.landing-theme-bw main .text-orange-800,
 .admin-theme-fleetx.landing-theme-bw main .text-indigo-600,
 .admin-theme-fleetx.landing-theme-bw main .text-indigo-700,
+.admin-theme-fleetx.landing-theme-bw main .text-violet-700,
+.admin-theme-fleetx.landing-theme-bw main .text-violet-800,
 .admin-theme-fleetx.landing-theme-bw main .text-rose-400,
 .admin-theme-fleetx.landing-theme-bw main .text-rose-500,
 .admin-theme-fleetx.landing-theme-bw main .text-rose-600,
 .admin-theme-fleetx.landing-theme-bw main .text-rose-700,
+.admin-theme-fleetx.landing-theme-bw main .text-rose-800,
+.admin-theme-fleetx.landing-theme-bw main .text-rose-900,
 .admin-theme-fleetx.landing-theme-bw main .text-red-400,
 .admin-theme-fleetx.landing-theme-bw main .text-red-500,
 .admin-theme-fleetx.landing-theme-bw main .text-red-600,
 .admin-theme-fleetx.landing-theme-bw main .text-red-700,
+.admin-theme-fleetx.landing-theme-bw main .text-red-800,
 .admin-theme-fleetx.landing-theme-bw main .text-purple-600,
 .admin-theme-fleetx.landing-theme-bw main .text-purple-700 {
   color: #0a0a0a !important;
@@ -498,14 +512,30 @@
 }
 
 .admin-theme-fleetx.landing-theme-bw main .bg-blue-50,
+.admin-theme-fleetx.landing-theme-bw main .bg-blue-50\/20,
+.admin-theme-fleetx.landing-theme-bw main .bg-blue-50\/40,
+.admin-theme-fleetx.landing-theme-bw main .bg-blue-50\/70,
+.admin-theme-fleetx.landing-theme-bw main .bg-blue-50\/80,
 .admin-theme-fleetx.landing-theme-bw main .bg-blue-100,
 .admin-theme-fleetx.landing-theme-bw main .bg-emerald-50,
+.admin-theme-fleetx.landing-theme-bw main .bg-emerald-50\/40,
+.admin-theme-fleetx.landing-theme-bw main .bg-emerald-50\/60,
+.admin-theme-fleetx.landing-theme-bw main .bg-emerald-100,
 .admin-theme-fleetx.landing-theme-bw main .bg-amber-50,
 .admin-theme-fleetx.landing-theme-bw main .bg-amber-100,
+.admin-theme-fleetx.landing-theme-bw main .bg-orange-50,
 .admin-theme-fleetx.landing-theme-bw main .bg-indigo-50,
+.admin-theme-fleetx.landing-theme-bw main .bg-indigo-100,
 .admin-theme-fleetx.landing-theme-bw main .bg-rose-50,
+.admin-theme-fleetx.landing-theme-bw main .bg-rose-50\/50,
+.admin-theme-fleetx.landing-theme-bw main .bg-rose-50\/60,
+.admin-theme-fleetx.landing-theme-bw main .bg-rose-100,
 .admin-theme-fleetx.landing-theme-bw main .bg-purple-50,
-.admin-theme-fleetx.landing-theme-bw main .bg-red-50\/70 {
+.admin-theme-fleetx.landing-theme-bw main .bg-purple-100,
+.admin-theme-fleetx.landing-theme-bw main .bg-violet-50,
+.admin-theme-fleetx.landing-theme-bw main .bg-red-50,
+.admin-theme-fleetx.landing-theme-bw main .bg-red-50\/70,
+.admin-theme-fleetx.landing-theme-bw main .bg-red-100 {
   background-color: #f0f0f0 !important;
   color: #0a0a0a !important;
 }
