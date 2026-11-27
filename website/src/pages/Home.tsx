@@ -1,18 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { Navbar, type LandingTheme } from '../components/Navbar';
 import { Hero } from '../components/Hero';
 import { KeyBenefits } from '../components/KeyBenefits';
-import { HowItWorks } from '../components/HowItWorks';
-import { Features } from '../components/Features';
-import { AppPreview } from '../components/AppPreview';
-import { WhyFleetX } from '../components/WhyFleetX';
-import { DownloadSection } from '../components/DownloadSection';
-import { ReleaseHistory } from '../components/ReleaseHistory';
-import { FaqSection } from '../components/FaqSection';
-import { FinalCta } from '../components/FinalCta';
-import { Footer } from '../components/Footer';
 import { getFleetXReleases } from '../services/githubReleaseService';
 import { ReleasesState } from '../types/github';
+
+const HowItWorks = lazy(() => import('../components/HowItWorks').then((m) => ({ default: m.HowItWorks })));
+const Features = lazy(() => import('../components/Features').then((m) => ({ default: m.Features })));
+const AppPreview = lazy(() => import('../components/AppPreview').then((m) => ({ default: m.AppPreview })));
+const WhyFleetX = lazy(() => import('../components/WhyFleetX').then((m) => ({ default: m.WhyFleetX })));
+const DownloadSection = lazy(() => import('../components/DownloadSection').then((m) => ({ default: m.DownloadSection })));
+const ReleaseHistory = lazy(() => import('../components/ReleaseHistory').then((m) => ({ default: m.ReleaseHistory })));
+const FaqSection = lazy(() => import('../components/FaqSection').then((m) => ({ default: m.FaqSection })));
+const FinalCta = lazy(() => import('../components/FinalCta').then((m) => ({ default: m.FinalCta })));
+const Footer = lazy(() => import('../components/Footer').then((m) => ({ default: m.Footer })));
 
 export const Home: React.FC = () => {
   const [theme, setTheme] = useState<LandingTheme>(() => {
@@ -96,25 +97,29 @@ export const Home: React.FC = () => {
       <main className="flex-grow">
         <Hero latestRelease={releasesState.latestRelease} onDownloadClick={scrollToDownload} />
         <KeyBenefits />
-        <HowItWorks />
-        <Features />
-        <AppPreview />
-        <WhyFleetX />
-        <DownloadSection
-          latestRelease={releasesState.latestRelease}
-          isLoading={releasesState.isLoading}
-          isError={releasesState.isError}
-          errorMessage={releasesState.errorMessage}
-        />
-        <ReleaseHistory
-          previousReleases={releasesState.previousReleases}
-          isLoading={releasesState.isLoading}
-        />
-        <FaqSection />
-        <FinalCta onExploreClick={scrollToDownload} />
+        <Suspense fallback={null}>
+          <HowItWorks />
+          <Features />
+          <AppPreview />
+          <WhyFleetX />
+          <DownloadSection
+            latestRelease={releasesState.latestRelease}
+            isLoading={releasesState.isLoading}
+            isError={releasesState.isError}
+            errorMessage={releasesState.errorMessage}
+          />
+          <ReleaseHistory
+            previousReleases={releasesState.previousReleases}
+            isLoading={releasesState.isLoading}
+          />
+          <FaqSection />
+          <FinalCta onExploreClick={scrollToDownload} />
+        </Suspense>
       </main>
 
-      <Footer latestRelease={releasesState.latestRelease} />
+      <Suspense fallback={null}>
+        <Footer latestRelease={releasesState.latestRelease} />
+      </Suspense>
     </div>
   );
 };

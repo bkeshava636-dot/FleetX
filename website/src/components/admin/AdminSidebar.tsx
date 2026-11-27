@@ -35,6 +35,36 @@ interface NavItem {
   badge?: string;
 }
 
+const routePrefetchers: Record<string, () => Promise<unknown>> = {
+  '/admin': () => import('../../pages/admin/AdminDashboard'),
+  '/admin/submissions': () => import('../../pages/admin/StopCoordinateSubmissions'),
+  '/admin/stop-requests': () => import('../../pages/admin/StopRequests'),
+  '/admin/routes': () => import('../../pages/admin/RoutesAndStops'),
+  '/admin/fleet': () => import('../../pages/admin/FleetManagement'),
+  '/admin/drivers': () => import('../../pages/admin/DriverManagement'),
+  '/admin/live-tracking': () => import('../../pages/admin/LiveFleetTracking'),
+  '/admin/bus-swaps': () => import('../../pages/admin/BusSwaps'),
+  '/admin/temporary-assignments': () => import('../../pages/admin/TemporaryAssignments'),
+  '/admin/calendar': () => import('../../pages/admin/CollegeCalendar'),
+  '/admin/announcements': () => import('../../pages/admin/Announcements'),
+  '/admin/students': () => import('../../pages/admin/StudentManagement'),
+  '/admin/analytics': () => import('../../pages/admin/AnalyticsReports'),
+  '/admin/audit': () => import('../../pages/admin/AuditLogs'),
+  '/admin/settings': () => import('../../pages/admin/AdminSettings'),
+};
+
+const prefetchedRoutes = new Set<string>();
+function prefetchRoute(href: string) {
+  if (prefetchedRoutes.has(href)) return;
+  const loader = routePrefetchers[href];
+  if (loader) {
+    prefetchedRoutes.add(href);
+    loader().catch(() => {
+      prefetchedRoutes.delete(href);
+    });
+  }
+}
+
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
   const { profile, logout } = useAdminAuth();
 
@@ -117,6 +147,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
                   key={item.name}
                   to={item.href}
                   end={item.href === '/admin'}
+                  onMouseEnter={() => prefetchRoute(item.href)}
+                  onFocus={() => prefetchRoute(item.href)}
                   onClick={() => onClose()}
                   className={({ isActive }) =>
                     `flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all ${

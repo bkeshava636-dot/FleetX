@@ -204,7 +204,7 @@ export const Hero: React.FC<HeroProps> = ({ latestRelease, onDownloadClick }) =>
                       src={heroTrackScreenshot}
                       alt="FleetX Live Student Bus Tracking Interface"
                       className="w-full h-full object-cover"
-                      loading="eager"
+                      loading="lazy"
                     />
                   ) : (
                     <div className="fleetx-phone-screen w-full h-full bg-gradient-to-b from-[#0B1220] via-[#111C2E] to-[#0B1220] text-white flex flex-col justify-between p-6 text-center">

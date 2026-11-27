@@ -35,6 +35,12 @@ export const AdminLogin: React.FC = () => {
     });
   };
 
+  // Prefetch AdminLayout + AdminDashboard while user logs in for instant transition
+  React.useEffect(() => {
+    import('../../layouts/AdminLayout').catch(() => {});
+    import('./AdminDashboard').catch(() => {});
+  }, []);
+
   // If already logged in as Admin, redirect immediately
   React.useEffect(() => {
     if (!authLoading && isAdmin) {

@@ -20,8 +20,13 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/database', 'firebase/functions', 'firebase/app-check'],
+          'firebase-core': ['firebase/app', 'firebase/app-check'],
+          'firebase-auth': ['firebase/auth'],
+          'firebase-firestore': ['firebase/firestore'],
+          'firebase-rtdb': ['firebase/database'],
+          'firebase-functions': ['firebase/functions'],
           maps: ['@react-google-maps/api'],
+          motion: ['animejs'],
           vendor: ['react', 'react-dom', 'react-router-dom', 'lucide-react'],
         },
       },
