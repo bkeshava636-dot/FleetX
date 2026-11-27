@@ -607,7 +607,7 @@ export const SubmitStopCoordinates: React.FC = () => {
                     <input
                       type="number"
                       step="0.000001"
-                      placeholder="e.g. 12.971600"
+                      placeholder="e.g. 15.168300"
                       value={proposedLocation ? proposedLocation.lat : ''}
                       onChange={(e) => {
                         const val = parseFloat(e.target.value);
@@ -626,7 +626,7 @@ export const SubmitStopCoordinates: React.FC = () => {
                     <input
                       type="number"
                       step="0.000001"
-                      placeholder="e.g. 77.594600"
+                      placeholder="e.g. 76.831700"
                       value={proposedLocation ? proposedLocation.lng : ''}
                       onChange={(e) => {
                         const val = parseFloat(e.target.value);

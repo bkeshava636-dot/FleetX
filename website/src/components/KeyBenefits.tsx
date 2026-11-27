@@ -106,7 +106,7 @@ export const KeyBenefits: React.FC = () => {
           {/* Largest Feature Card: Real-Time Bus Tracking */}
           <div
             data-reveal
-            className="lg:col-span-2 lg:row-span-2 flex flex-col justify-between rounded-3xl border border-fleet-navy bg-fleet-navy text-fleet-offwhite p-6 sm:p-8 shadow-md"
+            className="md:col-span-2 lg:col-span-2 lg:row-span-2 flex flex-col justify-between rounded-3xl border border-fleet-navy bg-fleet-navy text-fleet-offwhite p-6 sm:p-8 shadow-md"
           >
             <div>
               <div className="flex items-center justify-between mb-5">

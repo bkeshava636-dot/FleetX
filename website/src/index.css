@@ -73,8 +73,12 @@
 .landing-theme-bw footer,
 .landing-theme-bw .bg-fleet-navy,
 .landing-theme-bw .bg-fleet-navy\/95,
+.landing-theme-bw .bg-fleet-navy\/90,
 .landing-theme-bw .bg-fleet-navy\/85,
-.landing-theme-bw .bg-fleet-navy\/80 {
+.landing-theme-bw .bg-fleet-navy\/80,
+.landing-theme-bw .bg-fleet-navy\/75,
+.landing-theme-bw .bg-fleet-navy\/70,
+.landing-theme-bw .bg-fleet-navy\/60 {
   background-color: #ffffff !important;
   color: #0a0a0a !important;
   border-color: #e5e5e5 !important;

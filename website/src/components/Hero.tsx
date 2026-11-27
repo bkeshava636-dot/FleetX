@@ -242,8 +242,8 @@ export const Hero: React.FC<HeroProps> = ({ latestRelease, onDownloadClick }) =>
                 </div>
               </div>
 
-              {/* Floating Bus Info Card (positioned cleanly outside phone caption on desktop/tablet) */}
-              <div className="hidden sm:flex items-center gap-3 rounded-2xl border border-white/15 bg-[#111C2E]/95 backdrop-blur-md px-4 py-3 shadow-2xl absolute -left-24 bottom-24 z-30">
+              {/* Floating Bus Info Card (positioned clear of phone screen driver name & bottom pill) */}
+              <div className="hidden sm:flex items-center gap-3 rounded-2xl border border-white/15 bg-[#111C2E]/95 backdrop-blur-md px-4 py-3 shadow-2xl absolute -left-28 bottom-36 z-30">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-fleet-cyan/15 border border-fleet-cyan/30 text-fleet-cyan shrink-0">
                   <Bus className="w-5 h-5" />
                 </div>

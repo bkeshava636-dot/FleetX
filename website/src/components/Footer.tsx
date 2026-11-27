@@ -24,11 +24,11 @@ export const Footer: React.FC<FooterProps> = ({ latestRelease }) => {
                 alt="FleetX Logo"
                 className="w-10 h-10 rounded-xl bg-white p-0.5 object-cover"
               />
-              <span className="text-xl font-bold tracking-tight text-white">
-                Fleet<span className="text-blue-400">X</span>
+              <span className="font-display text-xl font-bold tracking-tight text-white">
+                Fleet<span className="text-fleet-cyan">X</span>
               </span>
             </div>
-            <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
+            <p className="text-xs text-fleet-muted max-w-sm leading-relaxed">
               Official real-time campus bus tracking and transit intelligence platform. Dedicated to providing dependable arrival estimates and route clarity for college commuters.
             </p>
             {latestRelease && (
@@ -76,14 +76,14 @@ export const Footer: React.FC<FooterProps> = ({ latestRelease }) => {
                 </a>
               </li>
               <li>
-                <Link to="/submit-stop" className="text-blue-400 hover:text-blue-300 font-medium transition-colors flex items-center gap-1.5">
+                <Link to="/submit-stop" className="text-fleet-cyan hover:text-fleet-cyan/80 font-medium transition-colors flex items-center gap-1.5">
                   <MapPin className="w-3 h-3" />
                   <span>Submit Bus Stop Location</span>
                 </Link>
               </li>
               <li>
-                <Link to="/admin/login" className="text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
-                  <Shield className="w-3 h-3 text-slate-500" />
+                <Link to="/admin/login" className="text-slate-300 hover:text-white transition-colors flex items-center gap-1.5">
+                  <Shield className="w-3 h-3 text-fleet-muted" />
                   <span>Admin Management Console</span>
                 </Link>
               </li>
@@ -127,21 +127,9 @@ export const Footer: React.FC<FooterProps> = ({ latestRelease }) => {
                   Privacy Policy & Disclaimers
                 </button>
               </li>
-              <li className="pt-2 text-[11px] text-slate-500">
-                <span>Support & Transportation Inquiries:</span>
-                <span className="block text-slate-400 mt-0.5">Please contact your college transportation administrator.</span>
-              </li>
-              <li>
-                <Link to="/submit-stop" className="text-blue-400 hover:text-blue-300 font-medium transition-colors flex items-center gap-1.5">
-                  <MapPin className="w-3 h-3" />
-                  <span>Submit Bus Stop Location</span>
-                </Link>
-              </li>
-              <li>
-                <Link to="/admin/login" className="text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
-                  <Shield className="w-3 h-3 text-slate-500" />
-                  <span>Admin Management Console</span>
-                </Link>
+              <li className="pt-2 text-xs text-slate-300">
+                <span className="font-semibold text-white">Support &amp; Transportation Inquiries:</span>
+                <span className="block text-fleet-muted mt-0.5">Please contact your college transportation administrator.</span>
               </li>
             </ul>
           </div>
@@ -149,7 +137,7 @@ export const Footer: React.FC<FooterProps> = ({ latestRelease }) => {
         </div>
 
         {/* Bottom copyright */}
-        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-fleet-muted">
           <p>© {new Date().getFullYear()} FleetX. Built for College Transit.</p>
           <p className="text-[11px]">
             Direct GitHub Release distribution • Android is a trademark of Google LLC.

@@ -13,6 +13,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import logoUrl from '../assets/logo/fleetx-logo.png';
+import { ReleaseNotesContent } from './common/ReleaseNotesContent';
 import studentHomeImg from '../assets/screenshots/screen-student-home.jpg';
 import { ReleaseInfo } from '../types/github';
 import { Badge } from './ui/badge';
@@ -231,9 +232,7 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({
                     <ChevronDown className="w-4 h-4 text-slate-500 transition-transform duration-200 group-open:rotate-180" />
                   </summary>
                   <div className="px-5 pb-4 pt-2 border-t border-slate-100">
-                    <pre className="text-xs text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200 font-mono whitespace-pre-wrap overflow-x-auto max-h-60 leading-relaxed">
-                      {latestRelease.releaseNotes}
-                    </pre>
+                    <ReleaseNotesContent markdown={latestRelease.releaseNotes} />
                   </div>
                 </details>
               )}

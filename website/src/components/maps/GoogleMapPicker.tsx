@@ -19,8 +19,8 @@ interface GoogleMapPickerProps {
   className?: string;
 }
 
-// Default center: College campus coordinates (e.g. 13.0827, 80.2707 / Bengaluru/Karnataka or configured college location)
-const DEFAULT_CENTER: LatLng = { lat: 12.9716, lng: 77.5946 };
+// Default center: BITM Ballari campus coordinates
+const DEFAULT_CENTER: LatLng = { lat: 15.1683, lng: 76.8317 };
 
 const mapContainerStyle: React.CSSProperties = {
   width: '100%',
@@ -238,8 +238,8 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
         )}
       </GoogleMap>
 
-      {/* Map Legend Overlay */}
-      <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-sm border border-slate-200 rounded-xl px-3 py-2 shadow-md flex items-center gap-4 text-[11px] text-slate-600 select-none pointer-events-none">
+      {/* Map Legend Overlay (offset above Google watermark) */}
+      <div className="absolute bottom-8 left-3 bg-white/95 backdrop-blur-sm border border-slate-200 rounded-xl px-3 py-2 shadow-md flex items-center gap-4 text-[11px] text-slate-600 select-none pointer-events-none">
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded-full bg-blue-600 border border-white shadow-sm" />
           <span className="font-semibold text-slate-800">Proposed Stop</span>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Download, History, ExternalLink, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { ReleaseInfo } from '../types/github';
+import { ReleaseNotesContent } from './common/ReleaseNotesContent';
 
 interface ReleaseHistoryProps {
   previousReleases: ReleaseInfo[];
@@ -116,10 +117,8 @@ export const ReleaseHistory: React.FC<ReleaseHistoryProps> = ({
 
                 {/* Collapsible Release Notes Body */}
                 {isExpanded && release.releaseNotes && (
-                  <div className="px-5 pb-5 pt-1 border-t border-slate-100 bg-slate-50/50">
-                    <pre className="text-xs text-slate-700 bg-white p-4 rounded-xl border border-slate-200 font-mono whitespace-pre-wrap max-h-56 overflow-y-auto leading-relaxed">
-                      {release.releaseNotes}
-                    </pre>
+                  <div className="px-5 pb-5 pt-2 border-t border-slate-100 bg-slate-50/50">
+                    <ReleaseNotesContent markdown={release.releaseNotes} className="bg-white max-h-56" />
                   </div>
                 )}
               </div>
