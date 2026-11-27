@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Shield, Lock, User, ArrowLeft, AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Shield, Lock, User, ArrowLeft, AlertCircle, Eye, EyeOff, Loader2, Sun, Moon } from 'lucide-react';
 import logoUrl from '../../assets/logo/fleetx-logo.png';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { CoordinateTag, MapGridBackdrop } from '../../components/MobilityPrimitives';
@@ -15,6 +15,25 @@ export const AdminLogin: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [theme, setTheme] = useState<'dark' | 'light-bw'>(() => {
+    try {
+      return localStorage.getItem('fleetx_landing_theme') === 'light-bw' ? 'light-bw' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === 'dark' ? 'light-bw' : 'dark';
+      try {
+        localStorage.setItem('fleetx_landing_theme', next);
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
 
   // If already logged in as Admin, redirect immediately
   React.useEffect(() => {
@@ -47,15 +66,19 @@ export const AdminLogin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-fleet-navy text-fleet-offwhite flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div
+      className={`min-h-screen bg-fleet-navy text-fleet-offwhite flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden transition-colors duration-200 ${
+        theme === 'light-bw' ? 'landing-theme-bw' : ''
+      }`}
+    >
       <MapGridBackdrop dark />
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -top-24 right-0 h-[380px] w-[420px] rounded-full bg-fleet-cyan/10 blur-3xl"
       />
 
-      {/* Top back button */}
-      <div className="absolute top-6 left-6 z-10">
+      {/* Top back & theme buttons */}
+      <div className="absolute top-6 left-6 right-6 z-10 flex items-center justify-between">
         <Link
           to="/"
           className="inline-flex items-center gap-2 text-xs font-semibold text-fleet-muted hover:text-fleet-offwhite bg-fleet-deep/90 hover:bg-fleet-deep px-3 py-2 rounded-lg border border-white/10 transition-colors"
@@ -63,6 +86,25 @@ export const AdminLogin: React.FC = () => {
           <ArrowLeft className="w-4 h-4" />
           <span>Back to FleetX</span>
         </Link>
+
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? 'Switch to Light Black & White mode' : 'Switch to Dark mode'}
+          className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-fleet-deep px-3 py-1.5 text-xs font-semibold text-fleet-offwhite hover:border-fleet-cyan/40 transition-colors"
+        >
+          {theme === 'dark' ? (
+            <>
+              <Sun className="w-3.5 h-3.5 text-fleet-lime" />
+              <span>B&amp;W</span>
+            </>
+          ) : (
+            <>
+              <Moon className="w-3.5 h-3.5 text-fleet-cyan" />
+              <span>Dark</span>
+            </>
+          )}
+        </button>
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md z-10 px-4">
@@ -74,9 +116,9 @@ export const AdminLogin: React.FC = () => {
           <div className="flex justify-center mb-2">
             <CoordinateTag label="ADMINISTRATION CONSOLE" />
           </div>
-          <h2 className="font-display text-2xl font-bold tracking-tight text-fleet-offwhite">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-fleet-offwhite">
             Fleet<span className="text-fleet-cyan">X</span> Administrator Portal
-          </h2>
+          </h1>
           <p className="mt-1.5 text-xs text-fleet-muted">
             Secure management console for college bus tracking and stop coordinates
           </p>
@@ -138,6 +180,7 @@ export const AdminLogin: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-fleet-muted hover:text-fleet-offwhite focus:outline-none"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

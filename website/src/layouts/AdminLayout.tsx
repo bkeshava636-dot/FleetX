@@ -5,7 +5,26 @@ import { AdminHeader } from '../components/admin/AdminHeader';
 
 export const AdminLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light-bw'>(() => {
+    try {
+      return localStorage.getItem('fleetx_landing_theme') === 'light-bw' ? 'light-bw' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
   const location = useLocation();
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === 'dark' ? 'light-bw' : 'dark';
+      try {
+        localStorage.setItem('fleetx_landing_theme', next);
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
 
   // Determine header title based on active path
   const getPageTitle = (pathname: string): string => {
@@ -28,13 +47,22 @@ export const AdminLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-fleet-navy text-fleet-offwhite flex admin-theme-fleetx">
+    <div
+      className={`min-h-screen bg-fleet-navy text-fleet-offwhite flex admin-theme-fleetx transition-colors duration-200 ${
+        theme === 'light-bw' ? 'landing-theme-bw' : ''
+      }`}
+    >
       {/* Sidebar */}
       <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 lg:pl-64">
-        <AdminHeader onMenuClick={() => setSidebarOpen(true)} title={getPageTitle(location.pathname)} />
+        <AdminHeader
+          onMenuClick={() => setSidebarOpen(true)}
+          title={getPageTitle(location.pathname)}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+        />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           <Outlet />

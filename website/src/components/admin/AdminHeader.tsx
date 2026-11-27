@@ -1,13 +1,20 @@
 import React from 'react';
-import { Menu, ShieldCheck, Wifi, WifiOff } from 'lucide-react';
+import { Menu, Moon, ShieldCheck, Sun, Wifi, WifiOff } from 'lucide-react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 
 interface AdminHeaderProps {
   onMenuClick: () => void;
   title?: string;
+  theme?: 'dark' | 'light-bw';
+  onToggleTheme?: () => void;
 }
 
-export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick, title = 'Administration Console' }) => {
+export const AdminHeader: React.FC<AdminHeaderProps> = ({
+  onMenuClick,
+  title = 'Administration Console',
+  theme = 'dark',
+  onToggleTheme,
+}) => {
   const { profile } = useAdminAuth();
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
 
@@ -38,7 +45,28 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick, title = '
         </div>
       </div>
 
-      <div className="flex items-center gap-3 sm:gap-4">
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        {onToggleTheme && (
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            aria-label={theme === 'dark' ? 'Switch to Light Black & White mode' : 'Switch to Dark mode'}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-fleet-deep px-2.5 py-1 text-[11px] font-semibold text-fleet-offwhite hover:border-fleet-cyan/40 transition-colors"
+          >
+            {theme === 'dark' ? (
+              <>
+                <Sun className="w-3.5 h-3.5 text-fleet-lime" />
+                <span className="hidden sm:inline">B&amp;W</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-3.5 h-3.5 text-fleet-cyan" />
+                <span className="hidden sm:inline">Dark</span>
+              </>
+            )}
+          </button>
+        )}
+
         {/* Network status indicator */}
         <div className="hidden sm:flex items-center gap-1.5 font-mono text-[11px] font-medium text-fleet-offwhite bg-fleet-deep px-2.5 py-1 rounded-full border border-white/10">
           {isOnline ? (
