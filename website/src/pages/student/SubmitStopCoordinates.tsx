@@ -53,13 +53,21 @@ export const SubmitStopCoordinates: React.FC = () => {
   const [selectedRouteId, setSelectedRouteId] = useState<string>('');
   const [selectedStopId, setSelectedStopId] = useState<string>('');
   const [routeSearch, setRouteSearch] = useState<string>('');
+  const [stopSearch, setStopSearch] = useState<string>('');
 
   // Location Proposal State
   const [proposedLocation, setProposedLocation] = useState<LatLng | null>(null);
   const [locationSource, setLocationSource] = useState<LocationSource>('MANUAL');
+  const [placeSearchUsed, setPlaceSearchUsed] = useState<boolean>(false);
   const [accuracyMeters, setAccuracyMeters] = useState<number | null>(null);
   const [locatingGps, setLocatingGps] = useState<boolean>(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+
+  // Place / Stop Name Search State (Step 3)
+  const [placeQuery, setPlaceQuery] = useState<string>('');
+  const [placeResults, setPlaceResults] = useState<Array<{ id: string; label: string; lat: number; lng: number }>>([]);
+  const [searchingPlace, setSearchingPlace] = useState<boolean>(false);
+  const [placeSearchError, setPlaceSearchError] = useState<string | null>(null);
 
   // Student remarks & form state
   const [studentNotes, setStudentNotes] = useState<string>('');
@@ -85,7 +93,7 @@ export const SubmitStopCoordinates: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Filtered Routes
+  // Filtered Routes (matches route name, ID, bus ID, or any stop name)
   const filteredRoutes = useMemo(() => {
     if (!routeSearch.trim()) return routes;
     const term = routeSearch.toLowerCase();
@@ -93,7 +101,8 @@ export const SubmitStopCoordinates: React.FC = () => {
       (r) =>
         r.name.toLowerCase().includes(term) ||
         r.routeId.toLowerCase().includes(term) ||
-        r.busId.toLowerCase().includes(term)
+        r.busId.toLowerCase().includes(term) ||
+        r.stops.some((s) => s.name.toLowerCase().includes(term))
     );
   }, [routes, routeSearch]);
 
@@ -101,6 +110,18 @@ export const SubmitStopCoordinates: React.FC = () => {
   const selectedRoute = useMemo(() => {
     return routes.find((r) => r.routeId === selectedRouteId) || null;
   }, [routes, selectedRouteId]);
+
+  // Filtered Stops within Selected Route
+  const filteredStops = useMemo(() => {
+    if (!selectedRoute) return [];
+    if (!stopSearch.trim()) return selectedRoute.stops;
+    const term = stopSearch.toLowerCase();
+    return selectedRoute.stops.filter(
+      (s) =>
+        s.name.toLowerCase().includes(term) ||
+        s.stopId.toLowerCase().includes(term)
+    );
+  }, [selectedRoute, stopSearch]);
 
   // Selected Stop Object
   const selectedStop = useMemo(() => {
@@ -127,6 +148,10 @@ export const SubmitStopCoordinates: React.FC = () => {
         setLocationSource('MANUAL');
         setAccuracyMeters(null);
       }
+      setPlaceSearchUsed(false);
+      setPlaceQuery('');
+      setPlaceResults([]);
+      setPlaceSearchError(null);
       setGpsError(null);
       setSubmissionError(null);
     }
@@ -192,8 +217,100 @@ export const SubmitStopCoordinates: React.FC = () => {
   const handleMapPositionChange = (pos: LatLng) => {
     setProposedLocation(pos);
     setLocationSource('MANUAL');
+    setPlaceSearchUsed(false);
     setAccuracyMeters(null);
     setGpsError(null);
+  };
+
+  // Search stop / landmark name via Google Maps Geocoder with Nominatim fallback
+  const handleSearchPlace = async (queryOverride?: string) => {
+    const rawQuery = (queryOverride ?? placeQuery).trim();
+    if (!rawQuery) {
+      setPlaceSearchError('Enter a stop name or landmark to search.');
+      setPlaceResults([]);
+      return;
+    }
+    if (queryOverride !== undefined) {
+      setPlaceQuery(queryOverride);
+    }
+
+    setSearchingPlace(true);
+    setPlaceSearchError(null);
+
+    const hasLocalContext = /ballari|bellary|karnataka/i.test(rawQuery);
+    const biasedQuery = hasLocalContext ? rawQuery : `${rawQuery}, Ballari, Karnataka, India`;
+
+    try {
+      let results: Array<{ id: string; label: string; lat: number; lng: number }> = [];
+
+      // 1. Try Google Maps Geocoder if loaded
+      if (typeof window !== 'undefined' && window.google?.maps?.Geocoder) {
+        const geocoder = new window.google.maps.Geocoder();
+        const geocodeRes = await new Promise<google.maps.GeocoderResult[]>((resolve) => {
+          geocoder.geocode(
+            {
+              address: biasedQuery,
+              region: 'IN',
+              bounds: { south: 14.95, west: 76.6, north: 15.35, east: 77.1 },
+            },
+            (res, status) => {
+              if (status === 'OK' && res && res.length > 0) {
+                resolve(res);
+              } else {
+                resolve([]);
+              }
+            }
+          );
+        });
+
+        results = geocodeRes.slice(0, 5).map((item, idx) => ({
+          id: item.place_id || `g-${idx}`,
+          label: item.formatted_address,
+          lat: Number(item.geometry.location.lat().toFixed(6)),
+          lng: Number(item.geometry.location.lng().toFixed(6)),
+        }));
+      }
+
+      // 2. Fallback to OpenStreetMap Nominatim if Google Geocoder yielded nothing
+      if (results.length === 0) {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=in&q=${encodeURIComponent(
+          biasedQuery
+        )}`;
+        const resp = await fetch(url, {
+          headers: { Accept: 'application/json' },
+        });
+        if (resp.ok) {
+          const data: Array<{ place_id: number; display_name: string; lat: string; lon: string }> =
+            await resp.json();
+          results = data.map((item) => ({
+            id: `osm-${item.place_id}`,
+            label: item.display_name,
+            lat: Number(parseFloat(item.lat).toFixed(6)),
+            lng: Number(parseFloat(item.lon).toFixed(6)),
+          }));
+        }
+      }
+
+      setPlaceResults(results);
+      if (results.length === 0) {
+        setPlaceSearchError(`No locations found for "${rawQuery}". Try adding a nearby landmark or click the map directly.`);
+      }
+    } catch {
+      setPlaceSearchError('Location search failed. Please check your connection or click the map directly.');
+      setPlaceResults([]);
+    } finally {
+      setSearchingPlace(false);
+    }
+  };
+
+  const handleSelectPlaceResult = (result: { id: string; label: string; lat: number; lng: number }) => {
+    setProposedLocation({ lat: result.lat, lng: result.lng });
+    setLocationSource('MANUAL');
+    setPlaceSearchUsed(true);
+    setAccuracyMeters(null);
+    setGpsError(null);
+    setPlaceResults([]);
+    setPlaceSearchError(null);
   };
 
   // Form submission handler
@@ -242,10 +359,15 @@ export const SubmitStopCoordinates: React.FC = () => {
     setSubmissionSuccess(false);
     setSubmittedSubmissionId(null);
     setSelectedStopId('');
+    setStopSearch('');
     setProposedLocation(null);
     setLocationSource('MANUAL');
+    setPlaceSearchUsed(false);
     setAccuracyMeters(null);
     setStudentNotes('');
+    setPlaceQuery('');
+    setPlaceResults([]);
+    setPlaceSearchError(null);
     setSubmissionError(null);
     setGpsError(null);
   };
@@ -439,7 +561,7 @@ export const SubmitStopCoordinates: React.FC = () => {
                 <Search className="w-4 h-4 text-fleet-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="Search route by name, route ID, or bus number..."
+                  placeholder="Search route by name, stop name, route ID, or bus number..."
                   value={routeSearch}
                   onChange={(e) => setRouteSearch(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 bg-fleet-navy border border-white/15 rounded-xl text-xs text-fleet-offwhite placeholder:text-fleet-muted/70 focus:outline-none focus:border-fleet-cyan"
@@ -456,6 +578,7 @@ export const SubmitStopCoordinates: React.FC = () => {
                       onClick={() => {
                         setSelectedRouteId(route.routeId);
                         setSelectedStopId('');
+                        setStopSearch('');
                       }}
                       className={`text-left p-3 rounded-xl border text-xs transition flex flex-col justify-between ${
                         isSelected
@@ -491,8 +614,19 @@ export const SubmitStopCoordinates: React.FC = () => {
                   </span>
                 </div>
 
+                <div className="relative">
+                  <Search className="w-4 h-4 text-fleet-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Filter stops by name or stop ID..."
+                    value={stopSearch}
+                    onChange={(e) => setStopSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-fleet-navy border border-white/15 rounded-xl text-xs text-fleet-offwhite placeholder:text-fleet-muted/70 focus:outline-none focus:border-fleet-cyan"
+                  />
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1">
-                  {selectedRoute.stops.map((stop) => {
+                  {filteredStops.map((stop) => {
                     const isSelected = stop.stopId === selectedStopId;
                     const hasCoords = checkStopHasCoordinates(stop);
 
@@ -588,6 +722,78 @@ export const SubmitStopCoordinates: React.FC = () => {
                   </div>
                 )}
 
+                {/* Search by Stop / Landmark Name */}
+                <div className="space-y-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative flex-1">
+                      <Search className="w-4 h-4 text-fleet-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Search stop or landmark name to find coordinates (e.g. Patel Nagar, SBI Bank)..."
+                        value={placeQuery}
+                        onChange={(e) => setPlaceQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSearchPlace();
+                          }
+                        }}
+                        className="w-full pl-10 pr-4 py-2.5 bg-fleet-navy border border-white/15 rounded-xl text-xs text-fleet-offwhite placeholder:text-fleet-muted/70 focus:outline-none focus:border-fleet-cyan"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={searchingPlace}
+                        onClick={() => handleSearchPlace()}
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-fleet-navy hover:bg-white/[0.06] border border-white/15 hover:border-fleet-cyan/40 disabled:opacity-50 text-fleet-offwhite text-xs font-semibold rounded-xl transition"
+                      >
+                        <Search className={`w-3.5 h-3.5 ${searchingPlace ? 'animate-pulse' : ''}`} />
+                        <span>{searchingPlace ? 'Searching...' : 'Search Place'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={searchingPlace}
+                        onClick={() => handleSearchPlace(selectedStop.name)}
+                        title={`Search coordinates for "${selectedStop.name}"`}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-fleet-cyan/15 hover:bg-fleet-cyan/25 border border-fleet-cyan/35 disabled:opacity-50 text-fleet-cyan text-xs font-semibold rounded-xl transition whitespace-nowrap"
+                      >
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Find "{selectedStop.name}"</span>
+                        <span className="sm:hidden">Find Stop</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {placeSearchError && (
+                    <div className="text-xs text-amber-300 bg-amber-950/40 border border-amber-500/30 rounded-xl px-3 py-2 flex items-center gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                      <span>{placeSearchError}</span>
+                    </div>
+                  )}
+
+                  {placeResults.length > 0 && (
+                    <div className="bg-fleet-navy border border-white/15 rounded-xl divide-y divide-white/10 overflow-hidden shadow-lg">
+                      {placeResults.map((res) => (
+                        <button
+                          key={res.id}
+                          type="button"
+                          onClick={() => handleSelectPlaceResult(res)}
+                          className="w-full text-left px-3.5 py-2.5 hover:bg-fleet-cyan/10 transition flex items-center justify-between gap-3 text-xs"
+                        >
+                          <div className="flex items-start gap-2 min-w-0">
+                            <MapPin className="w-3.5 h-3.5 text-fleet-cyan flex-shrink-0 mt-0.5" />
+                            <span className="text-fleet-offwhite truncate">{res.label}</span>
+                          </div>
+                          <span className="font-mono text-[11px] text-fleet-lime flex-shrink-0">
+                            {res.lat.toFixed(5)}, {res.lng.toFixed(5)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* Google Maps Container */}
                 <GoogleMapPicker
                   proposedPosition={proposedLocation}
@@ -650,7 +856,11 @@ export const SubmitStopCoordinates: React.FC = () => {
                             : 'bg-fleet-deep border-white/15 text-fleet-offwhite'
                         }`}
                       >
-                        {locationSource === 'GPS' ? 'GPS Device' : 'Manual Map Pin'}
+                        {locationSource === 'GPS'
+                          ? 'GPS Device'
+                          : placeSearchUsed
+                            ? 'Place Search (Adjust Pin if Needed)'
+                            : 'Manual Map Pin'}
                       </span>
                       {accuracyMeters && (
                         <span className="text-[11px] text-fleet-muted font-mono">
