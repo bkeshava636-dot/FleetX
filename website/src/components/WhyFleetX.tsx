@@ -1,8 +1,7 @@
 import React from 'react';
 import { Lock, MapPin, ShieldCheck, Zap } from 'lucide-react';
 import { useScrollStagger } from '@/lib/useMotionReveal';
-import { Badge } from './ui/badge';
-import { Card, CardContent } from './ui/card';
+import { CoordinateTag } from './MobilityPrimitives';
 
 const PILLARS = [
   {
@@ -32,42 +31,46 @@ const PILLARS = [
 ];
 
 export const WhyFleetX: React.FC = () => {
-  const pillarsRef = useScrollStagger<HTMLDivElement>('[data-reveal]', 55);
+  const pillarsRef = useScrollStagger<HTMLDivElement>('[data-reveal]', 50);
 
   return (
-    <section id="about" className="py-16 sm:py-20 bg-white border-t border-slate-200/80">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-12">
-          <Badge className="mb-3 uppercase tracking-wider text-[11px]">Connected Platform</Badge>
-          <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-            Why FleetX?
-          </h2>
-          <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed">
-            Instead of scattered WhatsApp updates and static spreadsheets, FleetX unifies live tracking, route management, and student communication in one dependable system.
-          </p>
-        </div>
+    <section id="about" className="py-16 sm:py-24 bg-fleet-deep text-fleet-offwhite border-b border-white/10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+          {/* Editorial Typography Left */}
+          <div className="lg:col-span-5 space-y-5">
+            <CoordinateTag label="WHY FLEETX" />
+            <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight leading-tight">
+              One connected system instead of scattered updates.
+            </h2>
+            <p className="text-sm sm:text-base text-fleet-muted leading-relaxed">
+              Campus transit fails when route sheets, driver rosters, and student updates live in separate places. FleetX unifies live telemetry, route governance, and announcements into one dependable platform.
+            </p>
+          </div>
 
-        <div ref={pillarsRef} className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
-          {PILLARS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Card
-                key={item.title}
-                data-reveal
-                className="group bg-college-surface/60 hover:border-college-primary/40 hover:-translate-y-1 hover:shadow-card-hover motion-reduce:hover:translate-y-0"
-              >
-                <CardContent className="p-6 flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-college-primary flex items-center justify-center shrink-0 shadow-sm">
-                    <Icon className="w-5 h-5" />
+          {/* Architectural Pillars Right */}
+          <div ref={pillarsRef} className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {PILLARS.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.title}
+                  data-reveal
+                  className="rounded-2xl border border-white/10 bg-fleet-navy/80 p-5 transition-colors hover:border-fleet-cyan/35"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-fleet-cyan/10 border border-fleet-cyan/20 text-fleet-cyan flex items-center justify-center mb-3.5">
+                    <Icon className="w-4 h-4" />
                   </div>
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 mb-1">{item.title}</h3>
-                    <p className="text-sm text-slate-600 leading-relaxed">{item.description}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  <h3 className="font-display text-base font-bold text-fleet-offwhite mb-1.5">
+                    {item.title}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-fleet-muted leading-relaxed">
+                    {item.description}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </section>

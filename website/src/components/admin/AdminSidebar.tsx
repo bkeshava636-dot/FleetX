@@ -68,46 +68,46 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
 
       {/* Sidebar Panel */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+        className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-fleet-navy border-r border-white/10 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Header */}
-        <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800 bg-slate-900/90">
+        <div className="h-16 flex items-center justify-between px-5 border-b border-white/10 bg-fleet-navy/95">
           <div className="flex items-center gap-3">
             <img src={logoUrl} alt="FleetX Logo" className="w-8 h-8 rounded-lg bg-white p-0.5 object-cover" />
             <div className="flex flex-col">
-              <span className="text-sm font-bold tracking-tight text-white leading-tight">
-                Fleet<span className="text-blue-400">X</span> Admin
+              <span className="font-display text-sm font-bold tracking-tight text-fleet-offwhite leading-tight">
+                Fleet<span className="text-fleet-cyan">X</span> Admin
               </span>
-              <span className="text-[10px] text-slate-400 font-medium">Transit Console</span>
+              <span className="font-mono text-[10px] uppercase tracking-wider text-fleet-muted font-medium">Transit Console</span>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+            className="lg:hidden p-1.5 rounded-lg text-fleet-muted hover:text-fleet-offwhite hover:bg-white/[0.06]"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* User Card */}
-        <div className="p-4 border-b border-slate-800/80 bg-slate-850">
+        <div className="p-4 border-b border-white/10 bg-fleet-deep/60">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-semibold text-xs">
+            <div className="w-9 h-9 rounded-full bg-fleet-cyan/15 border border-fleet-cyan/35 flex items-center justify-center text-fleet-cyan font-mono font-semibold text-xs">
               {profile?.name?.charAt(0).toUpperCase() || 'A'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white truncate">{profile?.name || 'Administrator'}</p>
-              <p className="text-[11px] text-slate-400 truncate">{profile?.email || 'admin@fleetx'}</p>
+              <p className="text-xs font-semibold text-fleet-offwhite truncate">{profile?.name || 'Administrator'}</p>
+              <p className="text-[11px] text-fleet-muted truncate">{profile?.email || 'admin@fleetx'}</p>
             </div>
           </div>
         </div>
 
         {/* Navigation Items */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1 custom-scrollbar">
-          <div className="px-2 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            Operations & Navigation
+          <div className="px-2 pb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-fleet-muted/70">
+            Operations &amp; Navigation
           </div>
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -121,8 +121,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
                   className={({ isActive }) =>
                     `flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all ${
                       isActive
-                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
-                        : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+                        ? 'bg-fleet-cyan/15 text-fleet-cyan border border-fleet-cyan/35 shadow-sm'
+                        : 'text-fleet-muted hover:text-fleet-offwhite hover:bg-white/[0.05] border border-transparent'
                     }`
                   }
                 >
@@ -131,7 +131,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
                     <span>{item.name}</span>
                   </div>
                   {item.badge && (
-                    <span className="text-[9px] font-bold uppercase tracking-wide bg-blue-500/20 text-blue-300 border border-blue-400/30 px-1.5 py-0.5 rounded-full">
+                    <span className="font-mono text-[9px] font-bold uppercase tracking-wide bg-fleet-lime/15 text-fleet-lime border border-fleet-lime/30 px-1.5 py-0.5 rounded-full">
                       {item.badge}
                     </span>
                   )}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Navbar } from '../components/Navbar';
+import { Navbar, type LandingTheme } from '../components/Navbar';
 import { Hero } from '../components/Hero';
 import { KeyBenefits } from '../components/KeyBenefits';
 import { HowItWorks } from '../components/HowItWorks';
@@ -15,6 +15,27 @@ import { getFleetXReleases } from '../services/githubReleaseService';
 import { ReleasesState } from '../types/github';
 
 export const Home: React.FC = () => {
+  const [theme, setTheme] = useState<LandingTheme>(() => {
+    try {
+      const saved = localStorage.getItem('fleetx_landing_theme');
+      return saved === 'light-bw' ? 'light-bw' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next: LandingTheme = prev === 'dark' ? 'light-bw' : 'dark';
+      try {
+        localStorage.setItem('fleetx_landing_theme', next);
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
+
   const [releasesState, setReleasesState] = useState<ReleasesState>({
     latestRelease: null,
     previousReleases: [],
@@ -61,8 +82,16 @@ export const Home: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-college-surface">
-      <Navbar latestRelease={releasesState.latestRelease} />
+    <div
+      className={`min-h-screen flex flex-col bg-fleet-offwhite transition-colors duration-200 ${
+        theme === 'light-bw' ? 'landing-theme-bw' : ''
+      }`}
+    >
+      <Navbar
+        latestRelease={releasesState.latestRelease}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
 
       <main className="flex-grow">
         <Hero latestRelease={releasesState.latestRelease} onDownloadClick={scrollToDownload} />

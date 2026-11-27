@@ -1,203 +1,184 @@
 import React, { useState } from 'react';
 import {
-  BarChart3,
-  BellRing,
-  Bus,
-  Calendar,
-  FileText,
-  MapPin,
+  CheckCircle2,
+  Compass,
   Navigation,
-  Radio,
-  RefreshCw,
-  Route as RouteIcon,
+  ShieldCheck,
+  Smartphone,
   UserCheck,
-  Users,
+  Wrench,
 } from 'lucide-react';
 import { useScrollStagger } from '@/lib/useMotionReveal';
 import { Badge } from './ui/badge';
-import { Card, CardContent } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
-interface FeatureGroup {
-  id: string;
+interface RoleMetric {
   label: string;
-  summary: string;
-  items: Array<{
-    title: string;
-    description: string;
-    icon: React.ComponentType<{ className?: string }>;
-  }>;
+  value: string;
 }
 
-const FEATURE_GROUPS: FeatureGroup[] = [
+interface ShowcaseBlock {
+  id: string;
+  label: string;
+  title: string;
+  description: string;
+  bullets: string[];
+  icon: React.ComponentType<{ className?: string }>;
+  codeTag: string;
+  highlights: [RoleMetric, RoleMetric];
+  statusLabel: string;
+}
+
+const SHOWCASE_BLOCKS: ShowcaseBlock[] = [
   {
-    id: 'tracking',
-    label: 'Live Tracking',
-    summary: 'Real-time GPS telemetry streamed via Firebase Realtime Database with clear freshness states.',
-    items: [
-      {
-        title: 'Real-Time Bus Location',
-        description: 'View live bus coordinates updated continuously as drivers operate their assigned route.',
-        icon: Navigation,
-      },
-      {
-        title: 'Map-Based Tracking',
-        description: 'Interactive Google Maps view showing bus heading, speed, and campus terminal markers.',
-        icon: MapPin,
-      },
-      {
-        title: 'GPS Tracking Lifecycle',
-        description: 'Clear Active, Stale, Waiting for GPS, Arrived at Campus, and Inactive status indicators.',
-        icon: Radio,
-      },
+    id: 'students',
+    label: 'For Students',
+    title: 'Zero-Guesswork Daily Commute',
+    description:
+      'Built for fast morning and evening checks — open the app, confirm your bus status, inspect route timings, and keep your digital bus pass ready.',
+    bullets: [
+      'Instant bus status: Active, Stale, Waiting for GPS, or Arrived',
+      'Morning and evening shift timetables with ordered stop lists',
+      'In-app front & back digital bus pass storage',
     ],
+    icon: Smartphone,
+    codeTag: 'Android · Student View',
+    highlights: [
+      { label: 'Boarding', value: 'Digital Pass' },
+      { label: 'Schedules', value: 'AM / PM Shifts' },
+    ],
+    statusLabel: 'Read-Only Live Access',
   },
   {
-    id: 'fleet',
-    label: 'Fleet Operations',
-    summary: 'Complete day-to-day control over vehicles, driver rosters, swaps, and temporary coverage.',
-    items: [
-      {
-        title: 'Bus Management',
-        description: 'Register buses, manage capacity and active status, and safely decommission retired units.',
-        icon: Bus,
-      },
-      {
-        title: 'Driver Assignments',
-        description: 'Assign or unassign verified drivers directly to buses with automatic RTDB sync tracking.',
-        icon: UserCheck,
-      },
-      {
-        title: 'Swaps & Temp Replacements',
-        description: 'Handle temporary driver replacements and bus swaps without disrupting student route visibility.',
-        icon: RefreshCw,
-      },
+    id: 'drivers',
+    label: 'For Drivers',
+    title: 'Focused Trip Broadcasting & Stop Requests',
+    description:
+      'Designed to stay out of the driver’s way — start location streaming for your assigned vehicle and submit stop coordinate corrections when needed.',
+    bullets: [
+      'Foreground GPS broadcasting via Fused Location Provider',
+      'Clear assigned bus and active route confirmation',
+      'Submit stop pin updates directly to the admin review queue',
     ],
+    icon: Navigation,
+    codeTag: 'Android · Driver Mode',
+    highlights: [
+      { label: 'Telemetry', value: 'Fused GPS' },
+      { label: 'Field Input', value: 'Stop Pin Requests' },
+    ],
+    statusLabel: 'Verified Driver Auth',
   },
   {
-    id: 'routes',
-    label: 'Route Management',
-    summary: 'Structured routes, crowdsourced stop accuracy, driver stop requests, and printable timetables.',
-    items: [
-      {
-        title: 'Route & Stop Editor',
-        description: 'Create routes, reorder stops 1..N, and place stop coordinates directly on Google Maps.',
-        icon: RouteIcon,
-      },
-      {
-        title: 'Stop Coordinate Submissions',
-        description: 'Review and approve student-submitted or driver-requested stop coordinates cleanly.',
-        icon: MapPin,
-      },
-      {
-        title: 'Route Timetable PDFs',
-        description: 'Upload route-specific and master all-routes timetable PDFs for student access.',
-        icon: FileText,
-      },
+    id: 'admins',
+    label: 'For Transport Admins',
+    title: 'Centralized Fleet & Route Governance',
+    description:
+      'Manage the entire BITM campus transport network from the web console — handle daily bus swaps, map stops, notices, and operational audits.',
+    bullets: [
+      'Live fleet overview with driver roster & temporary swaps',
+      'Google Maps stop coordinate editor & timetable PDF publishing',
+      'Searchable audit logs and 7-day / 30-day usage telemetry',
     ],
-  },
-  {
-    id: 'communication',
-    label: 'Communication',
-    summary: 'Keep students informed of schedule changes, bus swaps, and official transport advisories.',
-    items: [
-      {
-        title: 'Official Announcements',
-        description: 'Draft, schedule expiry, edit, and publish transport notices from the Admin Console.',
-        icon: BellRing,
-      },
-      {
-        title: 'Bus Timing Updates',
-        description: 'Publish targeted timing change alerts so students never miss an adjusted departure.',
-        icon: RefreshCw,
-      },
-      {
-        title: 'Student Notifications',
-        description: 'Deliver timely service updates and swap alerts to active student app installations.',
-        icon: Users,
-      },
+    icon: ShieldCheck,
+    codeTag: 'Web · Admin Console',
+    highlights: [
+      { label: 'Operations', value: 'Bus & Driver Swaps' },
+      { label: 'Governance', value: 'Audit & Analytics' },
     ],
-  },
-  {
-    id: 'admin',
-    label: 'Administration',
-    summary: 'Operational visibility, governance, and campus calendar management built for transit teams.',
-    items: [
-      {
-        title: 'Usage Analytics',
-        description: 'Monitor 7-day WAU, 30-day MAU, feature usage events, and app version distribution.',
-        icon: BarChart3,
-      },
-      {
-        title: 'Audit Logs',
-        description: 'Searchable operational history across swaps, assignments, and admin actions.',
-        icon: FileText,
-      },
-      {
-        title: 'College Operating Calendar',
-        description: 'Configure operating windows, holidays, and exceptions aligned with campus schedules.',
-        icon: Calendar,
-      },
-    ],
+    statusLabel: 'Role-Protected Console',
   },
 ];
 
 export const Features: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('tracking');
-  const cardsRef = useScrollStagger<HTMLDivElement>('[data-reveal]', 55, [activeTab]);
+  const [activeTab, setActiveTab] = useState('students');
+  const panelRef = useScrollStagger<HTMLDivElement>('[data-reveal]', 50, [activeTab]);
 
   return (
-    <section id="features" className="py-16 sm:py-20 bg-white border-y border-slate-200/80">
+    <section id="features" className="py-16 sm:py-24 bg-fleet-offwhite">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-2xl mx-auto mb-10">
-          <Badge className="mb-3 uppercase tracking-wider text-[11px]">Feature Showcase</Badge>
-          <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-            Built Around Real Campus Operations
+          <Badge variant="secondary" className="mb-3 font-mono uppercase tracking-wider text-[11px]">
+            Role-Based Experience
+          </Badge>
+          <h2 className="font-display text-3xl sm:text-4xl font-bold text-fleet-navy tracking-tight">
+            Built for Every Role on Campus
           </h2>
           <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed">
-            Explore the connected capabilities powering FleetX across student devices and the transport console.
+            Switch between Student, Driver, and Transport Admin perspectives to see how each role interacts with FleetX.
           </p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="flex justify-center">
-            <TabsList aria-label="FleetX feature categories">
-              {FEATURE_GROUPS.map((group) => (
-                <TabsTrigger key={group.id} value={group.id}>
-                  {group.label}
+            <TabsList aria-label="FleetX role capabilities" className="bg-white border border-slate-200">
+              {SHOWCASE_BLOCKS.map((b) => (
+                <TabsTrigger key={b.id} value={b.id}>
+                  {b.label}
                 </TabsTrigger>
               ))}
             </TabsList>
           </div>
 
-          <div ref={cardsRef}>
-            {FEATURE_GROUPS.map((group) => (
-              <TabsContent key={group.id} value={group.id}>
-                <p className="text-center text-sm text-slate-600 max-w-2xl mx-auto mb-8">
-                  {group.summary}
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
-                  {group.items.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <Card
-                        key={item.title}
-                        data-reveal
-                        className="group bg-college-surface/60 hover:border-college-primary/40 hover:-translate-y-1 hover:shadow-card-hover motion-reduce:hover:translate-y-0"
-                      >
-                        <CardContent className="p-6">
-                          <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-college-primary flex items-center justify-center mb-4 shadow-sm transition-transform duration-200 group-hover:scale-110 motion-reduce:group-hover:scale-100">
-                            <Icon className="w-5 h-5" />
+          <div ref={panelRef} className="mt-8">
+            {SHOWCASE_BLOCKS.map((block) => {
+              const Icon = block.icon;
+              return (
+                <TabsContent key={block.id} value={block.id}>
+                  <div
+                    data-reveal
+                    className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center rounded-3xl border border-slate-200 bg-white p-6 sm:p-10 shadow-sm"
+                  >
+                    <div className="lg:col-span-7 space-y-4">
+                      <span className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1 font-mono text-[11px] font-semibold text-slate-700">
+                        <Icon className="w-3.5 h-3.5 text-college-primary" />
+                        {block.codeTag}
+                      </span>
+                      <h3 className="font-display text-2xl sm:text-3xl font-bold text-fleet-navy tracking-tight">
+                        {block.title}
+                      </h3>
+                      <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+                        {block.description}
+                      </p>
+                      <ul className="space-y-2.5 pt-2">
+                        {block.bullets.map((bullet) => (
+                          <li key={bullet} className="flex items-start gap-2.5 text-sm text-slate-700">
+                            <CheckCircle2 className="w-4 h-4 text-status-green shrink-0 mt-0.5" />
+                            <span>{bullet}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Dynamic Role Summary Panel */}
+                    <div className="lg:col-span-5 rounded-2xl bg-fleet-navy text-fleet-offwhite p-6 border border-white/10 space-y-4">
+                      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                        <span className="font-mono text-xs text-fleet-cyan">{block.label}</span>
+                        <span className="h-2 w-2 rounded-full bg-fleet-lime" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-xl bg-fleet-deep p-3.5 border border-white/5">
+                          <Compass className="w-4 h-4 text-fleet-cyan mb-2" />
+                          <p className="text-xs font-semibold">{block.highlights[0].label}</p>
+                          <p className="text-[11px] text-fleet-muted mt-0.5">{block.highlights[0].value}</p>
+                        </div>
+                        <div className="rounded-xl bg-fleet-deep p-3.5 border border-white/5">
+                          <Wrench className="w-4 h-4 text-fleet-lime mb-2" />
+                          <p className="text-xs font-semibold">{block.highlights[1].label}</p>
+                          <p className="text-[11px] text-fleet-muted mt-0.5">{block.highlights[1].value}</p>
+                        </div>
+                        <div className="col-span-2 rounded-xl bg-fleet-deep p-3.5 border border-white/5 flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <UserCheck className="w-4 h-4 text-fleet-cyan" />
+                            <span className="text-xs font-semibold">{block.statusLabel}</span>
                           </div>
-                          <h3 className="text-base font-bold text-slate-900 mb-1.5">{item.title}</h3>
-                          <p className="text-sm text-slate-600 leading-relaxed">{item.description}</p>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </TabsContent>
-            ))}
+                          <span className="font-mono text-[10px] text-fleet-lime">ACTIVE</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+              );
+            })}
           </div>
         </Tabs>
       </div>

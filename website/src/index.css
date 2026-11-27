@@ -24,6 +24,7 @@
 
   html {
     scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -57,6 +58,252 @@
     transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
     transition-behavior: allow-discrete;
   }
+}
+
+/* ==========================================================================
+   Public Landing Page — Light Black & White Monochrome Mode (.landing-theme-bw)
+   Scoped strictly to Home.tsx wrapper; zero impact on Admin Console.
+   ========================================================================== */
+.landing-theme-bw {
+  background-color: #ffffff !important;
+  color: #0a0a0a !important;
+}
+
+.landing-theme-bw header,
+.landing-theme-bw footer,
+.landing-theme-bw .bg-fleet-navy,
+.landing-theme-bw .bg-fleet-navy\/95,
+.landing-theme-bw .bg-fleet-navy\/85,
+.landing-theme-bw .bg-fleet-navy\/80 {
+  background-color: #ffffff !important;
+  color: #0a0a0a !important;
+  border-color: #e5e5e5 !important;
+}
+
+.landing-theme-bw .bg-fleet-deep,
+.landing-theme-bw .bg-fleet-deep\/95,
+.landing-theme-bw .bg-fleet-deep\/90,
+.landing-theme-bw .bg-fleet-deep\/85,
+.landing-theme-bw .bg-fleet-deep\/80,
+.landing-theme-bw .bg-fleet-deep\/75,
+.landing-theme-bw .bg-fleet-deep\/50,
+.landing-theme-bw .bg-slate-800,
+.landing-theme-bw .bg-\[\#111C2E\],
+.landing-theme-bw .bg-\[\#111C2E\]\/95,
+.landing-theme-bw .bg-\[\#0B1220\] {
+  background-color: #fafafa !important;
+  color: #0a0a0a !important;
+  border-color: #e5e5e5 !important;
+}
+
+.landing-theme-bw .bg-fleet-offwhite {
+  background-color: #f5f5f5 !important;
+  color: #0a0a0a !important;
+}
+
+.landing-theme-bw .text-fleet-offwhite,
+.landing-theme-bw .text-fleet-offwhite\/90,
+.landing-theme-bw .text-fleet-offwhite\/85,
+.landing-theme-bw .text-white {
+  color: #0a0a0a !important;
+}
+
+.landing-theme-bw .text-fleet-muted,
+.landing-theme-bw .text-slate-300,
+.landing-theme-bw .text-slate-400 {
+  color: #525252 !important;
+}
+
+.landing-theme-bw .text-fleet-cyan,
+.landing-theme-bw .text-fleet-cyan\/90,
+.landing-theme-bw .text-fleet-lime,
+.landing-theme-bw .text-blue-400,
+.landing-theme-bw .text-college-primary {
+  color: #0a0a0a !important;
+}
+
+.landing-theme-bw .bg-fleet-lime {
+  background-color: #0a0a0a !important;
+  color: #ffffff !important;
+}
+
+.landing-theme-bw .bg-fleet-lime:hover {
+  background-color: #262626 !important;
+}
+
+.landing-theme-bw .text-fleet-navy {
+  color: #0a0a0a !important;
+}
+
+.landing-theme-bw .bg-fleet-lime.text-fleet-navy,
+.landing-theme-bw .bg-fleet-lime .text-fleet-navy,
+.landing-theme-bw .bg-fleet-cyan.text-fleet-navy {
+  color: #ffffff !important;
+}
+
+.landing-theme-bw .bg-fleet-cyan\/10,
+.landing-theme-bw .bg-fleet-cyan\/15,
+.landing-theme-bw .bg-fleet-cyan\/20,
+.landing-theme-bw .bg-fleet-lime\/15,
+.landing-theme-bw .bg-white\/\[0\.04\],
+.landing-theme-bw .bg-white\/\[0\.06\],
+.landing-theme-bw .bg-white\/\[0\.08\],
+.landing-theme-bw .bg-white\/10 {
+  background-color: #f0f0f0 !important;
+  color: #0a0a0a !important;
+}
+
+.landing-theme-bw .border-white\/10,
+.landing-theme-bw .border-white\/15,
+.landing-theme-bw .border-white\/\[0\.06\],
+.landing-theme-bw .border-slate-700,
+.landing-theme-bw .border-fleet-cyan,
+.landing-theme-bw .border-fleet-cyan\/30,
+.landing-theme-bw .border-fleet-navy {
+  border-color: #d4d4d4 !important;
+}
+
+.landing-theme-bw .bg-fleet-cyan,
+.landing-theme-bw .bg-emerald-400 {
+  background-color: #0a0a0a !important;
+}
+
+.landing-theme-bw .bg-gradient-to-b.from-fleet-cyan {
+  background-image: none !important;
+  background-color: #a3a3a3 !important;
+}
+
+.landing-theme-bw .text-status-green {
+  color: #171717 !important;
+}
+
+.landing-theme-bw svg[aria-hidden="true"] path[stroke="#45D6E8"],
+.landing-theme-bw svg path[stroke="#45D6E8"],
+.landing-theme-bw svg circle[stroke="#45D6E8"] {
+  stroke: #171717 !important;
+}
+
+.landing-theme-bw svg circle[fill="#45D6E8"],
+.landing-theme-bw svg circle[fill="#C5F36A"] {
+  fill: #0a0a0a !important;
+}
+
+.landing-theme-bw .text-white\/\[0\.04\] {
+  color: rgba(10, 10, 10, 0.05) !important;
+}
+
+/* Keep Hero App Identity dark phone screen crisp in Light B&W mode */
+.landing-theme-bw .fleetx-phone-screen .text-white {
+  color: #ffffff !important;
+}
+.landing-theme-bw .fleetx-phone-screen .text-slate-200 {
+  color: #e2e8f0 !important;
+}
+.landing-theme-bw .fleetx-phone-screen .text-slate-300 {
+  color: #cbd5e1 !important;
+}
+.landing-theme-bw .fleetx-phone-screen .text-slate-400 {
+  color: #94a3b8 !important;
+}
+.landing-theme-bw .fleetx-phone-screen .bg-white\/10,
+.landing-theme-bw .fleetx-phone-screen .bg-white\/\[0\.04\] {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #e2e8f0 !important;
+}
+
+/* Alert banners in Light B&W mode (e.g., /submit-stop) */
+.landing-theme-bw .bg-amber-950\/40,
+.landing-theme-bw .bg-amber-950\/60,
+.landing-theme-bw .bg-red-950\/40 {
+  background-color: #f5f5f5 !important;
+  border-color: #a3a3a3 !important;
+  color: #171717 !important;
+}
+.landing-theme-bw .text-amber-100,
+.landing-theme-bw .text-amber-200,
+.landing-theme-bw .text-amber-300,
+.landing-theme-bw .text-amber-400,
+.landing-theme-bw .text-red-200,
+.landing-theme-bw .text-red-400 {
+  color: #0a0a0a !important;
+}
+
+/* ==========================================================================
+   Admin Console — Redesigned FleetX Mobility-Tech Theme (.admin-theme-fleetx)
+   Scoped strictly to AdminLayout.tsx; excludes Google Maps (.gm-style).
+   ========================================================================== */
+.admin-theme-fleetx main {
+  color: #F5F6F2;
+}
+
+.admin-theme-fleetx main :not(.gm-style):not(.gm-style *) {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.admin-theme-fleetx main .bg-white:not(.gm-style *),
+.admin-theme-fleetx main .bg-slate-50:not(.gm-style *),
+.admin-theme-fleetx main .bg-slate-50\/80:not(.gm-style *) {
+  background-color: #111C2E !important;
+  color: #F5F6F2 !important;
+}
+
+.admin-theme-fleetx main .bg-slate-100:not(.gm-style *),
+.admin-theme-fleetx main .bg-slate-200:not(.gm-style *) {
+  background-color: #0B1220 !important;
+  color: #F5F6F2 !important;
+}
+
+.admin-theme-fleetx main .hover\:bg-slate-50:hover:not(.gm-style *),
+.admin-theme-fleetx main .hover\:bg-slate-100:hover:not(.gm-style *) {
+  background-color: rgba(69, 214, 232, 0.08) !important;
+}
+
+.admin-theme-fleetx main .text-slate-900:not(.gm-style *),
+.admin-theme-fleetx main .text-slate-800:not(.gm-style *),
+.admin-theme-fleetx main .text-slate-700:not(.gm-style *) {
+  color: #F5F6F2 !important;
+}
+
+.admin-theme-fleetx main .text-slate-600:not(.gm-style *),
+.admin-theme-fleetx main .text-slate-500:not(.gm-style *),
+.admin-theme-fleetx main .text-slate-400:not(.gm-style *) {
+  color: #9BA9BB !important;
+}
+
+.admin-theme-fleetx main .bg-blue-600 {
+  background-color: #C5F36A !important;
+  color: #0B1220 !important;
+}
+
+.admin-theme-fleetx main .bg-blue-600:hover {
+  background-color: #b4e657 !important;
+}
+
+.admin-theme-fleetx main .text-blue-600,
+.admin-theme-fleetx main .text-blue-700 {
+  color: #45D6E8 !important;
+}
+
+.admin-theme-fleetx main .bg-blue-50,
+.admin-theme-fleetx main .bg-blue-100 {
+  background-color: rgba(69, 214, 232, 0.12) !important;
+  color: #45D6E8 !important;
+}
+
+.admin-theme-fleetx main input:not([type="checkbox"]):not([type="radio"]):not(.gm-style *),
+.admin-theme-fleetx main select:not(.gm-style *),
+.admin-theme-fleetx main textarea:not(.gm-style *) {
+  background-color: #0B1220 !important;
+  color: #F5F6F2 !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.admin-theme-fleetx main table thead {
+  background-color: #0B1220 !important;
+}
+
+.admin-theme-fleetx main table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.03) !important;
 }
 
 /* Custom subtle scrollbar */

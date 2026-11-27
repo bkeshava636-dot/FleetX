@@ -1,18 +1,21 @@
 import React, { useState } from 'react';
 import {
-  Download,
-  Copy,
-  Check,
-  ShieldCheck,
   AlertCircle,
-  HelpCircle,
-  FileCode,
   Calendar,
-  Layers,
+  Check,
   ChevronDown,
-  ChevronUp
+  Copy,
+  Download,
+  FileCode,
+  HelpCircle,
+  Layers,
+  ShieldCheck,
+  Smartphone,
 } from 'lucide-react';
+import logoUrl from '../assets/logo/fleetx-logo.png';
+import studentHomeImg from '../assets/screenshots/screen-student-home.jpg';
 import { ReleaseInfo } from '../types/github';
+import { Badge } from './ui/badge';
 
 interface DownloadSectionProps {
   latestRelease: ReleaseInfo | null;
@@ -25,11 +28,10 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({
   latestRelease,
   isLoading,
   isError,
-  errorMessage
+  errorMessage,
 }) => {
   const [copiedChecksum, setCopiedChecksum] = useState(false);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
-  const [showNotesExpanded, setShowNotesExpanded] = useState(false);
 
   const handleCopyChecksum = (checksum: string) => {
     navigator.clipboard.writeText(checksum);
@@ -45,184 +47,168 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({
   };
 
   return (
-    <section id="download" className="py-20 bg-gradient-to-b from-college-surface to-white border-t border-slate-200/80">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-        {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto mb-14">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-college-primary-container text-college-primary-dark text-xs font-semibold uppercase tracking-wider mb-4">
-            Official Android Portal
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-college-on-surface tracking-tight">
-            Get Started with FleetX
+    <section id="download" className="py-20 sm:py-28 bg-fleet-offwhite border-t border-slate-200/80">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center max-w-2xl mx-auto mb-12">
+          <Badge variant="secondary" className="mb-3 font-mono uppercase tracking-wider text-[11px]">
+            Official Android Release
+          </Badge>
+          <h2 className="font-display text-3xl sm:text-4xl font-bold text-fleet-navy tracking-tight">
+            Get FleetX on Your Android Device
           </h2>
-          <p className="mt-4 text-base sm:text-lg text-college-on-surface-variant font-normal leading-relaxed">
-            Download the latest version of FleetX and stay connected with your college transportation.
+          <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed">
+            Download the verified FleetX APK directly from our official GitHub release feed.
           </p>
         </div>
 
-        {/* Main Download Card */}
-        <div className="max-w-4xl mx-auto">
-          {isLoading ? (
-            <div className="bg-white p-12 rounded-3xl border border-slate-200/90 shadow-card flex flex-col items-center justify-center text-center">
-              <div className="w-12 h-12 border-4 border-college-primary border-t-transparent rounded-full animate-spin mb-4" />
-              <p className="text-sm font-semibold text-college-on-surface">
-                Checking GitHub Releases for latest APK...
-              </p>
-              <p className="text-xs text-slate-400 mt-1">Connecting to official repository</p>
+        {isLoading ? (
+          <div className="bg-white p-12 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
+            <div className="w-10 h-10 border-4 border-college-primary border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="text-sm font-semibold text-fleet-navy">
+              Checking GitHub Releases for latest APK...
+            </p>
+            <p className="text-xs text-slate-500 mt-1">Connecting to official repository</p>
+          </div>
+        ) : isError || !latestRelease || !latestRelease.apkAsset ? (
+          <div className="bg-white p-10 rounded-3xl border border-amber-200 shadow-sm text-center max-w-2xl mx-auto">
+            <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <AlertCircle className="w-6 h-6" />
             </div>
-          ) : isError || !latestRelease || !latestRelease.apkAsset ? (
-            <div className="bg-white p-10 rounded-3xl border border-amber-200 shadow-card text-center">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-college-on-surface mb-2">
-                App download is temporarily unavailable. Please check back later.
-              </h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto mb-6">
-                {errorMessage || 'Unable to retrieve the latest APK asset from GitHub releases at this moment.'}
-              </p>
-              <a
-                href="https://github.com/bkeshava636-dot/FleetX/releases"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-xs font-semibold text-college-primary hover:underline"
-              >
-                <span>View releases directly on GitHub</span>
-                <span>↗</span>
-              </a>
-            </div>
-          ) : (
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-lg overflow-hidden">
-              {/* Card Banner */}
-              <div className="bg-college-primary text-white p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-xs font-semibold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-full">
-                      Latest Release
-                    </span>
-                    <span className="text-xs text-blue-100 flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {latestRelease.formattedDate}
-                    </span>
+            <h3 className="font-display text-lg font-bold text-fleet-navy mb-2">
+              App download is temporarily unavailable. Please check back later.
+            </h3>
+            <p className="text-sm text-slate-600 max-w-md mx-auto mb-6">
+              {errorMessage || 'Unable to retrieve the latest APK asset from GitHub releases at this moment.'}
+            </p>
+            <a
+              href="https://github.com/bkeshava636-dot/FleetX/releases"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-college-primary hover:underline"
+            >
+              <span>View releases directly on GitHub</span>
+              <span>↗</span>
+            </a>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Premium Main Download Showcase Card */}
+            <div className="rounded-3xl bg-fleet-navy text-fleet-offwhite border border-white/10 shadow-xl overflow-hidden">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 p-6 sm:p-10 items-center">
+                {/* Left Branding + Version + Prominent CTA */}
+                <div className="lg:col-span-7 space-y-6">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={logoUrl}
+                      alt="FleetX Logo"
+                      className="w-11 h-11 rounded-xl bg-white p-0.5 object-cover border border-white/15"
+                    />
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-display text-xl font-bold tracking-tight">
+                          Fleet<span className="text-fleet-cyan">X</span> for Android
+                        </span>
+                        <span className="rounded-full bg-fleet-cyan/15 border border-fleet-cyan/30 px-2.5 py-0.5 font-mono text-xs font-semibold text-fleet-cyan">
+                          v{latestRelease.version}
+                        </span>
+                      </div>
+                      <p className="text-xs text-fleet-muted mt-0.5 flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>Released {latestRelease.formattedDate}</span>
+                      </p>
+                    </div>
                   </div>
-                  <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                    FleetX v{latestRelease.version}
-                  </h3>
-                </div>
 
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleDownload}
-                    className="inline-flex items-center gap-2.5 bg-white text-college-primary hover:bg-slate-50 active:bg-blue-50 font-bold text-sm px-6 py-3.5 rounded-xl shadow-md transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white"
-                  >
-                    <Download className="w-5 h-5 text-college-primary" />
-                    <span>Download APK</span>
-                    <span className="text-xs bg-slate-100 text-college-primary px-2 py-0.5 rounded font-mono">
-                      {latestRelease.apkAsset.formattedSize}
-                    </span>
-                  </button>
-                </div>
-              </div>
+                  <p className="text-sm sm:text-base text-fleet-muted leading-relaxed">
+                    {latestRelease.whatsNewSummary ||
+                      'Track campus buses in real time, inspect ordered route stops, and receive official transport notices.'}
+                  </p>
 
-              {/* Release Details Body */}
-              <div className="p-6 sm:p-8 space-y-6">
-                {/* Meta Specs Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-college-surface p-4 rounded-2xl border border-slate-200/80 text-left">
-                  <div>
-                    <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
-                      Target OS
-                    </span>
-                    <span className="text-sm font-bold text-college-on-surface">
-                      Android 8.0+
-                    </span>
+                  {/* Compatibility & Size Pills */}
+                  <div className="flex flex-wrap gap-3 text-xs">
+                    <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-fleet-deep px-3.5 py-2">
+                      <Smartphone className="w-4 h-4 text-fleet-cyan" />
+                      <span>Android 8.0 (API 26)+</span>
+                    </div>
+                    <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-fleet-deep px-3.5 py-2 font-mono">
+                      <span>{latestRelease.apkAsset.formattedSize}</span>
+                    </div>
+                    <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-fleet-deep px-3.5 py-2 text-fleet-lime">
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Verified Direct APK</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
-                      File Size
-                    </span>
-                    <span className="text-sm font-bold text-college-on-surface">
-                      {latestRelease.apkAsset.formattedSize}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
-                      Asset Name
-                    </span>
-                    <span className="text-sm font-semibold text-college-on-surface font-mono truncate block" title={latestRelease.apkAsset.name}>
+
+                  <div className="pt-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleDownload}
+                      className="inline-flex items-center justify-center gap-2.5 rounded-xl bg-fleet-lime px-6 py-3.5 text-sm sm:text-base font-bold text-fleet-navy shadow-md hover:bg-fleet-lime/90 transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fleet-lime"
+                    >
+                      <Download className="w-5 h-5" />
+                      <span>Download APK (v{latestRelease.version})</span>
+                    </button>
+
+                    <span className="font-mono text-xs text-fleet-muted text-center sm:text-left">
                       {latestRelease.apkAsset.name}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
-                      Distribution
-                    </span>
-                    <span className="text-sm font-bold text-status-green flex items-center gap-1">
-                      <ShieldCheck className="w-4 h-4" />
-                      Direct APK
-                    </span>
-                  </div>
-                </div>
 
-                {/* What's New Box */}
-                <div className="bg-slate-50/70 p-5 rounded-2xl border border-slate-200/80">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-bold text-college-on-surface flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-college-primary" />
-                      <span>What's New in v{latestRelease.version}</span>
-                    </h4>
-                    {latestRelease.releaseNotes && (
+                  {showInstallGuide && (
+                    <div className="p-3.5 bg-fleet-lime/10 border border-fleet-lime/30 rounded-xl text-fleet-lime text-xs flex items-center justify-between">
+                      <span>Download started! Expand the Installation Guide below if you need setup steps.</span>
                       <button
                         type="button"
-                        onClick={() => setShowNotesExpanded(!showNotesExpanded)}
-                        className="text-xs text-college-primary hover:underline flex items-center gap-1 font-medium"
+                        onClick={() => setShowInstallGuide(false)}
+                        className="font-bold px-2 hover:opacity-80"
+                        aria-label="Dismiss message"
                       >
-                        <span>{showNotesExpanded ? 'Show Less' : 'Full Release Notes'}</span>
-                        {showNotesExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        ✕
                       </button>
-                    )}
-                  </div>
-                  <p className="text-xs sm:text-sm text-college-on-surface-variant leading-relaxed">
-                    {latestRelease.whatsNewSummary}
-                  </p>
-
-                  {/* Expanded Release Notes if clicked */}
-                  {showNotesExpanded && latestRelease.releaseNotes && (
-                    <div className="mt-4 pt-4 border-t border-slate-200">
-                      <pre className="text-xs text-slate-600 bg-white p-4 rounded-xl border border-slate-200 font-mono whitespace-pre-wrap overflow-x-auto max-h-60 leading-normal">
-                        {latestRelease.releaseNotes}
-                      </pre>
                     </div>
                   )}
                 </div>
 
-                {/* SHA-256 Checksum Card */}
-                {latestRelease.sha256 && (
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm text-left">
-                    <div className="flex items-start gap-3 overflow-hidden">
-                      <div className="p-2 bg-slate-100 rounded-lg text-slate-600 flex-shrink-0 mt-0.5">
-                        <FileCode className="w-4 h-4" />
-                      </div>
-                      <div className="overflow-hidden">
-                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                          SHA-256 Verified Checksum
-                        </span>
-                        <code className="text-xs font-mono text-slate-800 break-all select-all block">
-                          {latestRelease.sha256}
-                        </code>
-                      </div>
+                {/* Right Phone Mockup */}
+                <div className="lg:col-span-5 flex justify-center lg:justify-end">
+                  <div className="w-full max-w-[220px] sm:max-w-[240px] rounded-[34px] p-2 bg-slate-950 border-2 border-white/15 shadow-2xl">
+                    <div className="rounded-[26px] overflow-hidden bg-white aspect-[9/19.5]">
+                      <img
+                        src={studentHomeImg}
+                        alt="FleetX Student Android Application"
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
                     </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Expandable Technical Details (Checksum, Release Notes, Install Guide) */}
+            <div className="fleetx-faq grid grid-cols-1 gap-3">
+              {latestRelease.sha256 && (
+                <details className="group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-bold text-fleet-navy hover:bg-slate-50/80 transition-colors [&::-webkit-details-marker]:hidden">
+                    <span className="flex items-center gap-2.5">
+                      <FileCode className="w-4 h-4 text-college-primary" />
+                      <span>SHA-256 Verification Checksum</span>
+                    </span>
+                    <ChevronDown className="w-4 h-4 text-slate-500 transition-transform duration-200 group-open:rotate-180" />
+                  </summary>
+                  <div className="px-5 pb-4 pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <code className="text-xs font-mono text-slate-800 break-all select-all">
+                      {latestRelease.sha256}
+                    </code>
                     <button
                       type="button"
                       onClick={() => handleCopyChecksum(latestRelease.sha256!)}
-                      className="flex-shrink-0 inline-flex items-center gap-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-                      title="Copy SHA-256 hash"
+                      className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 px-3 py-2 rounded-lg transition-colors"
                     >
                       {copiedChecksum ? (
                         <>
                           <Check className="w-3.5 h-3.5 text-status-green" />
-                          <span className="text-status-green font-semibold">Copied!</span>
+                          <span className="text-status-green">Copied!</span>
                         </>
                       ) : (
                         <>
@@ -232,69 +218,57 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({
                       )}
                     </button>
                   </div>
-                )}
+                </details>
+              )}
 
-                {/* Platform availability note */}
-                <div className="text-center text-xs text-slate-500 pt-2">
-                  <p className="font-medium text-slate-600">
-                    FleetX is currently available for Android.
+              {latestRelease.releaseNotes && (
+                <details className="group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-bold text-fleet-navy hover:bg-slate-50/80 transition-colors [&::-webkit-details-marker]:hidden">
+                    <span className="flex items-center gap-2.5">
+                      <Layers className="w-4 h-4 text-college-primary" />
+                      <span>Full Release Notes (v{latestRelease.version})</span>
+                    </span>
+                    <ChevronDown className="w-4 h-4 text-slate-500 transition-transform duration-200 group-open:rotate-180" />
+                  </summary>
+                  <div className="px-5 pb-4 pt-2 border-t border-slate-100">
+                    <pre className="text-xs text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200 font-mono whitespace-pre-wrap overflow-x-auto max-h-60 leading-relaxed">
+                      {latestRelease.releaseNotes}
+                    </pre>
+                  </div>
+                </details>
+              )}
+
+              <details className="group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-bold text-fleet-navy hover:bg-slate-50/80 transition-colors [&::-webkit-details-marker]:hidden">
+                  <span className="flex items-center gap-2.5">
+                    <HelpCircle className="w-4 h-4 text-college-primary" />
+                    <span>Android APK Installation &amp; Update Guide</span>
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-slate-500 transition-transform duration-200 group-open:rotate-180" />
+                </summary>
+                <div className="px-5 pb-5 pt-3 border-t border-slate-100 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-slate-600">
+                    <div className="p-4 bg-fleet-offwhite rounded-xl border border-slate-200/70">
+                      <span className="font-bold text-fleet-navy block mb-1">1. Download</span>
+                      <span>Tap <strong>Download APK</strong> to save the verified build to your Android Downloads folder.</span>
+                    </div>
+                    <div className="p-4 bg-fleet-offwhite rounded-xl border border-slate-200/70">
+                      <span className="font-bold text-fleet-navy block mb-1">2. Allow Install</span>
+                      <span>When prompted by Android, allow your browser to install apps from this source.</span>
+                    </div>
+                    <div className="p-4 bg-fleet-offwhite rounded-xl border border-slate-200/70">
+                      <span className="font-bold text-fleet-navy block mb-1">3. Launch</span>
+                      <span>Tap <strong>Install</strong>, open FleetX, and select your campus bus route.</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Updating from an older version? Download the latest release above and confirm the APK update prompt on your device.
                   </p>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Installation Instructions Helper */}
-          <div className="mt-8 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm">
-            {showInstallGuide && (
-              <div className="mb-4 p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs flex items-center justify-between animate-in fade-in">
-                <span className="font-medium">✓ Download started! Follow the 3 steps below on your Android device to install.</span>
-                <button
-                  type="button"
-                  onClick={() => setShowInstallGuide(false)}
-                  className="text-emerald-700 hover:text-emerald-900 font-bold text-sm px-2"
-                  aria-label="Dismiss message"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-            <h4 className="text-base font-bold text-college-on-surface mb-4 flex items-center gap-2">
-              <HelpCircle className="w-5 h-5 text-college-primary" />
-              <span>Android APK Installation Guide</span>
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-college-on-surface-variant">
-              <div className="p-3.5 bg-college-surface rounded-xl border border-slate-100">
-                <span className="font-bold text-college-primary block mb-1">Step 1: Download</span>
-                <span>Click <strong>Download APK</strong>. The file will save to your Android device's Downloads folder.</span>
-              </div>
-              <div className="p-3.5 bg-college-surface rounded-xl border border-slate-100">
-                <span className="font-bold text-college-primary block mb-1">Step 2: Allow Install</span>
-                <span>When prompted by Android, permit your browser to install applications from this source.</span>
-              </div>
-              <div className="p-3.5 bg-college-surface rounded-xl border border-slate-100">
-                <span className="font-bold text-college-primary block mb-1">Step 3: Launch</span>
-                <span>Tap <strong>Install</strong>, then open FleetX to choose your bus and begin real-time tracking!</span>
-              </div>
+              </details>
             </div>
           </div>
-
-          {/* Update Information Subsection */}
-          <div className="mt-6 p-5 rounded-2xl bg-blue-50/70 border border-blue-200/70 text-xs sm:text-sm text-blue-950 flex items-start gap-3">
-            <div className="p-1.5 bg-blue-100 rounded-lg text-college-primary flex-shrink-0 mt-0.5">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="font-bold text-college-on-surface mb-0.5">
-                Update Information
-              </p>
-              <p className="text-xs text-college-on-surface-variant leading-relaxed">
-                Using an older version of FleetX? Download the latest release to access the newest improvements and fixes. Android requires you to download and confirm installation of APK updates manually.
-              </p>
-            </div>
-          </div>
-        </div>
-
+        )}
       </div>
     </section>
   );

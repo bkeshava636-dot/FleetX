@@ -76,35 +76,35 @@ export const AdminDashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl shadow-blue-900/10 relative overflow-hidden">
-        {/* Subtle decorative circles */}
-        <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/5 rounded-full pointer-events-none" />
-        <div className="absolute right-20 -top-10 w-40 h-40 bg-white/5 rounded-full pointer-events-none" />
+      <div className="bg-fleet-deep border border-white/10 rounded-2xl p-6 sm:p-8 text-fleet-offwhite shadow-xl relative overflow-hidden">
+        {/* Subtle decorative cyan/lime accents */}
+        <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-fleet-cyan/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute right-20 -top-10 w-40 h-40 bg-fleet-lime/10 rounded-full blur-2xl pointer-events-none" />
 
         <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center gap-2 bg-blue-500/20 text-blue-100 text-xs font-semibold px-3 py-1 rounded-full border border-blue-400/30 mb-3 backdrop-blur-sm">
-            <ShieldCheck className="w-3.5 h-3.5 text-blue-300" />
+          <div className="inline-flex items-center gap-2 bg-fleet-cyan/10 text-fleet-cyan font-mono text-[11px] font-semibold px-3 py-1 rounded-full border border-fleet-cyan/30 mb-3">
+            <ShieldCheck className="w-3.5 h-3.5 text-fleet-cyan" />
             <span>Authorized Administration Portal</span>
           </div>
 
-          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+          <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-fleet-offwhite">
             Welcome, {profile?.name || 'Administrator'}
           </h2>
 
-          <p className="mt-2 text-xs sm:text-sm text-blue-100/90 leading-relaxed max-w-2xl">
+          <p className="mt-2 text-xs sm:text-sm text-fleet-muted leading-relaxed max-w-2xl">
             Real-time operations center for FleetX college bus transit. Review live fleet metrics, coordinate crowdsourcing submissions, and verified route stop data.
           </p>
 
           <div className="mt-5 flex flex-wrap items-center gap-3 text-xs">
-            <div className="inline-flex items-center gap-1.5 bg-black/20 px-3 py-1.5 rounded-xl border border-white/10 text-blue-100">
-              <Clock className="w-3.5 h-3.5 text-blue-300" />
+            <div className="inline-flex items-center gap-1.5 bg-fleet-navy px-3 py-1.5 rounded-xl border border-white/10 text-fleet-muted font-mono">
+              <Clock className="w-3.5 h-3.5 text-fleet-cyan" />
               <span>Last Firebase Sync: {lastSyncTime}</span>
             </div>
 
             {stats && stats.pendingStopSubmissions > 0 && (
               <Link
                 to="/admin/submissions"
-                className="inline-flex items-center gap-1.5 bg-amber-400 text-amber-950 font-bold px-3 py-1.5 rounded-xl hover:bg-amber-300 shadow-sm transition-colors"
+                className="inline-flex items-center gap-1.5 bg-fleet-lime text-fleet-navy font-bold px-3 py-1.5 rounded-xl hover:bg-fleet-lime/90 shadow-sm transition-colors"
               >
                 <AlertTriangle className="w-3.5 h-3.5" />
                 <span>{stats.pendingStopSubmissions} Stop Submissions Awaiting Approval</span>

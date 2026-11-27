@@ -34,6 +34,14 @@ export default {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        fleet: {
+          navy: '#0B1220',
+          deep: '#111C2E',
+          offwhite: '#F5F6F2',
+          cyan: '#45D6E8',
+          lime: '#C5F36A',
+          muted: '#9BA9BB',
+        },
         college: {
           primary: '#0B57D0',
           'primary-dark': '#0842A0',
@@ -54,6 +62,17 @@ export default {
         }
       },
       fontFamily: {
+        display: [
+          '"Space Grotesk"',
+          'Inter',
+          'sans-serif',
+        ],
+        mono: [
+          '"JetBrains Mono"',
+          'ui-monospace',
+          'SFMono-Regular',
+          'monospace',
+        ],
         sans: [
           'Inter',
           '-apple-system',

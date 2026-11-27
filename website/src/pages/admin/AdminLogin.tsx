@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Shield, Lock, User, ArrowLeft, AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
 import logoUrl from '../../assets/logo/fleetx-logo.png';
 import { useAdminAuth } from '../../context/AdminAuthContext';
+import { CoordinateTag, MapGridBackdrop } from '../../components/MobilityPrimitives';
 
 export const AdminLogin: React.FC = () => {
   const navigate = useNavigate();
@@ -46,15 +47,18 @@ export const AdminLogin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Background ambient gradient */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-slate-900 to-slate-950 pointer-events-none" />
+    <div className="min-h-screen bg-fleet-navy text-fleet-offwhite flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      <MapGridBackdrop dark />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-24 right-0 h-[380px] w-[420px] rounded-full bg-fleet-cyan/10 blur-3xl"
+      />
 
       {/* Top back button */}
       <div className="absolute top-6 left-6 z-10">
         <Link
           to="/"
-          className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-800 px-3 py-2 rounded-lg border border-slate-700 transition-colors"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-fleet-muted hover:text-fleet-offwhite bg-fleet-deep/90 hover:bg-fleet-deep px-3 py-2 rounded-lg border border-white/10 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back to FleetX</span>
@@ -64,19 +68,22 @@ export const AdminLogin: React.FC = () => {
       <div className="sm:mx-auto sm:w-full sm:max-w-md z-10 px-4">
         {/* Brand Header */}
         <div className="text-center">
-          <div className="inline-flex items-center justify-center p-2 bg-white rounded-2xl shadow-xl shadow-blue-500/10 mb-4 border border-slate-200">
+          <div className="inline-flex items-center justify-center p-2 bg-white rounded-2xl shadow-xl mb-4 border border-white/20">
             <img src={logoUrl} alt="FleetX Logo" className="w-12 h-12 object-contain" />
           </div>
-          <h2 className="text-2xl font-bold tracking-tight text-white">
-            Fleet<span className="text-blue-400">X</span> Administrator Portal
+          <div className="flex justify-center mb-2">
+            <CoordinateTag label="ADMINISTRATION CONSOLE" />
+          </div>
+          <h2 className="font-display text-2xl font-bold tracking-tight text-fleet-offwhite">
+            Fleet<span className="text-fleet-cyan">X</span> Administrator Portal
           </h2>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1.5 text-xs text-fleet-muted">
             Secure management console for college bus tracking and stop coordinates
           </p>
         </div>
 
         {/* Login Card */}
-        <div className="mt-8 bg-slate-800/90 backdrop-blur-md py-8 px-6 shadow-2xl rounded-2xl sm:px-10 border border-slate-700/80">
+        <div className="mt-8 bg-fleet-deep/95 backdrop-blur-md py-8 px-6 shadow-2xl rounded-2xl sm:px-10 border border-white/10">
           <form className="space-y-5" onSubmit={handleSubmit}>
             {errorMessage && (
               <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-2.5 text-red-300 text-xs leading-relaxed animate-fade-in">
@@ -87,11 +94,11 @@ export const AdminLogin: React.FC = () => {
 
             {/* Staff ID or Email Input */}
             <div>
-              <label htmlFor="staff-id" className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+              <label htmlFor="staff-id" className="block font-mono text-[11px] font-semibold uppercase tracking-wider text-fleet-muted mb-1.5">
                 Staff ID or Email
               </label>
               <div className="relative rounded-xl shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-fleet-muted">
                   <User className="h-4 w-4" />
                 </div>
                 <input
@@ -103,18 +110,18 @@ export const AdminLogin: React.FC = () => {
                   value={idOrEmail}
                   onChange={(e) => setIdOrEmail(e.target.value)}
                   placeholder="e.g. admin26 or admin@college.edu"
-                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="block w-full pl-10 pr-4 py-2.5 bg-fleet-navy border border-white/15 rounded-xl text-fleet-offwhite placeholder-fleet-muted/60 text-sm focus:outline-none focus:ring-2 focus:ring-fleet-cyan focus:border-transparent transition-all"
                 />
               </div>
             </div>
 
             {/* Password Input */}
             <div>
-              <label htmlFor="password" className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+              <label htmlFor="password" className="block font-mono text-[11px] font-semibold uppercase tracking-wider text-fleet-muted mb-1.5">
                 Password
               </label>
               <div className="relative rounded-xl shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-fleet-muted">
                   <Lock className="h-4 w-4" />
                 </div>
                 <input
@@ -126,12 +133,12 @@ export const AdminLogin: React.FC = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="block w-full pl-10 pr-10 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="block w-full pl-10 pr-10 py-2.5 bg-fleet-navy border border-white/15 rounded-xl text-fleet-offwhite placeholder-fleet-muted/60 text-sm focus:outline-none focus:ring-2 focus:ring-fleet-cyan focus:border-transparent transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-200 focus:outline-none"
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-fleet-muted hover:text-fleet-offwhite focus:outline-none"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -143,7 +150,7 @@ export const AdminLogin: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-xl shadow-lg shadow-blue-500/20 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-fleet-navy bg-fleet-lime hover:bg-fleet-lime/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-fleet-navy focus:ring-fleet-cyan disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {isSubmitting ? (
                   <>

@@ -3,11 +3,11 @@ import { animate, set, stagger } from 'animejs';
 
 /**
  * Triggers a smooth, compositor-friendly Anime.js entrance stagger when the container enters the viewport.
- * Respects `prefers-reduced-motion: reduce` by leaving elements immediately visible with no spatial motion.
+ * Respects `prefers-reduced-motion: reduce`.
  */
 export function useScrollStagger<T extends HTMLElement>(
   selector = '[data-reveal]',
-  delayMs = 55,
+  delayMs = 50,
   deps: React.DependencyList = []
 ) {
   const containerRef = useRef<T>(null);
@@ -25,8 +25,7 @@ export function useScrollStagger<T extends HTMLElement>(
     const targets = Array.from(container.querySelectorAll<HTMLElement>(selector));
     if (targets.length === 0) return;
 
-    // Pre-hide targets only when motion is enabled so scroll reveals are clearly visible
-    set(targets, { opacity: 0, translateY: 18, scale: 0.98 });
+    set(targets, { opacity: 0, translateY: 16, scale: 0.985 });
 
     let hasAnimated = false;
     const triggerReveal = () => {
@@ -34,9 +33,9 @@ export function useScrollStagger<T extends HTMLElement>(
       hasAnimated = true;
       animate(targets, {
         opacity: [0, 1],
-        translateY: [18, 0],
-        scale: [0.98, 1],
-        duration: 380,
+        translateY: [16, 0],
+        scale: [0.985, 1],
+        duration: 360,
         delay: stagger(delayMs),
         ease: 'outExpo',
       });
@@ -52,7 +51,7 @@ export function useScrollStagger<T extends HTMLElement>(
           }
         }
       },
-      { threshold: 0.08, rootMargin: '0px 0px -24px 0px' }
+      { threshold: 0.08, rootMargin: '0px 0px -20px 0px' }
     );
 
     observer.observe(container);
@@ -61,4 +60,30 @@ export function useScrollStagger<T extends HTMLElement>(
   }, [selector, delayMs, ...deps]);
 
   return containerRef;
+}
+
+/**
+ * Draws an SVG route path smoothly on mount / viewport entry.
+ */
+export function useRoutePathDraw(pathRef: React.RefObject<SVGPathElement | null>) {
+  useEffect(() => {
+    const path = pathRef.current;
+    if (!path) return;
+
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) return;
+
+    const length = path.getTotalLength();
+    path.style.strokeDasharray = `${length}`;
+    path.style.strokeDashoffset = `${length}`;
+
+    animate(path, {
+      strokeDashoffset: [length, 0],
+      duration: 900,
+      ease: 'outExpo',
+      delay: 150,
+    });
+  }, [pathRef]);
 }

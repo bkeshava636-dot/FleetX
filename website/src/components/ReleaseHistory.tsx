@@ -29,19 +29,19 @@ export const ReleaseHistory: React.FC<ReleaseHistoryProps> = ({
   }
 
   return (
-    <section id="releases" className="py-20 bg-college-surface border-t border-slate-200/80">
+    <section id="releases" className="py-16 sm:py-20 bg-fleet-offwhite border-t border-slate-200/80">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Section Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 mb-10">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-200/80 text-slate-700 text-xs font-semibold uppercase tracking-wider mb-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-200/80 text-slate-700 font-mono text-[11px] font-semibold uppercase tracking-wider mb-3">
               Version Archive
             </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-college-on-surface tracking-tight">
+            <h2 className="font-display text-2xl sm:text-3xl font-bold text-fleet-navy tracking-tight">
               Previous Releases
             </h2>
-            <p className="mt-1 text-sm text-college-on-surface-variant font-normal">
+            <p className="mt-1 text-sm text-slate-600 font-normal">
               Review release changelogs and archived stable builds.
             </p>
           </div>

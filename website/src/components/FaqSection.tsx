@@ -36,13 +36,16 @@ export const FaqSection: React.FC = () => {
 
   return (
     <section
+      id="faq"
       aria-labelledby="faq-heading"
-      className="fleetx-faq py-16 sm:py-20 bg-college-surface border-t border-slate-200/80"
+      className="fleetx-faq py-16 sm:py-24 bg-fleet-offwhite border-t border-slate-200/80"
     >
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-10">
-          <Badge className="mb-3 uppercase tracking-wider text-[11px]">FAQ</Badge>
-          <h2 id="faq-heading" className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          <Badge variant="secondary" className="mb-3 font-mono uppercase tracking-wider text-[11px]">
+            FAQ
+          </Badge>
+          <h2 id="faq-heading" className="font-display text-3xl sm:text-4xl font-bold text-fleet-navy tracking-tight">
             Frequently Asked Questions
           </h2>
           <p className="mt-2.5 text-sm text-slate-600">
@@ -55,9 +58,9 @@ export const FaqSection: React.FC = () => {
             <details
               key={item.question}
               data-reveal
-              className="group rounded-2xl border border-slate-200/90 bg-white shadow-sm overflow-hidden transition-colors hover:border-slate-300"
+              className="group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden transition-colors hover:border-slate-300"
             >
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm sm:text-base font-bold text-slate-900 hover:bg-slate-50/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-display text-sm sm:text-base font-bold text-fleet-navy hover:bg-slate-50/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                 <span>{item.question}</span>
                 <ChevronDown className="w-4 h-4 text-slate-500 shrink-0 transition-transform duration-200 group-open:rotate-180" />
               </summary>
