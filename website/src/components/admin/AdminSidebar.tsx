@@ -92,7 +92,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
         </div>
 
         {/* User Card */}
-        <div className="p-4 border-b border-white/10 bg-fleet-deep/60">
+        <div className="p-4 border-b border-white/10 bg-fleet-deep">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-fleet-cyan/15 border border-fleet-cyan/35 flex items-center justify-center text-fleet-cyan font-mono font-semibold text-xs">
               {profile?.name?.charAt(0).toUpperCase() || 'A'}
@@ -159,18 +159,18 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
         </nav>
 
         {/* Footer Actions */}
-        <div className="p-3 border-t border-slate-800 bg-slate-900/90 space-y-1">
+        <div className="p-3 border-t border-white/10 bg-fleet-navy space-y-1">
           <a
             href="/"
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
+            className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-fleet-muted hover:text-fleet-offwhite hover:bg-white/[0.06] rounded-lg transition-colors"
           >
             <span className="flex items-center gap-2">
               <ExternalLink className="w-3.5 h-3.5" />
               <span>Public Website</span>
             </span>
-            <span className="text-[10px] text-slate-500">Live</span>
+            <span className="text-[10px] text-fleet-muted">Live</span>
           </a>
 
           <button

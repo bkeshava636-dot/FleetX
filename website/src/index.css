@@ -420,7 +420,15 @@
 }
 
 .admin-theme-fleetx.landing-theme-bw main .bg-slate-100:not(.gm-style *),
-.admin-theme-fleetx.landing-theme-bw main .bg-slate-200:not(.gm-style *) {
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-200:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-800:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-800\/80:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-900:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-900\/90:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-900\/95:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-slate-950:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-fleet-navy:not(.gm-style *),
+.admin-theme-fleetx.landing-theme-bw main .bg-fleet-navy\/90:not(.gm-style *) {
   background-color: #f5f5f5 !important;
   color: #0a0a0a !important;
 }
@@ -447,11 +455,45 @@
 
 .admin-theme-fleetx.landing-theme-bw main .text-blue-600,
 .admin-theme-fleetx.landing-theme-bw main .text-blue-700,
+.admin-theme-fleetx.landing-theme-bw main .text-blue-400,
+.admin-theme-fleetx.landing-theme-bw main .text-blue-500,
+.admin-theme-fleetx.landing-theme-bw main .text-cyan-400,
+.admin-theme-fleetx.landing-theme-bw main .text-cyan-500,
+.admin-theme-fleetx.landing-theme-bw main .text-emerald-400,
+.admin-theme-fleetx.landing-theme-bw main .text-emerald-500,
 .admin-theme-fleetx.landing-theme-bw main .text-emerald-600,
+.admin-theme-fleetx.landing-theme-bw main .text-emerald-700,
+.admin-theme-fleetx.landing-theme-bw main .text-amber-400,
+.admin-theme-fleetx.landing-theme-bw main .text-amber-500,
 .admin-theme-fleetx.landing-theme-bw main .text-amber-600,
+.admin-theme-fleetx.landing-theme-bw main .text-amber-700,
 .admin-theme-fleetx.landing-theme-bw main .text-indigo-600,
+.admin-theme-fleetx.landing-theme-bw main .text-indigo-700,
+.admin-theme-fleetx.landing-theme-bw main .text-rose-400,
+.admin-theme-fleetx.landing-theme-bw main .text-rose-500,
 .admin-theme-fleetx.landing-theme-bw main .text-rose-600,
-.admin-theme-fleetx.landing-theme-bw main .text-purple-600 {
+.admin-theme-fleetx.landing-theme-bw main .text-rose-700,
+.admin-theme-fleetx.landing-theme-bw main .text-red-400,
+.admin-theme-fleetx.landing-theme-bw main .text-red-500,
+.admin-theme-fleetx.landing-theme-bw main .text-red-600,
+.admin-theme-fleetx.landing-theme-bw main .text-red-700,
+.admin-theme-fleetx.landing-theme-bw main .text-purple-600,
+.admin-theme-fleetx.landing-theme-bw main .text-purple-700 {
+  color: #0a0a0a !important;
+}
+
+.admin-theme-fleetx.landing-theme-bw aside .text-red-400 {
+  color: #0a0a0a !important;
+}
+
+.admin-theme-fleetx.landing-theme-bw main .bg-emerald-500\/10,
+.admin-theme-fleetx.landing-theme-bw main .bg-emerald-500\/20,
+.admin-theme-fleetx.landing-theme-bw main .bg-blue-500\/10,
+.admin-theme-fleetx.landing-theme-bw main .bg-blue-500\/20,
+.admin-theme-fleetx.landing-theme-bw main .bg-amber-500\/10,
+.admin-theme-fleetx.landing-theme-bw main .bg-rose-500\/10,
+.admin-theme-fleetx.landing-theme-bw main .bg-cyan-500\/10 {
+  background-color: #f0f0f0 !important;
   color: #0a0a0a !important;
 }
 
